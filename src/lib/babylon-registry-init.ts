@@ -422,13 +422,7 @@ export async function registerBabylonGame(): Promise<BabylonRegistrationResult |
     logger.info('Registering Babylon with Agent0 SDK on Ethereum Sepolia...', undefined, 'BabylonRegistry')
     logger.info('Game operates on Base network with cross-chain discovery via agent0', undefined, 'BabylonRegistry')
 
-    // Use Ethereum Sepolia RPC (where agent0 contracts are deployed)
-    // Priority: AGENT0_RPC_URL > SEPOLIA_RPC_URL > fallback
-    const rpcUrl = 
-      process.env.AGENT0_RPC_URL || 
-      process.env.SEPOLIA_RPC_URL || 
-      process.env.NEXT_PUBLIC_RPC_URL ||
-      'https://ethereum-sepolia-rpc.publicnode.com'
+    const rpcUrl = process.env.AGENT0_RPC_URL || process.env.SEPOLIA_RPC_URL
 
     // Configure IPFS - use Pinata if available, otherwise use public IPFS node
     const ipfsConfig = process.env.PINATA_JWT

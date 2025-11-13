@@ -86,12 +86,7 @@ describe('Agent0 Discovery Integration', () => {
   })
   
   test('Agent0Client can be initialized', () => {
-    // Agent0 operations require Ethereum Sepolia RPC (not Base Sepolia)
-    // Priority: AGENT0_RPC_URL > SEPOLIA_RPC_URL
-    const rpcUrl = 
-      process.env.AGENT0_RPC_URL || 
-      process.env.SEPOLIA_RPC_URL ||
-      'https://ethereum-sepolia-rpc.publicnode.com'
+    const rpcUrl = process.env.AGENT0_RPC_URL || process.env.SEPOLIA_RPC_URL
     const privateKey = process.env.BABYLON_GAME_PRIVATE_KEY || process.env.AGENT0_PRIVATE_KEY
     
     if (!privateKey) {

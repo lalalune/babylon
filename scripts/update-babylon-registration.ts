@@ -39,13 +39,7 @@ async function updateBabylonRegistration() {
       throw new Error('Missing BABYLON_GAME_PRIVATE_KEY or BABYLON_GAME_WALLET_ADDRESS')
     }
 
-    // Agent0 operations require Ethereum Sepolia RPC (not Base Sepolia)
-    // Priority: AGENT0_RPC_URL > SEPOLIA_RPC_URL > fallback
-    const rpcUrl = 
-      process.env.AGENT0_RPC_URL || 
-      process.env.SEPOLIA_RPC_URL || 
-      process.env.NEXT_PUBLIC_RPC_URL ||
-      'https://ethereum-sepolia-rpc.publicnode.com'
+    const rpcUrl = process.env.AGENT0_RPC_URL || process.env.SEPOLIA_RPC_URL
     const ipfsConfig = process.env.PINATA_JWT
       ? { ipfsProvider: 'pinata' as const, pinataJwt: process.env.PINATA_JWT }
       : { ipfsProvider: 'node' as const, ipfsNodeUrl: process.env.IPFS_NODE_URL || 'https://ipfs.io' }

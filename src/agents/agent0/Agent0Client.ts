@@ -377,13 +377,7 @@ let agent0ClientInstance: Agent0Client | null = null
 
 export function getAgent0Client(): Agent0Client {
   if (!agent0ClientInstance) {
-    // Agent0 operations require Ethereum Sepolia RPC (not Base Sepolia)
-    // Priority: AGENT0_RPC_URL > SEPOLIA_RPC_URL > fallback
-    const rpcUrl = 
-      process.env.AGENT0_RPC_URL || 
-      process.env.SEPOLIA_RPC_URL || 
-      process.env.NEXT_PUBLIC_RPC_URL ||
-      'https://ethereum-sepolia-rpc.publicnode.com'
+    const rpcUrl = process.env.AGENT0_RPC_URL || process.env.SEPOLIA_RPC_URL
     
     const privateKey = process.env.BABYLON_GAME_PRIVATE_KEY || process.env.AGENT0_PRIVATE_KEY
     

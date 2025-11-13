@@ -7,9 +7,9 @@
 import { Service } from '@elizaos/core'
 import type { IAgentRuntime } from '@elizaos/core'
 import { logger } from '@elizaos/core'
-import { UnifiedDiscoveryService, getUnifiedDiscoveryService } from '../../src/agents/agent0/UnifiedDiscovery'
-import { GameDiscoveryService } from '../../src/agents/agent0/GameDiscovery'
-import { Agent0Client } from '../../src/agents/agent0/Agent0Client'
+import { type UnifiedDiscoveryService , getUnifiedDiscoveryService } from '../../../src/agents/agent0/UnifiedDiscovery'
+import { GameDiscoveryService } from '../../../src/agents/agent0/GameDiscovery'
+import { Agent0Client } from '../../../src/agents/agent0/Agent0Client'
 
 export class Agent0Service extends Service {
   static override serviceType = 'babylon-agent0' as const
@@ -51,13 +51,7 @@ export class Agent0Service extends Service {
     this.gameDiscoveryService = new GameDiscoveryService()
     
     const privateKey = process.env.BABYLON_AGENT_PRIVATE_KEY || process.env.AGENT0_PRIVATE_KEY
-    // Agent0 operations require Ethereum Sepolia RPC (not Base Sepolia)
-    // Priority: AGENT0_RPC_URL > SEPOLIA_RPC_URL > fallback
-    const rpcUrl = 
-      process.env.AGENT0_RPC_URL || 
-      process.env.SEPOLIA_RPC_URL || 
-      process.env.NEXT_PUBLIC_RPC_URL ||
-      'https://ethereum-sepolia-rpc.publicnode.com'
+    const rpcUrl = process.env.AGENT0_RPC_URL || process.env.SEPOLIA_RPC_URL
     
     if (privateKey && rpcUrl) {
       this.agent0Client = new Agent0Client({
