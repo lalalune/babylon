@@ -423,7 +423,12 @@ export async function registerBabylonGame(): Promise<BabylonRegistrationResult |
     logger.info('Game operates on Base network with cross-chain discovery via agent0', undefined, 'BabylonRegistry')
 
     // Use Ethereum Sepolia RPC (where agent0 contracts are deployed)
-    const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || process.env.SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com'
+    // Priority: AGENT0_RPC_URL > SEPOLIA_RPC_URL > fallback
+    const rpcUrl = 
+      process.env.AGENT0_RPC_URL || 
+      process.env.SEPOLIA_RPC_URL || 
+      process.env.NEXT_PUBLIC_RPC_URL ||
+      'https://ethereum-sepolia-rpc.publicnode.com'
 
     // Configure IPFS - use Pinata if available, otherwise use public IPFS node
     const ipfsConfig = process.env.PINATA_JWT
@@ -444,6 +449,12 @@ export async function registerBabylonGame(): Promise<BabylonRegistrationResult |
     let result: { tokenId: number; txHash: string; metadataCID?: string }
 
     try {
+      // Get Base network configuration for cross-chain game network metadata
+      const baseChainId = parseInt(process.env.BASE_CHAIN_ID || process.env.NEXT_PUBLIC_CHAIN_ID || '84532', 10) // Base Sepolia testnet by default
+      const baseRegistryAddress = process.env.BASE_IDENTITY_REGISTRY_ADDRESS || process.env.NEXT_PUBLIC_IDENTITY_REGISTRY_BASE_SEPOLIA
+      const baseReputationAddress = process.env.BASE_REPUTATION_SYSTEM_ADDRESS || process.env.NEXT_PUBLIC_REPUTATION_SYSTEM_BASE_SEPOLIA
+      const baseMarketAddress = process.env.BASE_DIAMOND_ADDRESS || process.env.NEXT_PUBLIC_DIAMOND_BASE_SEPOLIA
+
       result = await agent0Client.registerAgent({
         name: babylonCard.name,
         description: babylonCard.description,
@@ -455,7 +466,16 @@ export async function registerBabylonGame(): Promise<BabylonRegistrationResult |
           markets: babylonCard.capabilities.markets,
           actions: babylonCard.capabilities.actions,
           version: '1.0.0',
-          x402Support: true // Babylon supports ERC-402 micropayments for premium actions
+          x402Support: true, // Babylon supports ERC-402 micropayments for premium actions
+          platform: 'babylon',
+          userType: 'game',
+          // Cross-chain game network info - tells agents where to connect for actual game operations
+          gameNetwork: baseRegistryAddress ? {
+            chainId: baseChainId,
+            registryAddress: baseRegistryAddress,
+            reputationAddress: baseReputationAddress,
+            marketAddress: baseMarketAddress
+          } : undefined
         }
       })
 

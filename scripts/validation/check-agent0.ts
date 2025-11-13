@@ -13,13 +13,31 @@ async function main() {
   logger.info('='.repeat(60), undefined, 'Script')
 
   // Check environment variables
+  // IMPORTANT: Multi-chain setup
+  // - Agent0 operations require Ethereum Sepolia RPC (not Base Sepolia)
+  // - Base Sepolia RPC is for game operations only
+  logger.info('Multi-chain setup:', undefined, 'Script')
+  logger.info('  - Agent0 network: Ethereum Sepolia (for game/agent discovery)', undefined, 'Script')
+  logger.info('  - Game network: Base Sepolia (for actual game operations)', undefined, 'Script')
+  logger.info('', undefined, 'Script')
+
+  const hasEthereumRpc = 
+    !!process.env.AGENT0_RPC_URL || 
+    !!process.env.SEPOLIA_RPC_URL
+
   const requiredVars = [
     'AGENT0_ENABLED',
-    'BASE_SEPOLIA_RPC_URL',
     'BABYLON_GAME_PRIVATE_KEY'
   ]
 
   const missing = requiredVars.filter(v => !process.env[v])
+
+  if (!hasEthereumRpc) {
+    logger.error('❌ Missing Ethereum Sepolia RPC URL for Agent0 operations', undefined, 'Script')
+    logger.error('   Required: AGENT0_RPC_URL or SEPOLIA_RPC_URL', undefined, 'Script')
+    logger.error('   Agent0 operations happen on Ethereum Sepolia, not Base Sepolia', undefined, 'Script')
+    missing.push('AGENT0_RPC_URL')
+  }
 
   if (missing.length > 0) {
     logger.error('❌ Missing required environment variables:', undefined, 'Script')
@@ -30,6 +48,11 @@ async function main() {
   }
 
   logger.info('✅ Required environment variables present', undefined, 'Script')
+  
+  // Warn if Base Sepolia RPC is missing (needed for game operations)
+  if (!process.env.BASE_SEPOLIA_RPC_URL) {
+    logger.warn('⚠️  BASE_SEPOLIA_RPC_URL not set (required for game operations on Base Sepolia)', undefined, 'Script')
+  }
 
   // Check Agent0 client initialization
   if (process.env.AGENT0_ENABLED !== 'true') {
@@ -39,11 +62,21 @@ async function main() {
   }
 
   try {
-    const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL || process.env.BASE_RPC_URL
+    // Agent0 operations require Ethereum Sepolia RPC (not Base Sepolia)
+    // Priority: AGENT0_RPC_URL > SEPOLIA_RPC_URL > fallback
+    const rpcUrl = 
+      process.env.AGENT0_RPC_URL || 
+      process.env.SEPOLIA_RPC_URL ||
+      'https://ethereum-sepolia-rpc.publicnode.com'
+    
     const privateKey = process.env.BABYLON_GAME_PRIVATE_KEY || process.env.AGENT0_PRIVATE_KEY
 
-    if (!rpcUrl || !privateKey) {
-      throw new Error('Missing RPC URL or private key')
+    if (!privateKey) {
+      throw new Error('Missing BABYLON_GAME_PRIVATE_KEY or AGENT0_PRIVATE_KEY')
+    }
+    
+    if (!rpcUrl) {
+      throw new Error('Missing Ethereum Sepolia RPC URL (AGENT0_RPC_URL or SEPOLIA_RPC_URL)')
     }
 
     const client = new Agent0Client({

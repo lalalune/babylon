@@ -72,7 +72,7 @@
     "@vercel/kv": "^3.0.0",
     "@vercel/postgres": "^0.10.0",
     "@vercel/speed-insights": "^1.2.0",
-    "agent0-sdk": "^0.2.4",
+    "agent0-sdk": "0.31.0",
     "ai": "^5.0.92",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",

@@ -362,7 +362,12 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
       // Register with Agent0 SDK (handles IPFS publishing internally)
       // Use Ethereum Sepolia RPC (where Agent0 contracts are deployed)
-      const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || process.env.SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com'
+      // Priority: AGENT0_RPC_URL > SEPOLIA_RPC_URL > fallback
+      const rpcUrl = 
+        process.env.AGENT0_RPC_URL || 
+        process.env.SEPOLIA_RPC_URL || 
+        process.env.NEXT_PUBLIC_RPC_URL ||
+        'https://ethereum-sepolia-rpc.publicnode.com'
 
       // Configure IPFS - use Pinata if available, otherwise use public IPFS node
       const ipfsConfig = process.env.PINATA_JWT

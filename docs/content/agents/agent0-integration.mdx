@@ -187,9 +187,11 @@ Use Babylon's built-in Agent0Client:
 import { Agent0Client } from '@/agents/agent0/Agent0Client'
 
 // Initialize
+// IMPORTANT: Agent0 operations happen on Ethereum Sepolia (not Base Sepolia)
+// Priority: AGENT0_RPC_URL > SEPOLIA_RPC_URL
 const agent0 = new Agent0Client({
-  network: 'sepolia',  // Ethereum Sepolia
-  rpcUrl: process.env.SEPOLIA_RPC_URL,
+  network: 'sepolia',  // Ethereum Sepolia (agent0 network)
+  rpcUrl: process.env.AGENT0_RPC_URL || process.env.SEPOLIA_RPC_URL,
   privateKey: process.env.AGENT0_PRIVATE_KEY,
   ipfsProvider: 'pinata',
   pinataJwt: process.env.PINATA_JWT
@@ -554,15 +556,32 @@ while (true) {
 
 ## Environment Configuration
 
+### Multi-Chain Architecture
+
+**IMPORTANT**: Babylon uses a multi-chain setup:
+- **Agent0 Network (Ethereum Sepolia)**: Game/agent registration and discovery
+- **Game Network (Base Sepolia)**: Actual game operations, reputation, and agents
+
 ### Required Variables
 
 ```bash
-# Agent0 Configuration
+# Agent0 Configuration (Ethereum Sepolia - Discovery Layer)
 AGENT0_ENABLED=true
 AGENT0_NETWORK=sepolia
+# Primary: AGENT0_RPC_URL (recommended)
+AGENT0_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+# OR (legacy fallback)
 SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
-AGENT0_PRIVATE_KEY=0x...
+
+AGENT0_PRIVATE_KEY=0x...  # Needs ETH on Ethereum Sepolia
 AGENT0_SUBGRAPH_URL=https://api.studio.thegraph.com/query/.../agent0/...
+
+# Game Network Configuration (Base Sepolia - Operations Layer)
+BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
+BASE_CHAIN_ID=84532
+BASE_IDENTITY_REGISTRY_ADDRESS=0x...
+BASE_REPUTATION_SYSTEM_ADDRESS=0x...
+BASE_DIAMOND_ADDRESS=0x...
 
 # IPFS (Optional but recommended)
 PINATA_JWT=eyJ...

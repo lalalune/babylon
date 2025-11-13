@@ -50,7 +50,7 @@ echo ""
 # Determine RPC URL
 case $NETWORK in
     sepolia)
-        RPC_URL=${ETHEREUM_SEPOLIA_RPC_URL:-"https://eth-sepolia.g.alchemy.com/v2/your-key"}
+        RPC_URL=${AGENT0_RPC_URL:-${SEPOLIA_RPC_URL:-"https://eth-sepolia.g.alchemy.com/v2/your-key"}}
         CHAIN_ID=11155111
         ;;
     mainnet)

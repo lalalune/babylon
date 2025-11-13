@@ -689,9 +689,17 @@ export async function processOnchainRegistration({
   }
 
   if (user.isAgent) {
+    // Agent0 operations require Ethereum Sepolia RPC (not Base Sepolia)
+    // Priority: AGENT0_RPC_URL > SEPOLIA_RPC_URL > fallback
+    const rpcUrl = 
+      process.env.AGENT0_RPC_URL || 
+      process.env.SEPOLIA_RPC_URL || 
+      process.env.NEXT_PUBLIC_RPC_URL ||
+      'https://ethereum-sepolia-rpc.publicnode.com'
+    
     const agent0Client = new Agent0Client({
       network: (process.env.AGENT0_NETWORK as 'sepolia' | 'mainnet') || 'sepolia',
-      rpcUrl: process.env.BASE_SEPOLIA_RPC_URL || process.env.BASE_RPC_URL || '',
+      rpcUrl,
       privateKey: DEPLOYER_PRIVATE_KEY,
     })
 

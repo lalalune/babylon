@@ -51,7 +51,7 @@
         "@vercel/kv": "^3.0.0",
         "@vercel/postgres": "^0.10.0",
         "@vercel/speed-insights": "^1.2.0",
-        "agent0-sdk": "^0.2.4",
+        "agent0-sdk": "0.31.0",
         "ai": "^5.0.92",
         "ajv": "^8.17.1",
         "ajv-formats": "^3.0.1",
@@ -1578,7 +1578,7 @@
 
     "agent-base": ["agent-base@6.0.2", "", { "dependencies": { "debug": "4" } }, "sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ=="],
 
-    "agent0-sdk": ["agent0-sdk@0.2.4", "", { "dependencies": { "dotenv": "^16.3.1", "ethers": "^6.9.0", "graphql-request": "^6.1.0", "ipfs-http-client": "^60.0.1" } }, "sha512-+8R2raOxeBCmiKP2bqAXpRalozRdH3nCYUSH661rN6pal6qUq5m9WPs1Vb442RdhQUMQog7jiaf1xO6vNu0m3A=="],
+    "agent0-sdk": ["agent0-sdk@0.31.0", "", { "dependencies": { "dotenv": "^16.3.1", "ethers": "^6.9.0", "graphql-request": "^6.1.0", "ipfs-http-client": "^60.0.1" } }, "sha512-JnjBunnlmBkqGUaeCqifJ8vtWT5G9BKBFaOApR2zR78IUCaHjq3Vy7LcyisVj1yPwOYXCkQ1f2uKP4FlScWoKQ=="],
 
     "agentkeepalive": ["agentkeepalive@4.6.0", "", { "dependencies": { "humanize-ms": "^1.2.1" } }, "sha512-kja8j7PjmncONqaTsB8fQ+wE2mSU2DJ9D4XKoJ5PFWIdRMa6SLSN1ff4mOr4jCbfRSsxR4keIiySJU0N9T5hIQ=="],
 

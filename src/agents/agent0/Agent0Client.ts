@@ -368,17 +368,35 @@ export class Agent0Client implements IAgent0Client {
 
 /**
  * Get or create singleton Agent0Client instance
+ * 
+ * IMPORTANT: Agent0 operations happen on Ethereum Sepolia (not Base Sepolia)
+ * - Game registration: Ethereum Sepolia (agent0 network)
+ * - Game operations: Base Sepolia (game network)
  */
 let agent0ClientInstance: Agent0Client | null = null
 
 export function getAgent0Client(): Agent0Client {
   if (!agent0ClientInstance) {
-    const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL || process.env.BASE_RPC_URL
+    // Agent0 operations require Ethereum Sepolia RPC (not Base Sepolia)
+    // Priority: AGENT0_RPC_URL > SEPOLIA_RPC_URL > fallback
+    const rpcUrl = 
+      process.env.AGENT0_RPC_URL || 
+      process.env.SEPOLIA_RPC_URL || 
+      process.env.NEXT_PUBLIC_RPC_URL ||
+      'https://ethereum-sepolia-rpc.publicnode.com'
+    
     const privateKey = process.env.BABYLON_GAME_PRIVATE_KEY || process.env.AGENT0_PRIVATE_KEY
     
-    if (!rpcUrl || !privateKey) {
+    if (!privateKey) {
       throw new Error(
-        'Agent0Client requires BASE_SEPOLIA_RPC_URL and BABYLON_GAME_PRIVATE_KEY environment variables'
+        'Agent0Client requires BABYLON_GAME_PRIVATE_KEY or AGENT0_PRIVATE_KEY environment variable'
+      )
+    }
+    
+    if (!rpcUrl) {
+      throw new Error(
+        'Agent0Client requires AGENT0_RPC_URL or SEPOLIA_RPC_URL environment variable. ' +
+        'Agent0 operations happen on Ethereum Sepolia, not Base Sepolia.'
       )
     }
     

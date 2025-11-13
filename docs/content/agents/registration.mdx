@@ -77,6 +77,10 @@ export BASE_IDENTITY_REGISTRY_ADDRESS="0x4102F9b209796b53a18B063A438D05C7C9Af31A
 
 # Optional: Enable agent0 cross-chain linking
 export AGENT0_ENABLED="true"
+# Agent0 operations require Ethereum Sepolia RPC (not Base Sepolia)
+# Primary: AGENT0_RPC_URL (recommended)
+export AGENT0_RPC_URL="https://ethereum-sepolia-rpc.publicnode.com"
+# OR (legacy fallback)
 export SEPOLIA_RPC_URL="https://ethereum-sepolia-rpc.publicnode.com"
 
 # Register your agent

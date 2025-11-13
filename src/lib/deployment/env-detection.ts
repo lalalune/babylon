@@ -184,9 +184,23 @@ function validateTestnet(errors: string[], warnings: string[]): void {
 
   // Check Agent0 configuration
   if (process.env.AGENT0_ENABLED === 'true') {
-    if (!process.env.BASE_SEPOLIA_RPC_URL) {
-      errors.push('BASE_SEPOLIA_RPC_URL is required when AGENT0_ENABLED=true')
+    // Agent0 operations require Ethereum Sepolia RPC (not Base Sepolia)
+    const hasEthereumRpc = 
+      !!process.env.AGENT0_RPC_URL || 
+      !!process.env.SEPOLIA_RPC_URL
+    
+    if (!hasEthereumRpc) {
+      errors.push(
+        'AGENT0_RPC_URL or SEPOLIA_RPC_URL is required when AGENT0_ENABLED=true. ' +
+        'Agent0 operations happen on Ethereum Sepolia, not Base Sepolia.'
+      )
     }
+    
+    // Base Sepolia RPC is still required for game operations
+    if (!process.env.BASE_SEPOLIA_RPC_URL) {
+      warnings.push('BASE_SEPOLIA_RPC_URL not set (required for game operations on Base Sepolia)')
+    }
+    
     if (!process.env.BABYLON_GAME_PRIVATE_KEY) {
       errors.push('BABYLON_GAME_PRIVATE_KEY is required when AGENT0_ENABLED=true')
     }
@@ -233,9 +247,24 @@ function validateMainnet(errors: string[], warnings: string[]): void {
 
   // Check Agent0 for mainnet
   if (process.env.AGENT0_ENABLED === 'true') {
-    if (!process.env.BASE_RPC_URL) {
-      errors.push('BASE_RPC_URL is required when AGENT0_ENABLED=true on mainnet')
+    // Agent0 operations require Ethereum Mainnet RPC (not Base)
+    const hasEthereumRpc = 
+      !!process.env.ETHEREUM_MAINNET_RPC_URL || 
+      !!process.env.AGENT0_RPC_URL || 
+      !!process.env.ETHEREUM_RPC_URL
+    
+    if (!hasEthereumRpc) {
+      errors.push(
+        'ETHEREUM_MAINNET_RPC_URL, AGENT0_RPC_URL, or ETHEREUM_RPC_URL is required when AGENT0_ENABLED=true on mainnet. ' +
+        'Agent0 operations happen on Ethereum Mainnet, not Base.'
+      )
     }
+    
+    // Base Mainnet RPC is still required for game operations
+    if (!process.env.BASE_RPC_URL) {
+      warnings.push('BASE_RPC_URL not set (required for game operations on Base Mainnet)')
+    }
+    
     if (!process.env.BABYLON_GAME_PRIVATE_KEY) {
       errors.push('BABYLON_GAME_PRIVATE_KEY is required when AGENT0_ENABLED=true')
     }

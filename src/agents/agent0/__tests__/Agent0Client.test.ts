@@ -1,5 +1,7 @@
 /**
  * Unit Tests for Agent0Client
+ * 
+ * IMPORTANT: Agent0 operations require Ethereum Sepolia RPC (not Base Sepolia)
  */
 
 import { describe, test, expect } from 'bun:test'
@@ -17,7 +19,11 @@ describe('Agent0Client', () => {
   });
   
   test('can be initialized with valid config', () => {
-    const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL ?? 'https://sepolia.infura.io/v3/test';
+    // Agent0 operations require Ethereum Sepolia RPC (not Base Sepolia)
+    const rpcUrl = 
+      process.env.AGENT0_RPC_URL || 
+      process.env.SEPOLIA_RPC_URL ||
+      'https://ethereum-sepolia-rpc.publicnode.com'
     const privateKey = process.env.BABYLON_GAME_PRIVATE_KEY ?? '0x0000000000000000000000000000000000000000000000000000000000000001';
     
     const client = new Agent0Client({
@@ -31,7 +37,11 @@ describe('Agent0Client', () => {
   })
   
   test('searchAgents returns an array', async () => {
-    const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL ?? 'https://sepolia.infura.io/v3/test';
+    // Agent0 operations require Ethereum Sepolia RPC (not Base Sepolia)
+    const rpcUrl = 
+      process.env.AGENT0_RPC_URL || 
+      process.env.SEPOLIA_RPC_URL ||
+      'https://ethereum-sepolia-rpc.publicnode.com'
     const privateKey = process.env.BABYLON_GAME_PRIVATE_KEY ?? '0x0000000000000000000000000000000000000000000000000000000000000001';
     
     const client = new Agent0Client({
@@ -48,7 +58,11 @@ describe('Agent0Client', () => {
   })
   
   test('getAgentProfile returns a profile or null', async () => {
-    const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL ?? 'https://sepolia.infura.io/v3/test';
+    // Agent0 operations require Ethereum Sepolia RPC (not Base Sepolia)
+    const rpcUrl = 
+      process.env.AGENT0_RPC_URL || 
+      process.env.SEPOLIA_RPC_URL ||
+      'https://ethereum-sepolia-rpc.publicnode.com'
     const privateKey = process.env.BABYLON_GAME_PRIVATE_KEY ?? '0x0000000000000000000000000000000000000000000000000000000000000001';
     
     const client = new Agent0Client({

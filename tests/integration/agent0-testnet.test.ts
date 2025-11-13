@@ -1,7 +1,11 @@
 /**
  * Agent0 Testnet Integration Tests
  * 
- * Tests Agent0 integration on Base Sepolia testnet
+ * Tests Agent0 integration on Ethereum Sepolia (agent0 network) and Base Sepolia (game network)
+ * 
+ * IMPORTANT: Multi-chain setup
+ * - Agent0 operations: Ethereum Sepolia (discovery/registration)
+ * - Game operations: Base Sepolia (actual game play)
  */
 
 import { describe, test, expect } from 'bun:test'
@@ -10,8 +14,13 @@ import { GameDiscoveryService } from '../../src/agents/agent0/GameDiscovery'
 
 describe('Agent0 Testnet Integration', () => {
   const isAgent0Enabled = process.env.AGENT0_ENABLED === 'true'
+  // Agent0 operations require Ethereum Sepolia RPC (not Base Sepolia)
+  const ethereumRpcUrl = 
+    process.env.AGENT0_RPC_URL || 
+    process.env.SEPOLIA_RPC_URL
+  
   const hasRequiredConfig = !!(
-    process.env.BASE_SEPOLIA_RPC_URL &&
+    ethereumRpcUrl &&
     process.env.BABYLON_GAME_PRIVATE_KEY
   )
 
@@ -23,18 +32,20 @@ describe('Agent0 Testnet Integration', () => {
     }
 
     expect(process.env.AGENT0_NETWORK).toBe('sepolia')
-    expect(process.env.BASE_SEPOLIA_RPC_URL).toBeDefined()
-
+    expect(ethereumRpcUrl).toBeDefined()
     console.log('✅ Agent0 configuration valid for testnet')
+    console.log(`   Ethereum Sepolia RPC: ${ethereumRpcUrl ? '✅ set' : '❌ not set'}`)
+    console.log(`   Base Sepolia RPC: ${process.env.BASE_SEPOLIA_RPC_URL ? '✅ set' : '❌ not set'}`)
   })
 
   test('Can initialize Agent0Client for testnet', () => {
     if (!hasRequiredConfig) {
       console.log('⚠️  Missing Agent0 configuration, skipping test')
+      console.log('   Required: AGENT0_RPC_URL and BABYLON_GAME_PRIVATE_KEY')
       return
     }
 
-    const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL!
+    const rpcUrl = ethereumRpcUrl!
     const privateKey = process.env.BABYLON_GAME_PRIVATE_KEY!
 
     const client = new Agent0Client({
@@ -46,7 +57,7 @@ describe('Agent0 Testnet Integration', () => {
     expect(client).toBeDefined()
     expect(client.isAvailable()).toBe(true)
 
-    console.log('✅ Agent0Client initialized for testnet')
+    console.log('✅ Agent0Client initialized for testnet (Ethereum Sepolia)')
   })
 
   test('GameDiscoveryService can query testnet', async () => {
@@ -109,14 +120,14 @@ describe('Agent0 Testnet Integration', () => {
     try {
       const client = new Agent0Client({
         network: 'sepolia',
-        rpcUrl: process.env.BASE_SEPOLIA_RPC_URL!,
+        rpcUrl: ethereumRpcUrl!, // Use Ethereum Sepolia RPC, not Base Sepolia
         privateKey: process.env.BABYLON_GAME_PRIVATE_KEY!
       })
 
       // Try to get agent profile (would return null if not registered)
       // This is a non-destructive check
       expect(client.isAvailable()).toBe(true)
-      console.log('✅ Agent0Client ready for registration')
+      console.log('✅ Agent0Client ready for registration (using Ethereum Sepolia)')
     } catch (error) {
       console.log('⚠️  Agent0Client setup failed:', error)
     }

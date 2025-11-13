@@ -51,7 +51,13 @@ export class Agent0Service extends Service {
     this.gameDiscoveryService = new GameDiscoveryService()
     
     const privateKey = process.env.BABYLON_AGENT_PRIVATE_KEY || process.env.AGENT0_PRIVATE_KEY
-    const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL || process.env.BASE_RPC_URL
+    // Agent0 operations require Ethereum Sepolia RPC (not Base Sepolia)
+    // Priority: AGENT0_RPC_URL > SEPOLIA_RPC_URL > fallback
+    const rpcUrl = 
+      process.env.AGENT0_RPC_URL || 
+      process.env.SEPOLIA_RPC_URL || 
+      process.env.NEXT_PUBLIC_RPC_URL ||
+      'https://ethereum-sepolia-rpc.publicnode.com'
     
     if (privateKey && rpcUrl) {
       this.agent0Client = new Agent0Client({
