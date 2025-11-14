@@ -1,23 +1,10 @@
 import { defineConfig, devices } from '@playwright/test'
 // Wallet setup will be configured when MetaMask integration is needed
 // import { defineWalletSetup } from '@synthetixio/synpress'
-import { config } from 'dotenv'
-import { resolve } from 'path'
-
-// Load environment variables from .env.local
-config({ path: resolve(__dirname, '.env.local') })
-// Fallback to .env if .env.local doesn't exist
-config({ path: resolve(__dirname, '.env') })
+import 'dotenv/config'
 
 const SEED_PHRASE = process.env.WALLET_SEED_PHRASE || 'test test test test test test test test test test test junk'
 const PASSWORD = process.env.WALLET_PASSWORD || 'Tester@1234'
-
-// Verify Privy test credentials are loaded (for debugging)
-if (process.env.PRIVY_TEST_EMAIL) {
-  console.log('✅ Privy test credentials loaded successfully')
-} else {
-  console.warn('⚠️ Privy test credentials not found in environment')
-}
 
 export default defineConfig({
   testDir: './tests/synpress',
@@ -78,7 +65,13 @@ export default defineConfig({
   ],
 
   /* Run your local dev server before starting the tests */
-  // NOTE: Start your dev server manually with 'bun run dev' before running tests
-  // webServer config disabled to avoid conflicts with manually-run server
+  webServer: process.env.CI ? undefined : {
+    command: 'bun run dev:skip-check',
+    url: 'http://localhost:3000',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120 * 1000,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  },
 })
 

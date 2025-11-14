@@ -58,7 +58,6 @@ class CachedDatabaseService {
 
   /**
    * Get posts for following feed with caching
-   * Filters out posts from test users
    */
   async getPostsForFollowing(
     userId: string,
@@ -72,31 +71,10 @@ class CachedDatabaseService {
     return getCacheOrFetch(
       cacheKey,
       async () => {
-        // First, filter out test users from followedIds
-        const [testUsers, testActors] = await Promise.all([
-          db.prisma.user.findMany({
-            where: { id: { in: followedIds }, isTest: true },
-            select: { id: true },
-          }),
-          db.prisma.actor.findMany({
-            where: { id: { in: followedIds }, isTest: true },
-            select: { id: true },
-          }),
-        ]);
-        
-        const testAuthorIds = new Set([
-          ...testUsers.map(u => u.id),
-          ...testActors.map(a => a.id),
-        ]);
-        
-        // Remove test users from followedIds
-        const nonTestFollowedIds = followedIds.filter(id => !testAuthorIds.has(id));
-        
-        // Query posts from database (only from non-test users)
+        // Query posts from database
         const posts = await db.prisma.post.findMany({
           where: {
-            authorId: { in: nonTestFollowedIds },
-            deletedAt: null, // Filter out deleted posts
+            authorId: { in: followedIds },
           },
           orderBy: {
             timestamp: 'desc',
@@ -169,64 +147,6 @@ class CachedDatabaseService {
   }
 
   /**
-   * Get user profile stats with caching (followers, following, posts)
-   */
-  async getUserProfileStats(userId: string) {
-    const cacheKey = userId;
-    
-    return getCacheOrFetch(
-      cacheKey,
-      async () => {
-        const user = await db.prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            _count: {
-              select: {
-                Follow_Follow_followingIdToUser: true, // users following this user (followers)
-                Follow_Follow_followerIdToUser: true, // users this user follows (following)
-                UserActorFollow: true,
-                Position: true,
-                Comment: true,
-                Reaction: true,
-              },
-            },
-          },
-        });
-
-        if (!user) return null;
-
-        // Also count legacy actor follows
-        const legacyActorFollowCount = await db.prisma.followStatus.count({
-          where: {
-            userId,
-            isActive: true,
-            followReason: 'user_followed',
-          },
-        });
-
-        // Count posts
-        const postCount = await db.prisma.post.count({
-          where: { authorId: userId },
-        });
-
-        return {
-          followers: user._count.Follow_Follow_followingIdToUser,
-          following: user._count.Follow_Follow_followerIdToUser + user._count.UserActorFollow + legacyActorFollowCount,
-          positions: user._count.Position,
-          comments: user._count.Comment,
-          reactions: user._count.Reaction,
-          posts: postCount,
-        };
-      },
-      {
-        namespace: 'user:profile:stats',
-        ttl: 60, // Cache for 1 minute
-      }
-    );
-  }
-
-  /**
    * Get actor by ID with caching
    */
   async getActorById(actorId: string) {
@@ -293,6 +213,68 @@ class CachedDatabaseService {
   }
 
   /**
+   * Get active pools with caching
+   */
+  async getActivePools() {
+    const cacheKey = 'active';
+    
+    return getCacheOrFetch(
+      cacheKey,
+      () => db.prisma.pool.findMany({
+        where: { isActive: true },
+        include: {
+          npcActor: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              tier: true,
+              personality: true,
+            },
+          },
+          deposits: {
+            where: {
+              withdrawnAt: null,
+            },
+            select: {
+              amount: true,
+              currentValue: true,
+            },
+          },
+          positions: {
+            where: {
+              closedAt: null,
+            },
+            select: {
+              marketType: true,
+              ticker: true,
+              marketId: true,
+              side: true,
+              size: true,
+              unrealizedPnL: true,
+            },
+          },
+          _count: {
+            select: {
+              deposits: {
+                where: {
+                  withdrawnAt: null,
+                },
+              },
+              trades: true,
+            },
+          },
+        },
+        orderBy: { totalValue: 'desc' },
+      }),
+      {
+        namespace: CACHE_KEYS.POOLS_LIST,
+        ttl: DEFAULT_TTLS.POOLS_LIST,
+      }
+    );
+  }
+
+  /**
    * Get trending tags with caching
    */
   async getTrendingTags(limit = 10) {
@@ -304,7 +286,7 @@ class CachedDatabaseService {
         take: limit,
         orderBy: { rank: 'asc' },
         include: {
-          Tag: true,
+          tag: true,
         },
       }),
       {
@@ -341,9 +323,7 @@ class CachedDatabaseService {
     await Promise.all([
       invalidateCache(userId, { namespace: CACHE_KEYS.USER }),
       invalidateCache(userId, { namespace: CACHE_KEYS.USER_BALANCE }),
-      invalidateCache(userId, { namespace: 'user:profile:stats' }),
       invalidateCachePattern(`${userId}:*`, { namespace: CACHE_KEYS.POSTS_FOLLOWING }),
-      invalidateCachePattern('*', { namespace: 'user:follows' }), // Invalidate follows cache
     ]);
   }
 
@@ -355,6 +335,13 @@ class CachedDatabaseService {
     await invalidateCachePattern('*', { namespace: CACHE_KEYS.MARKETS_LIST });
   }
 
+  /**
+   * Invalidate cache for pools
+   */
+  async invalidatePoolsCache() {
+    logger.info('Invalidating pools cache', undefined, 'CachedDatabaseService');
+    await invalidateCachePattern('*', { namespace: CACHE_KEYS.POOLS_LIST });
+  }
 
   /**
    * Invalidate all caches (use sparingly!)
@@ -364,6 +351,7 @@ class CachedDatabaseService {
     await Promise.all([
       this.invalidatePostsCache(),
       this.invalidateMarketsCache(),
+      this.invalidatePoolsCache(),
     ]);
   }
 }

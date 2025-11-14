@@ -84,19 +84,16 @@
  *                   description: Whether user is following the target
  */
 
-import { authenticate } from '@/lib/api/auth-middleware';
-import { cachedDb } from '@/lib/cached-database-service';
-import { prisma } from '@/lib/database-service';
-import { BusinessLogicError, NotFoundError } from '@/lib/errors';
-import { successResponse, withErrorHandling } from '@/lib/errors/error-handler';
-import { logger } from '@/lib/logger';
-import { trackServerEvent } from '@/lib/posthog/server';
-import { notifyFollow } from '@/lib/services/notification-service';
-import { generateSnowflakeId } from '@/lib/snowflake';
-import { findUserByIdentifier } from '@/lib/users/user-lookup';
-import { UserIdParamSchema } from '@/lib/validation/schemas';
 import type { NextRequest } from 'next/server';
-import { checkRateLimitAndDuplicates, RATE_LIMIT_CONFIGS } from '@/lib/rate-limiting';
+import { prisma } from '@/lib/database-service';
+import { withErrorHandling, successResponse } from '@/lib/errors/error-handler';
+import { NotFoundError, BusinessLogicError } from '@/lib/errors';
+import { UserIdParamSchema } from '@/lib/validation/schemas';
+import { authenticate } from '@/lib/api/auth-middleware';
+import { notifyFollow } from '@/lib/services/notification-service';
+import { logger } from '@/lib/logger';
+import { findUserByIdentifier } from '@/lib/users/user-lookup';
+import { trackServerEvent } from '@/lib/posthog/server';
 
 /**
  * POST Handler - Follow User or Actor
@@ -115,17 +112,6 @@ export const POST = withErrorHandling(async (
 ) => {
   // Authenticate user
   const user = await authenticate(request);
-  
-  // Apply rate limiting (no duplicate detection needed)
-  const rateLimitError = checkRateLimitAndDuplicates(
-    user.userId,
-    null,
-    RATE_LIMIT_CONFIGS.FOLLOW_USER
-  );
-  if (rateLimitError) {
-    return rateLimitError;
-  }
-  
   const params = await context.params;
   const { userId: targetIdentifier } = UserIdParamSchema.parse(params);
   const targetUser = await findUserByIdentifier(targetIdentifier, { id: true, isActor: true });
@@ -166,12 +152,11 @@ export const POST = withErrorHandling(async (
     // Create follow relationship
     const follow = await prisma.follow.create({
       data: {
-        id: await generateSnowflakeId(),
         followerId: user.userId,
         followingId: targetId,
       },
       include: {
-        User_Follow_followingIdToUser: {
+        following: {
           select: {
             id: true,
             displayName: true,
@@ -186,21 +171,13 @@ export const POST = withErrorHandling(async (
     // Create notification for the followed user
     await notifyFollow(targetId, user.userId);
 
-    // Invalidate caches for both users to update follower/following counts
-    await Promise.all([
-      cachedDb.invalidateUserCache(user.userId),  // Invalidate follower's cache
-      cachedDb.invalidateUserCache(targetId),     // Invalidate target's cache
-    ]).catch((error) => {
-      logger.warn('Failed to invalidate user cache after follow', { error });
-    });
-
     logger.info('User followed successfully', { userId: user.userId, targetId }, 'POST /api/users/[userId]/follow');
 
     // Track user followed event
     trackServerEvent(user.userId, 'user_followed', {
       targetUserId: targetId,
       targetType: 'user',
-      targetUsername: follow.User_Follow_followingIdToUser.username,
+      targetUsername: follow.following.username,
     }).catch((error) => {
       logger.warn('Failed to track user_followed event', { error });
     });
@@ -208,7 +185,7 @@ export const POST = withErrorHandling(async (
     return successResponse(
       {
         id: follow.id,
-        following: follow.User_Follow_followingIdToUser,
+        following: follow.following,
         createdAt: follow.createdAt,
       },
       201
@@ -244,12 +221,11 @@ export const POST = withErrorHandling(async (
       ? prisma.$transaction(async (tx) => {
           const created = await tx.userActorFollow.create({
             data: {
-              id: await generateSnowflakeId(),
               userId: user.userId,
               actorId: targetId,
             },
             include: {
-              Actor: {
+              actor: {
                 select: {
                   id: true,
                   name: true,
@@ -273,12 +249,11 @@ export const POST = withErrorHandling(async (
         })
       : prisma.userActorFollow.create({
           data: {
-            id: await generateSnowflakeId(),
             userId: user.userId,
             actorId: targetId,
           },
           include: {
-            Actor: {
+            actor: {
               select: {
                 id: true,
                 name: true,
@@ -290,19 +265,14 @@ export const POST = withErrorHandling(async (
           },
         }));
 
-    // Invalidate cache for the user to update following count
-    await cachedDb.invalidateUserCache(user.userId).catch((error) => {
-      logger.warn('Failed to invalidate user cache after actor follow', { error });
-    });
-
     logger.info('Actor followed successfully', { userId: user.userId, npcId: targetId }, 'POST /api/users/[userId]/follow');
 
     // Track actor followed event
     trackServerEvent(user.userId, 'user_followed', {
       targetUserId: targetId,
       targetType: 'actor',
-      actorName: follow.Actor.name,
-      actorTier: follow.Actor.tier,
+      actorName: follow.actor.name,
+      actorTier: follow.actor.tier,
     }).catch((error) => {
       logger.warn('Failed to track user_followed event', { error });
     });
@@ -310,7 +280,7 @@ export const POST = withErrorHandling(async (
     return successResponse(
       {
         id: follow.id,
-        actor: follow.Actor,
+        actor: follow.actor,
         createdAt: follow.createdAt,
       },
       201
@@ -328,17 +298,6 @@ export const DELETE = withErrorHandling(async (
 ) => {
   // Authenticate user
   const user = await authenticate(request);
-  
-  // Apply rate limiting (no duplicate detection needed)
-  const rateLimitError = checkRateLimitAndDuplicates(
-    user.userId,
-    null,
-    RATE_LIMIT_CONFIGS.UNFOLLOW_USER
-  );
-  if (rateLimitError) {
-    return rateLimitError;
-  }
-  
   const params = await context.params;
   const { userId: targetIdentifier } = UserIdParamSchema.parse(params);
   const targetUser = await findUserByIdentifier(targetIdentifier, { id: true });
@@ -364,14 +323,6 @@ export const DELETE = withErrorHandling(async (
       where: {
         id: follow.id,
       },
-    });
-
-    // Invalidate caches for both users to update follower/following counts
-    await Promise.all([
-      cachedDb.invalidateUserCache(user.userId),  // Invalidate unfollower's cache
-      cachedDb.invalidateUserCache(targetId),     // Invalidate target's cache
-    ]).catch((error) => {
-      logger.warn('Failed to invalidate user cache after unfollow', { error });
     });
 
     logger.info('User unfollowed successfully', { userId: user.userId, targetId }, 'DELETE /api/users/[userId]/follow');
@@ -433,11 +384,6 @@ export const DELETE = withErrorHandling(async (
           },
         });
       }
-    });
-
-    // Invalidate cache for the user to update following count
-    await cachedDb.invalidateUserCache(user.userId).catch((error) => {
-      logger.warn('Failed to invalidate user cache after actor unfollow', { error });
     });
 
     logger.info('Actor unfollowed successfully', { userId: user.userId, npcId: targetId }, 'DELETE /api/users/[userId]/follow');

@@ -275,7 +275,7 @@ export function QuickRatingButton({
         onClick={handleOpen}
         className={cn(
           'flex items-center gap-2 px-4 py-3 rounded-lg font-semibold transition-colors',
-          'bg-[#1c9cf0] hover:bg-[#1c9cf0]/90 text-primary-foreground',
+          'bg-[#1c9cf0] hover:bg-[#1c9cf0]/90 text-white',
           className
         )}
       >

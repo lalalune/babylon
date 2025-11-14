@@ -13,13 +13,13 @@ import { definePrompt } from '../define-prompt';
 
 export const npcMarketDecisions = definePrompt({
   id: 'npc-market-decisions',
-  version: '2.0.0',
+  version: '1.0.0',
   category: 'trading',
   description: 'Generate trading decisions for multiple NPCs in batch based on information they have access to',
   temperature: 0.8,
   maxTokens: 8000,
   
-  template: `You must respond with valid XML only.
+  template: `You must respond with valid JSON only.
 
 You are simulating the trading decisions of {{npcCount}} different traders/NPCs in a prediction market and perpetual futures platform.
 
@@ -35,14 +35,14 @@ CRITICAL RULES:
 7. "hold" is a valid and common action - NPCs don't have to trade every tick (most should hold)
 8. Consider existing positions - NPCs may want to close losing positions or take profits
 9. Conservative position sizing: Use 10-30% of available balance per trade, not 100%
-10. RELATIONSHIPS MATTER:
+9. RELATIONSHIPS MATTER:
    - Rivals (sentiment < -0.5): Take OPPOSITE positions to them. If rival bets YES, you bet NO.
    - Allies (sentiment > 0.5): Take SAME positions as them. If ally bets YES, you bet YES.
    - Mentors: Follow their trading signals with high confidence
    - Critics: Take opposite positions to your subjects
    - Strong relationships (strength > 0.7): Weight their influence heavily
-11. If an event involves your rival, bet AGAINST them benefiting
-12. If an event involves your ally, bet WITH them benefiting
+10. If an event involves your rival, bet AGAINST them benefiting
+11. If an event involves your ally, bet WITH them benefiting
 
 ---
 
@@ -50,31 +50,24 @@ CRITICAL RULES:
 
 ---
 
-VALUE RANGES:
-- confidence: 0.0 (uncertain) to 1.0 (very certain)
-- amount: number >= 0 (must be <= available balance, 0 if hold)
-
-OUTPUT XML (exactly {{npcCount}} decisions, one per NPC):
-
-<decisions>
-  <decision>
-    <npcId>string</npcId>
-    <npcName>string</npcName>
-    <action>open_long | open_short | buy_yes | buy_no | close_position | hold</action>
-    <marketType>perp | prediction | null (null if hold)</marketType>
-    <ticker>string (for perps) or null</ticker>
-    <marketId>number (for predictions) or null</marketId>
-    <positionId>string (if closing) or null</positionId>
-    <amount>number ($ to invest, 0 if hold)</amount>
-    <confidence>0.0 to 1.0</confidence>
-    <reasoning>Explain decision based on SPECIFIC information they saw - reference posts, events, or group chat messages</reasoning>
-  </decision>
-  ... repeat for all {{npcCount}} NPCs ...
-</decisions>
+OUTPUT JSON (array of exactly {{npcCount}} decisions, one per NPC):
+[
+  {
+    "npcId": "string",
+    "npcName": "string",
+    "action": "open_long" | "open_short" | "buy_yes" | "buy_no" | "close_position" | "hold",
+    "marketType": "perp" | "prediction" | null (null if hold),
+    "ticker": "string (for perps) or null",
+    "marketId": number (for predictions) or null,
+    "positionId": "string (if closing position) or null",
+    "amount": number (how much $ to invest, 0 if hold or close),
+    "confidence": number between 0 and 1 (how confident in this decision),
+    "reasoning": "string (explain decision based on SPECIFIC information they saw - reference posts, events, or group chat messages)"
+  }
+]
 
 REMEMBER:
-- Output VALID XML with all tags properly closed
-- Exactly {{npcCount}} <decision> elements inside <decisions> root
+- Output exactly {{npcCount}} decisions in the array
 - Each NPC makes decisions independently based on THEIR information
 - Group chat members have insider info others don't  
 - Every trade decision must be justified by specific information they've seen

@@ -6,9 +6,7 @@
  */
 
 import { logger } from '@/lib/logger'
-import type OpenAI from 'openai'
-
-type OpenAIClient = OpenAI
+import OpenAI from 'openai'
 
 // Try Groq first, then OpenAI (Groq is faster and often more reliable)
 const apiKey = process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY
@@ -17,35 +15,17 @@ const baseURL = process.env.GROQ_API_KEY
   : 'https://api.openai.com/v1'
 
 // Lazy initialization - only create client when needed and API key is available
-let openaiClient: OpenAIClient | null = null
-let openaiImportAttempted = false
-
-async function getOpenAIClient(): Promise<OpenAIClient | null> {
+let openaiClient: OpenAI | null = null
+function getOpenAIClient(): OpenAI | null {
   if (!apiKey) {
     return null // No API key configured
   }
-  if (openaiClient) {
-    return openaiClient
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey,
+      baseURL,
+    })
   }
-
-  if (!openaiImportAttempted) {
-    openaiImportAttempted = true
-    try {
-      const { default: OpenAI } = await import('openai')
-      openaiClient = new OpenAI({
-        apiKey,
-        baseURL,
-      })
-    } catch (error) {
-      logger.warn(
-        'OpenAI SDK not available, tag generation disabled',
-        { error },
-        'TagGenerationService'
-      )
-      openaiClient = null
-    }
-  }
-
   return openaiClient
 }
 
@@ -59,7 +39,7 @@ export interface GeneratedTag {
  * Generate 1-3 organic tags from post content
  */
 export async function generateTagsFromPost(content: string): Promise<GeneratedTag[]> {
-  const openai = await getOpenAIClient()
+  const openai = getOpenAIClient()
   
   // If no API key configured, return empty tags (graceful degradation)
   if (!openai) {
@@ -79,23 +59,22 @@ Rules:
 5. Return 1-3 tags only (prefer quality over quantity)
 6. Categorize each tag (Sports, Politics, Tech, Finance, Entertainment, etc.)
 
-Return ONLY valid XML in this exact format:
-<tags>
-  <tag>
-    <displayName>NFC North</displayName>
-    <category>Sports</category>
-  </tag>
-  <tag>
-    <displayName>Puka</displayName>
-    <category>Sports</category>
-  </tag>
-</tags>
+Return ONLY a JSON array of objects with this exact format:
+[
+  {
+    "displayName": "NFC North",
+    "category": "Sports"
+  },
+  {
+    "displayName": "Puka",
+    "category": "Sports"
+  }
+]
 
-If no good tags can be extracted, return: <tags></tags>`
+If no good tags can be extracted, return an empty array: []`
 
-  // Use llama-3.1-8b-instant (130k in, 130k out - no restrictions!)
   const model = process.env.GROQ_API_KEY 
-    ? 'llama-3.1-8b-instant' // 130k in/out, fast, no token limits
+    ? 'llama-3.3-70b-versatile' // Updated Groq model
     : 'gpt-4o-mini'
 
   const response = await openai.chat.completions.create({
@@ -103,7 +82,7 @@ If no good tags can be extracted, return: <tags></tags>`
     messages: [
       {
         role: 'system',
-        content: 'You are an XML-only assistant for tag extraction. You must respond ONLY with valid XML. No JSON, no explanations, no markdown.',
+        content: 'You are a trending topics extraction expert. You analyze social media posts and extract organic, searchable tags that would appear in trending sections.',
       },
       {
         role: 'user',
@@ -111,7 +90,7 @@ If no good tags can be extracted, return: <tags></tags>`
       },
     ],
     temperature: 0.3,
-    max_tokens: 500, // Increased for XML (more verbose than JSON)
+    max_tokens: 200,
   })
 
   const content_text = response.choices[0]?.message?.content?.trim()
@@ -120,68 +99,43 @@ If no good tags can be extracted, return: <tags></tags>`
     return []
   }
 
-  // Parse XML instead of JSON
-  const xmlContent = content_text
-    .replace(/```xml\n?/g, '')
+  // Parse JSON response
+  // Remove markdown code blocks if present
+  const jsonContent = content_text
+    .replace(/```json\n?/g, '')
     .replace(/```\n?/g, '')
     .trim()
   
-  // Extract tags from XML
-  const tags: Array<{ displayName: string; category?: string }> = [];
-  
-  try {
-    // Simple XML parsing for tag structure
-    const tagMatches = xmlContent.matchAll(/<tag>([\s\S]*?)<\/tag>/g);
-    
-    for (const tagMatch of tagMatches) {
-      const tagContent = tagMatch[1];
-      if (!tagContent) continue;
-      
-      const displayNameMatch = tagContent.match(/<displayName>(.*?)<\/displayName>/);
-      const categoryMatch = tagContent.match(/<category>(.*?)<\/category>/);
-      
-      if (displayNameMatch && displayNameMatch[1]) {
-        tags.push({
-          displayName: displayNameMatch[1].trim(),
-          category: categoryMatch?.[1]?.trim(),
-        });
-      }
-    }
-    
-    // If no tags found, try alternative structure
-    if (tags.length === 0) {
-      logger.warn('No tags found in XML, trying alternative parsing', { 
-        xmlPreview: xmlContent.substring(0, 200) 
-      }, 'TagGenerationService');
-    }
-  } catch (error) {
-    logger.error('Failed to parse tag generation XML', { 
-      error, 
-      xmlContent: xmlContent.substring(0, 200),
-      contentPreview: content.substring(0, 100)
-    }, 'TagGenerationService');
-    // Return empty array on parse error instead of crashing
-    return [];
-  }
+  const tags = JSON.parse(jsonContent) as Array<{ displayName: string; category?: string }>
 
-  const generatedTags: GeneratedTag[] = tags
-    .filter(tag => tag.displayName && typeof tag.displayName === 'string')
-    .map(tag => {
-      const displayName = tag.displayName.trim()
-      const name = displayName
-        .toLowerCase()
-        .replace(/[^\w\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-')
-        .trim()
-      
-      return {
-        name,
-        displayName,
-        category: tag.category,
-      }
+  // Validate and normalize tags
+  const generatedTags: GeneratedTag[] = []
+  for (const tag of tags) {
+    if (!tag.displayName || typeof tag.displayName !== 'string') {
+      continue
+    }
+
+    const displayName = tag.displayName.trim()
+    if (displayName.length === 0 || displayName.length > 50) {
+      continue
+    }
+
+    // Normalize to lowercase, replace spaces with hyphens
+    const name = displayName
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '') // Remove special chars except hyphens
+      .replace(/\s+/g, '-')     // Replace spaces with hyphens
+      .replace(/-+/g, '-')      // Collapse multiple hyphens
+      .trim()
+
+    if (name.length > 0) {
+    generatedTags.push({
+      name,
+      displayName,
+      category: tag.category || undefined,
     })
-    .filter(tag => tag.name.length > 0 && tag.displayName.length <= 50)
+    }
+  }
 
   logger.debug('Generated tags from post', {
     content: content.slice(0, 100),

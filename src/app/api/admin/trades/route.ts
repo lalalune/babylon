@@ -15,7 +15,7 @@ import { logger } from '@/lib/logger';
 const QuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(50),
   offset: z.coerce.number().min(0).default(0),
-  type: z.enum(['all', 'balance', 'npc', 'position']).default('all'),
+  type: z.enum(['all', 'balance', 'npc', 'position']).optional(),
 });
 
 export const GET = withErrorHandling(async (request: NextRequest) => {
@@ -37,81 +37,69 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     take: params.limit,
     skip: params.offset,
     orderBy: { createdAt: 'desc' },
+    include: {
+      user: {
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          profileImageUrl: true,
+          isActor: true,
+        },
+      },
+    },
     where: params.type === 'balance' ? {} : undefined,
   });
-
-  // Fetch users for balance transactions
-  const balanceUserIds = [...new Set(balanceTransactions.map(tx => tx.userId))];
-  const balanceUsers = await prisma.user.findMany({
-    where: { id: { in: balanceUserIds } },
-    select: {
-      id: true,
-      username: true,
-      displayName: true,
-      profileImageUrl: true,
-      isActor: true,
-    },
-  });
-  const balanceUsersMap = new Map(balanceUsers.map(u => [u.id, u]));
 
   // Get recent NPC trades
   const npcTrades = await prisma.nPCTrade.findMany({
     take: params.limit,
     skip: params.offset,
     orderBy: { executedAt: 'desc' },
+    include: {
+      npcActor: {
+        select: {
+          id: true,
+          name: true,
+          profileImageUrl: true,
+        },
+      },
+      pool: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
     where: params.type === 'npc' ? {} : undefined,
   });
-
-  // Fetch actors for NPC trades
-  const actorIds = [...new Set(npcTrades.map(trade => trade.npcActorId))];
-  
-  const actors = await prisma.actor.findMany({
-    where: { id: { in: actorIds } },
-    select: {
-      id: true,
-      name: true,
-      profileImageUrl: true,
-    },
-  });
-  
-  const actorsMap = new Map(actors.map(a => [a.id, a]));
 
   // Get recent position changes
   const positions = await prisma.position.findMany({
     take: params.limit,
     skip: params.offset,
     orderBy: { updatedAt: 'desc' },
+    include: {
+      user: {
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          profileImageUrl: true,
+          isActor: true,
+        },
+      },
+      market: {
+        select: {
+          id: true,
+          question: true,
+          resolved: true,
+          resolution: true,
+        },
+      },
+    },
     where: params.type === 'position' ? {} : undefined,
   });
-
-  // Fetch users and markets for positions
-  const positionUserIds = [...new Set(positions.map(pos => pos.userId))];
-  const marketIds = [...new Set(positions.map(pos => pos.marketId))];
-  
-  const [positionUsers, markets] = await Promise.all([
-    prisma.user.findMany({
-      where: { id: { in: positionUserIds } },
-      select: {
-        id: true,
-        username: true,
-        displayName: true,
-        profileImageUrl: true,
-        isActor: true,
-      },
-    }),
-    prisma.market.findMany({
-      where: { id: { in: marketIds } },
-      select: {
-        id: true,
-        question: true,
-        resolved: true,
-        resolution: true,
-      },
-    }),
-  ]);
-  
-  const positionUsersMap = new Map(positionUsers.map(u => [u.id, u]));
-  const marketsMap = new Map(markets.map(m => [m.id, m]));
 
   // Merge and sort by timestamp
   const allTrades = [
@@ -119,7 +107,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       type: 'balance' as const,
       id: tx.id,
       timestamp: tx.createdAt,
-      user: balanceUsersMap.get(tx.userId) || null,
+      user: tx.user,
       amount: tx.amount.toString(),
       balanceBefore: tx.balanceBefore.toString(),
       balanceAfter: tx.balanceAfter.toString(),
@@ -127,42 +115,40 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       description: tx.description,
       relatedId: tx.relatedId,
     })),
-    ...npcTrades.map(trade => {
-      const actor = actorsMap.get(trade.npcActorId);
-      return {
-        type: 'npc' as const,
-        id: trade.id,
-        timestamp: trade.executedAt,
-        user: actor ? {
-          id: actor.id,
-          username: actor.name,
-          displayName: actor.name,
-          profileImageUrl: actor.profileImageUrl,
-          isActor: true,
-        } : null,
-        marketType: trade.marketType,
-        ticker: trade.ticker,
-        marketId: trade.marketId,
-        action: trade.action,
-        side: trade.side,
-        amount: trade.amount,
-        price: trade.price,
-        sentiment: trade.sentiment,
-        reason: trade.reason,
-      };
-    }),
+    ...npcTrades.map(trade => ({
+      type: 'npc' as const,
+      id: trade.id,
+      timestamp: trade.executedAt,
+      user: {
+        id: trade.npcActor.id,
+        username: trade.npcActor.name,
+        displayName: trade.npcActor.name,
+        profileImageUrl: trade.npcActor.profileImageUrl,
+        isActor: true,
+      },
+      marketType: trade.marketType,
+      ticker: trade.ticker,
+      marketId: trade.marketId,
+      action: trade.action,
+      side: trade.side,
+      amount: trade.amount,
+      price: trade.price,
+      sentiment: trade.sentiment,
+      reason: trade.reason,
+      pool: trade.pool,
+    })),
     ...positions.map(pos => ({
       type: 'position' as const,
       id: pos.id,
       timestamp: pos.updatedAt,
-      user: positionUsersMap.get(pos.userId) || null,
-      market: marketsMap.get(pos.marketId) || null,
+      user: pos.user,
+      market: pos.market,
       side: pos.side ? 'YES' : 'NO',
       shares: pos.shares.toString(),
       avgPrice: pos.avgPrice.toString(),
       createdAt: pos.createdAt,
     })),
-  ].filter(trade => trade.user !== null); // Filter out trades with missing users
+  ];
 
   // Sort by timestamp
   allTrades.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());

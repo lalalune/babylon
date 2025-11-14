@@ -15,21 +15,6 @@ export type JsonValue =
   | JsonValue[] 
   | { [key: string]: JsonValue };
 
-import { z } from 'zod';
-
-export type JsonValueSchema = z.ZodType<JsonValue>;
-
-export const JsonValueSchema: JsonValueSchema = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.null(),
-    z.array(JsonValueSchema),
-    z.record(z.string(), JsonValueSchema),
-  ])
-);
-
 /**
  * Generic key-value record with string keys
  */

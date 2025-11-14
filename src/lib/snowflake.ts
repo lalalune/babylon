@@ -35,8 +35,6 @@ class SnowflakeGenerator {
   private workerId: bigint;
   private sequence: bigint = 0n;
   private lastTimestamp: bigint = 0n;
-  private generating: boolean = false;
-  private queue: Array<{ resolve: (value: string) => void; reject: (error: Error) => void }> = [];
 
   constructor(workerId: number = 0) {
     if (workerId < 0 || workerId > Number(MAX_WORKER_ID)) {
@@ -46,42 +44,9 @@ class SnowflakeGenerator {
   }
 
   /**
-   * Generate a new Snowflake ID (async with mutex for concurrency safety)
+   * Generate a new Snowflake ID
    */
-  async generate(): Promise<string> {
-    return new Promise((resolve, reject) => {
-      this.queue.push({ resolve, reject });
-      this.processQueue();
-    });
-  }
-
-  /**
-   * Process the queue of ID generation requests
-   */
-  private processQueue(): void {
-    if (this.generating || this.queue.length === 0) {
-      return;
-    }
-
-    this.generating = true;
-    const request = this.queue.shift()!;
-
-    try {
-      const id = this.generateSync();
-      request.resolve(id);
-    } catch (error) {
-      request.reject(error as Error);
-    } finally {
-      this.generating = false;
-      // Process next item in queue
-      queueMicrotask(() => this.processQueue());
-    }
-  }
-
-  /**
-   * Generate a new Snowflake ID (synchronous internal method)
-   */
-  private generateSync(): string {
+  generate(): string {
     let timestamp = BigInt(Date.now()) - EPOCH;
 
     // If same millisecond, increment sequence
@@ -148,12 +113,18 @@ class SnowflakeGenerator {
    * Check if a string is a valid Snowflake ID
    */
   static isValid(id: string): boolean {
-    const idBigInt = BigInt(id);
-    if (idBigInt < 0n || idBigInt >= (1n << 63n)) {
+    try {
+      const idBigInt = BigInt(id);
+      // Must be positive and within 64-bit range
+      if (idBigInt < 0n || idBigInt >= (1n << 63n)) {
+        return false;
+      }
+      // Try to parse it
+      SnowflakeGenerator.parse(idBigInt);
+      return true;
+    } catch {
       return false;
     }
-    SnowflakeGenerator.parse(idBigInt);
-    return true;
   }
 }
 
@@ -178,8 +149,8 @@ function getGenerator(): SnowflakeGenerator {
 /**
  * Generate a new Snowflake ID (convenience function)
  */
-export async function generateSnowflakeId(): Promise<string> {
-  return await getGenerator().generate();
+export function generateSnowflakeId(): string {
+  return getGenerator().generate();
 }
 
 /**

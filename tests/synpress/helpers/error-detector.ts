@@ -149,8 +149,8 @@ export class ButtonValidator {
     
     for (let i = 0; i < buttonElements.length; i++) {
       const button = buttonElements[i]
-      const text = await button?.textContent().catch(() => '') || ''
-      const visible = await button?.isVisible().catch(() => false) || false
+      const text = await button.textContent().catch(() => '')
+      const visible = await button.isVisible().catch(() => false)
       const selector = `button >> nth=${i}`
       
       buttons.push({
@@ -165,8 +165,8 @@ export class ButtonValidator {
     
     for (let i = 0; i < linkElements.length; i++) {
       const link = linkElements[i]
-      const text = await link?.textContent().catch(() => '') || ''
-      const visible = await link?.isVisible().catch(() => false) || false
+      const text = await link.textContent().catch(() => '')
+      const visible = await link.isVisible().catch(() => false)
       const selector = `a[role="button"] >> nth=${i}`
       
       buttons.push({
@@ -183,44 +183,48 @@ export class ButtonValidator {
    * Test a single button
    */
   async testButton(selector: string, text: string): Promise<boolean> {
-    console.log(`  Testing button: "${text}"`)
-    
-    const button = this.page.locator(selector).first()
-    
-    // Check if button exists and is visible
-    const isVisible = await button.isVisible({ timeout: 1000 })
-    if (!isVisible) {
-      console.log(`    ⏭️  Skipped (not visible): "${text}"`)
-      return false
+    try {
+      console.log(`  Testing button: "${text}"`)
+      
+      const button = this.page.locator(selector).first()
+      
+      // Check if button exists and is visible
+      if (!(await button.isVisible({ timeout: 1000 }).catch(() => false))) {
+        console.log(`    ⏭️  Skipped (not visible): "${text}"`)
+        return false
+      }
+      
+      // Check if button is disabled
+      if (await button.isDisabled().catch(() => false)) {
+        console.log(`    ⏭️  Skipped (disabled): "${text}"`)
+        return false
+      }
+      
+      // Clear errors before clicking
+      this.errorDetector.clear()
+      
+      // Click the button
+      await button.click({ timeout: 5000 })
+      
+      // Wait for any effects
+      await this.page.waitForTimeout(500)
+      
+      // Check for errors after clicking
+      if (this.errorDetector.hasErrors()) {
+        console.error(`    ❌ ERRORS after clicking "${text}":`)
+        this.errorDetector.logStatus()
+        this.errorDetector.throwIfErrors()
+      }
+      
+      console.log(`    ✅ Clicked successfully: "${text}"`)
+      this.testedButtons.add(text)
+      
+      return true
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error(`    ❌ FAILED to test button "${text}": ${errorMessage}`)
+      throw new Error(`Button test failed for "${text}": ${errorMessage}`)
     }
-    
-    // Check if button is disabled
-    const isDisabled = await button.isDisabled()
-    if (isDisabled) {
-      console.log(`    ⏭️  Skipped (disabled): "${text}"`)
-      return false
-    }
-    
-    // Clear errors before clicking
-    this.errorDetector.clear()
-    
-    // Click the button
-    await button.click({ timeout: 5000 })
-    
-    // Wait for any effects
-    await this.page.waitForTimeout(500)
-    
-    // Check for errors after clicking
-    if (this.errorDetector.hasErrors()) {
-      console.error(`    ❌ ERRORS after clicking "${text}":`)
-      this.errorDetector.logStatus()
-      this.errorDetector.throwIfErrors()
-    }
-    
-    console.log(`    ✅ Clicked successfully: "${text}"`)
-    this.testedButtons.add(text)
-    
-    return true
   }
 
   /**
@@ -263,21 +267,27 @@ export class ButtonValidator {
         continue
       }
       
-      const wasClicked = await this.testButton(button.selector, button.text)
-      if (wasClicked) {
-        tested++
-        
-        // Take screenshot after click if prefix provided
-        if (options.screenshotPrefix) {
-          await this.page.screenshot({ 
-            path: `test-results/screenshots/${options.screenshotPrefix}-${tested}.png` 
-          })
+      try {
+        const wasClicked = await this.testButton(button.selector, button.text)
+        if (wasClicked) {
+          tested++
+          
+          // Take screenshot after click if prefix provided
+          if (options.screenshotPrefix) {
+            await this.page.screenshot({ 
+              path: `test-results/screenshots/${options.screenshotPrefix}-${tested}.png` 
+            })
+          }
+          
+          // Wait a bit between clicks
+          await this.page.waitForTimeout(300)
+        } else {
+          skipped++
         }
-        
-        // Wait a bit between clicks
-        await this.page.waitForTimeout(300)
-      } else {
-        skipped++
+      } catch (error) {
+        failed++
+        console.error(`  ❌ Failed: "${button.text}"`)
+        throw error // Re-throw to fail the test
       }
     }
     

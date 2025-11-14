@@ -8,13 +8,13 @@
  * - Apps (game platforms and services)
  */
 
-import { SubgraphClient } from '@/agents/agent0/SubgraphClient'
+import type { NextRequest } from 'next/server'
 import { optionalAuth } from '@/lib/api/auth-middleware'
 import { asPublic } from '@/lib/db/context'
-import { successResponse, withErrorHandling } from '@/lib/errors/error-handler'
+import { withErrorHandling, successResponse } from '@/lib/errors/error-handler'
 import { logger } from '@/lib/logger'
 import type { PrismaClient } from '@prisma/client'
-import type { NextRequest } from 'next/server'
+import { SubgraphClient } from '@/agents/agent0/SubgraphClient'
 
 /**
  * GET /api/registry/all
@@ -34,8 +34,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
   // Fetch users from database
   const fetchUsers = async () => {
-    try {
-      const dbOperation = async (db: PrismaClient) => {
+    const dbOperation = async (db: PrismaClient) => {
       const where: Record<string, unknown> = {}
       if (onChainOnly) {
         where.onChainRegistered = true
@@ -71,11 +70,11 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
           reputationPoints: true,
           _count: {
             select: {
-              Position: true,
-              Comment: true,
-              Reaction: true,
-              Follow_Follow_followerIdToUser: true,
-              Follow_Follow_followingIdToUser: true,
+              positions: true,
+              comments: true,
+              reactions: true,
+              following: true,
+              followedBy: true,
             },
           },
         },
@@ -99,27 +98,22 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         createdAt: user.createdAt,
         balance: user.virtualBalance.toString(),
         reputationPoints: user.reputationPoints,
-          stats: {
-            positions: user._count.Position,
-            comments: user._count.Comment,
-            reactions: user._count.Reaction,
-            followers: user._count.Follow_Follow_followingIdToUser,
-            following: user._count.Follow_Follow_followerIdToUser,
-          },
-        }))
-      }
-
-      return await asPublic(dbOperation)
-    } catch (error) {
-      logger.error('Failed to fetch users from database', { error }, 'GET /api/registry/all')
-      return []
+        stats: {
+          positions: user._count.positions,
+          comments: user._count.comments,
+          reactions: user._count.reactions,
+          followers: user._count.followedBy,
+          following: user._count.following,
+        },
+      }))
     }
+
+    return await asPublic(dbOperation)
   }
 
   // Fetch actors (NPCs) from database
   const fetchActors = async () => {
-    try {
-      const dbOperation = async (db: PrismaClient) => {
+    const dbOperation = async (db: PrismaClient) => {
       const where: Record<string, unknown> = {}
       if (search) {
         where.OR = [
@@ -148,10 +142,10 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
           createdAt: true,
           _count: {
             select: {
-              Pool: true,
-              NPCTrade: true,
-              ActorFollow_ActorFollow_followingIdToActor: true,
-              ActorFollow_ActorFollow_followerIdToActor: true,
+              pools: true,
+              npcTrades: true,
+              followedBy: true,
+              following: true,
             },
           },
         },
@@ -172,21 +166,18 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         hasPool: actor.hasPool,
         createdAt: actor.createdAt,
         stats: {
-          pools: actor._count.Pool,
-          trades: actor._count.NPCTrade,
-          followers: actor._count.ActorFollow_ActorFollow_followingIdToActor,
-          following: actor._count.ActorFollow_ActorFollow_followerIdToActor,
+          pools: actor._count.pools,
+          trades: actor._count.npcTrades,
+          followers: actor._count.followedBy,
+          following: actor._count.following,
         },
       }))
     }
 
-      return await asPublic(dbOperation)
-    } catch (error) {
-      logger.error('Failed to fetch actors from database', { error }, 'GET /api/registry/all')
-      return []
-    }
+    return await asPublic(dbOperation)
   }
 
+  // Fetch agents from Agent0 subgraph
   const fetchAgents = async () => {
     try {
       const agents = await subgraphClient.searchAgents({
@@ -194,66 +185,55 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         limit: 100
       })
 
-      return agents.map(agent => {
-        let parsedCapabilities: unknown = {}
-        if (agent.capabilities) {
-          try {
-            parsedCapabilities = JSON.parse(agent.capabilities)
-          } catch {
-            parsedCapabilities = {}
-          }
-        }
-
-        return {
-          type: 'agent',
-          id: `agent0-${agent.tokenId}`,
-          tokenId: agent.tokenId,
-          name: agent.name,
-          walletAddress: agent.walletAddress,
-          metadataCID: agent.metadataCID,
-          mcpEndpoint: agent.mcpEndpoint,
-          a2aEndpoint: agent.a2aEndpoint,
-          capabilities: parsedCapabilities,
-          reputation: agent.reputation,
-        }
-      })
+      return agents.map(agent => ({
+        type: 'agent',
+        id: `agent0-${agent.tokenId}`,
+        tokenId: agent.tokenId,
+        name: agent.name,
+        walletAddress: agent.walletAddress,
+        metadataCID: agent.metadataCID,
+        mcpEndpoint: agent.mcpEndpoint,
+        a2aEndpoint: agent.a2aEndpoint,
+        capabilities: agent.capabilities ? JSON.parse(agent.capabilities) : {},
+        reputation: agent.reputation || {
+          totalBets: 0,
+          winningBets: 0,
+          trustScore: 0,
+          accuracyScore: 0,
+        },
+      }))
     } catch (error) {
-      logger.error('Failed to fetch agents from subgraph', { error }, 'GET /api/registry/all')
+      logger.warn('Failed to fetch agents from subgraph', { error }, 'GET /api/registry/all')
       return []
     }
   }
 
+  // Fetch apps (game platforms) from Agent0 subgraph
   const fetchApps = async () => {
     try {
       const apps = await subgraphClient.getGamePlatforms({
         minTrustScore: 0
       })
 
-      return apps.map(app => {
-        let parsedCapabilities: unknown = {}
-        if (app.capabilities) {
-          try {
-            parsedCapabilities = JSON.parse(app.capabilities)
-          } catch {
-            parsedCapabilities = {}
-          }
-        }
-
-        return {
-          type: 'app',
-          id: `app-${app.tokenId}`,
-          tokenId: app.tokenId,
-          name: app.name,
-          walletAddress: app.walletAddress,
-          metadataCID: app.metadataCID,
-          mcpEndpoint: app.mcpEndpoint,
-          a2aEndpoint: app.a2aEndpoint,
-          capabilities: parsedCapabilities,
-          reputation: app.reputation || 0,
-        }
-      })
+      return apps.map(app => ({
+        type: 'app',
+        id: `app-${app.tokenId}`,
+        tokenId: app.tokenId,
+        name: app.name,
+        walletAddress: app.walletAddress,
+        metadataCID: app.metadataCID,
+        mcpEndpoint: app.mcpEndpoint,
+        a2aEndpoint: app.a2aEndpoint,
+        capabilities: app.capabilities ? JSON.parse(app.capabilities) : {},
+        reputation: app.reputation || {
+          totalBets: 0,
+          winningBets: 0,
+          trustScore: 0,
+          accuracyScore: 0,
+        },
+      }))
     } catch (error) {
-      logger.error('Failed to fetch apps from subgraph', { error }, 'GET /api/registry/all')
+      logger.warn('Failed to fetch apps from subgraph', { error }, 'GET /api/registry/all')
       return []
     }
   }

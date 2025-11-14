@@ -62,19 +62,6 @@ const config: Config = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
-      maxWidth: {
-        'feed': '600px',      // Main feed content
-        'modal': '600px',     // Modals and dialogs
-        'sidebar': '350px',   // Widget sidebar
-        'nav-sidebar': '280px', // Navigation sidebar
-      },
-      fontSize: {
-        'base-text': '0.9375rem', // 15px - standard body text
-      },
-      spacing: {
-        'safe-bottom': 'env(safe-area-inset-bottom)',
-        'safe-top': 'env(safe-area-inset-top)',
-      },
       keyframes: {
         'accordion-down': {
           from: { height: '0' },
@@ -92,12 +79,27 @@ const config: Config = {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
         },
+        'bounce-squish': {
+          '0%, 100%': {
+            transform: 'translateY(0) scaleY(1)',
+          },
+          '25%': {
+            transform: 'translateY(-25%) scaleY(1.1) scaleX(0.95)',
+          },
+          '50%': {
+            transform: 'translateY(0) scaleY(0.85) scaleX(1.15)',
+          },
+          '75%': {
+            transform: 'translateY(-10%) scaleY(1.05) scaleX(0.98)',
+          },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
         'slide-in': 'slide-in 0.3s ease-out',
         'fade-in': 'fade-in 0.2s ease-out',
+        'bounce-squish': 'bounce-squish 1s ease-in-out infinite',
       },
       backdropBlur: {
         xs: '2px',

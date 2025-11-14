@@ -4,6 +4,7 @@
  * Displays active market biases and sentiment adjustments
  * Shows which markets are being influenced and by how much
  *
+ * Pattern based on: ReputationCard.tsx
  */
 
 'use client'
@@ -44,13 +45,18 @@ export function MarketBiasIndicator({
   useEffect(() => {
     const fetchBiases = async () => {
       setLoading(true)
-      const response = await fetch('/api/markets/bias/active')
-      const result = await response.json()
+      try {
+        const response = await fetch('/api/markets/bias/active')
+        const result = await response.json()
 
-      if (result.success) {
-        setData(result)
+        if (result.success) {
+          setData(result)
+        }
+      } catch (error) {
+        console.error('Failed to fetch market biases:', error)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
 
     fetchBiases()
@@ -121,9 +127,9 @@ export function MarketBiasIndicator({
               {/* Entity Info */}
               <div className="flex items-center gap-2 flex-1">
                 {bias.direction === 'up' ? (
-                  <TrendingUp className="w-5 h-5 text-green-500 shrink-0" />
+                  <TrendingUp className="w-5 h-5 text-green-500 flex-shrink-0" />
                 ) : (
-                  <TrendingDown className="w-5 h-5 text-red-500 shrink-0" />
+                  <TrendingDown className="w-5 h-5 text-red-500 flex-shrink-0" />
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-foreground truncate">
@@ -136,7 +142,7 @@ export function MarketBiasIndicator({
               </div>
 
               {/* Strength & Adjustments */}
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-3 flex-shrink-0">
                 {/* Strength Bar */}
                 <div className="hidden sm:block">
                   <div className="text-xs text-muted-foreground mb-1">Strength</div>

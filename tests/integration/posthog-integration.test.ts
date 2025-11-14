@@ -120,7 +120,7 @@ describe('PostHog Server Integration', () => {
     });
 
     it('should handle concurrent tracking calls', async () => {
-      const promises: Promise<void>[] = [];
+      const promises = [];
       
       for (let i = 0; i < 10; i++) {
         promises.push(trackServerEvent(`test-user-${i}`, `concurrent_test_${i}`, {
@@ -135,24 +135,11 @@ describe('PostHog Server Integration', () => {
   });
 
   describe('Flush and Cleanup', () => {
-    it('should flush events (may fail if events are invalid)', async () => {
-      // PostHog flush may fail with 400 if events are invalid
-      // This is expected in test environment, so we just test it doesn't crash
-      try {
-        await Promise.race([
-          flushPostHog(),
-          new Promise((resolve) => setTimeout(() => {
-            console.log('⚠️  PostHog flush timeout (expected in test)');
-            resolve(null);
-          }, 3000))
-        ]);
-        console.log('✅ PostHog flush succeeded');
-      } catch (error) {
-        console.log('⚠️  PostHog flush failed (expected in test environment):', error);
-        // Don't fail the test - this is expected
-      }
-      expect(true).toBe(true);
-    }, 10000); // Increase timeout to 10s
+    it('should flush events without errors', async () => {
+      await expect(async () => {
+        await flushPostHog();
+      }).not.toThrow();
+    });
   });
 });
 

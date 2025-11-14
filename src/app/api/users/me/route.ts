@@ -1,91 +1,6 @@
 /**
- * Current User Profile API
- * 
- * @route GET /api/users/me
- * @access Authenticated
- * 
- * @description
- * Returns the authenticated user's complete profile information including
- * profile status, social connections, reputation, and onboarding state.
- * Central endpoint for user session management and profile data.
- * 
- * **Profile Data Includes:**
- * - **Identity:** username, display name, bio, avatar, cover image
- * - **Onboarding Status:** profile completion, on-chain registration
- * - **Social Links:** Farcaster, Twitter connections and visibility settings
- * - **Blockchain:** wallet address, NFT token ID, on-chain status
- * - **Reputation:** reputation points, referral code, referral source
- * - **Stats:** cached profile statistics (posts, followers, following)
- * - **Permissions:** admin status, actor/agent flag
- * 
- * **Onboarding States:**
- * - `needsOnboarding: true` - User needs to complete profile setup
- * - `needsOnchain: true` - Profile complete but not registered on-chain
- * - Both false - Fully onboarded user
- * 
- * **Profile Completeness:**
- * A profile is considered complete when user has:
- * - Set a username
- * - Added a bio
- * - Uploaded a profile image
- * 
- * **Caching:**
- * Profile stats (posts, followers, etc.) are cached for performance.
- * Cache is invalidated on relevant user actions.
- * 
- * @returns {object} User profile response
- * @property {boolean} authenticated - Always true (auth required)
- * @property {boolean} needsOnboarding - Whether user needs profile setup
- * @property {boolean} needsOnchain - Whether user needs on-chain registration
- * @property {object|null} user - User profile object (null if no profile yet)
- * @property {object} user.stats - Cached profile statistics
- * 
- * **User Object Fields:**
- * @property {string} user.id - User ID
- * @property {string} user.privyId - Privy authentication ID
- * @property {string} user.username - Unique username
- * @property {string} user.displayName - Display name
- * @property {string} user.bio - User biography
- * @property {string} user.profileImageUrl - Profile image URL
- * @property {string} user.coverImageUrl - Cover image URL
- * @property {string} user.walletAddress - Blockchain wallet address
- * @property {boolean} user.onChainRegistered - On-chain registration status
- * @property {string} user.nftTokenId - Associated NFT token ID
- * @property {string} user.referralCode - User's referral code
- * @property {string} user.referredBy - Referrer's code (if referred)
- * @property {number} user.reputationPoints - Reputation score
- * @property {boolean} user.hasFarcaster - Farcaster connected
- * @property {boolean} user.hasTwitter - Twitter connected
- * @property {boolean} user.isAdmin - Admin privileges
- * @property {boolean} user.isActor - Agent/actor flag
- * 
- * @throws {401} Unauthorized - authentication required
- * @throws {500} Internal server error
- * 
- * @example
- * ```typescript
- * // Get current user profile
- * const response = await fetch('/api/users/me', {
- *   headers: { 'Authorization': `Bearer ${token}` }
- * });
- * const { user, needsOnboarding, needsOnchain } = await response.json();
- * 
- * if (needsOnboarding) {
- *   // Redirect to onboarding flow
- *   router.push('/onboarding');
- * } else if (needsOnchain) {
- *   // Prompt for on-chain registration
- *   showOnchainModal();
- * } else {
- *   // User fully onboarded
- *   console.log(`Welcome, ${user.displayName}!`);
- * }
- * ```
- * 
- * @see {@link /lib/cached-database-service} Profile stats caching
- * @see {@link /lib/api/auth-middleware} Authentication
- * @see {@link /src/app/onboarding/page.tsx} Onboarding flow
- * @see {@link /src/contexts/AuthContext.tsx} Auth context consumer
+ * API Route: /api/users/me
+ * Methods: GET (return authenticated user information)
  */
 
 import type { NextRequest } from 'next/server'
@@ -93,7 +8,6 @@ import { authenticate } from '@/lib/api/auth-middleware'
 import { withErrorHandling, successResponse } from '@/lib/errors/error-handler'
 import { prisma } from '@/lib/database-service'
 import { logger } from '@/lib/logger'
-import { cachedDb } from '@/lib/cached-database-service'
 
 const userSelect = {
   id: true,
@@ -121,8 +35,6 @@ const userSelect = {
   showTwitterPublic: true,
   showFarcasterPublic: true,
   showWalletPublic: true,
-  isAdmin: true,
-  isActor: true,
   createdAt: true,
   updatedAt: true,
 } as const
@@ -157,9 +69,6 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     })
   }
 
-  // Get cached profile stats
-  const stats = await cachedDb.getUserProfileStats(dbUser.id)
-
   const responseUser = {
     id: dbUser.id,
     privyId: dbUser.privyId,
@@ -186,11 +95,8 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     showTwitterPublic: dbUser.showTwitterPublic,
     showFarcasterPublic: dbUser.showFarcasterPublic,
     showWalletPublic: dbUser.showWalletPublic,
-    isAdmin: dbUser.isAdmin,
-    isActor: dbUser.isActor,
     createdAt: dbUser.createdAt.toISOString(),
     updatedAt: dbUser.updatedAt.toISOString(),
-    stats: stats || undefined,
   }
 
   const needsOnboarding = !dbUser.profileComplete

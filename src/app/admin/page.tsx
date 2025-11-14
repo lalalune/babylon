@@ -7,21 +7,11 @@ import { PageContainer } from '@/components/shared/PageContainer'
 import { StatsTab } from '@/components/admin/StatsTab'
 import { TradingFeedTab } from '@/components/admin/TradingFeedTab'
 import { UserManagementTab } from '@/components/admin/UserManagementTab'
-import { NotificationsTab } from '@/components/admin/NotificationsTab'
-import { GroupsTab } from '@/components/admin/GroupsTab'
-import { FeesTab } from '@/components/admin/FeesTab'
-import { AdminManagementTab } from '@/components/admin/AdminManagementTab'
-import { ReportsTab } from '@/components/admin/ReportsTab'
-import { Shield, Activity, Users, BarChart, Bell, MessageSquare, DollarSign, Layers, ShieldCheck, Flag, Sparkles, Database, Bot, Gamepad2 } from 'lucide-react'
+import { Shield, Activity, Users, BarChart } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Skeleton } from '@/components/shared/Skeleton'
-import { RegistryTab } from '@/components/admin/RegistryTab'
-import { AIModelsTab } from '@/components/admin/AIModelsTab'
-import { TrainingDataTab } from '@/components/admin/TrainingDataTab'
-import { AgentsTab } from '@/components/admin/AgentsTab'
-import { GameControlTab } from '@/components/admin/GameControlTab'
+import { BouncingLogo } from '@/components/shared/BouncingLogo'
 
-type Tab = 'stats' | 'game-control' | 'fees' | 'trades' | 'users' | 'registry' | 'groups' | 'notifications' | 'admins' | 'reports' | 'ai-models' | 'training-data' | 'agents'
+type Tab = 'stats' | 'trades' | 'users'
 
 export default function AdminDashboard() {
   const router = useRouter()
@@ -32,36 +22,25 @@ export default function AdminDashboard() {
 
   const checkAdminAccess = useCallback(async () => {
     if (!authenticated) {
-      // Don't redirect on localhost - let them see the login prompt
-      const isLocalhost = typeof window !== 'undefined' && 
-        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      
-      if (!isLocalhost) {
-        router.push('/')
-        return
-      }
-      
-      setIsAuthorized(false)
-      setLoading(false)
+      router.push('/')
       return
     }
 
-    // Check if user is admin by trying to fetch admin stats
-    const response = await fetch('/api/admin/stats').catch((error: Error) => {
+    try {
+      // Check if user is admin by trying to fetch admin stats
+      const response = await fetch('/api/admin/stats')
+      if (!response.ok) {
+        setIsAuthorized(false)
+        setLoading(false)
+        return
+      }
+      setIsAuthorized(true)
+      setLoading(false)
+    } catch (error) {
       console.error('Admin access check failed:', error)
       setIsAuthorized(false)
       setLoading(false)
-      throw error
-    })
-    
-    if (!response.ok) {
-      setIsAuthorized(false)
-      setLoading(false)
-      return
     }
-    
-    setIsAuthorized(true)
-    setLoading(false)
   }, [authenticated, router, user])
 
   useEffect(() => {
@@ -72,10 +51,7 @@ export default function AdminDashboard() {
     return (
       <PageContainer>
         <div className="flex items-center justify-center h-full">
-          <div className="space-y-4 w-full max-w-md">
-            <Skeleton className="h-8 w-48" />
-            <Skeleton className="h-4 w-64" />
-          </div>
+          <BouncingLogo size={48} />
         </div>
       </PageContainer>
     )
@@ -95,18 +71,8 @@ export default function AdminDashboard() {
 
   const tabs = [
     { id: 'stats' as const, label: 'Dashboard', icon: BarChart },
-    { id: 'game-control' as const, label: 'Game Control', icon: Gamepad2 },
-    { id: 'fees' as const, label: 'Fees', icon: DollarSign },
     { id: 'trades' as const, label: 'Trading Feed', icon: Activity },
     { id: 'users' as const, label: 'Users', icon: Users },
-    { id: 'reports' as const, label: 'Reports', icon: Flag },
-    { id: 'admins' as const, label: 'Admins', icon: ShieldCheck },
-    { id: 'registry' as const, label: 'Registry', icon: Layers },
-    { id: 'groups' as const, label: 'Groups', icon: MessageSquare },
-    { id: 'agents' as const, label: 'Agents', icon: Bot },
-    { id: 'ai-models' as const, label: 'AI Models', icon: Sparkles },
-    { id: 'training-data' as const, label: 'Training Data', icon: Database },
-    { id: 'notifications' as const, label: 'Notifications', icon: Bell },
   ]
 
   return (
@@ -146,18 +112,8 @@ export default function AdminDashboard() {
       {/* Tab Content */}
       <div className="flex-1 overflow-auto">
         {activeTab === 'stats' && <StatsTab />}
-        {activeTab === 'game-control' && <GameControlTab />}
-        {activeTab === 'fees' && <FeesTab />}
         {activeTab === 'trades' && <TradingFeedTab />}
         {activeTab === 'users' && <UserManagementTab />}
-        {activeTab === 'reports' && <ReportsTab />}
-        {activeTab === 'admins' && <AdminManagementTab />}
-        {activeTab === 'registry' && <RegistryTab />}
-        {activeTab === 'groups' && <GroupsTab />}
-        {activeTab === 'agents' && <AgentsTab />}
-        {activeTab === 'ai-models' && <AIModelsTab />}
-        {activeTab === 'training-data' && <TrainingDataTab />}
-        {activeTab === 'notifications' && <NotificationsTab />}
       </div>
     </PageContainer>
   )

@@ -65,10 +65,6 @@ export interface CommentData {
     username: string | null;
     profileImageUrl: string | null;
   };
-  // API response includes these directly
-  likeCount?: number;
-  replyCount?: number;
-  // Deprecated: kept for backwards compatibility
   _count?: {
     reactions: number;
     replies: number;
@@ -315,15 +311,6 @@ export interface RepostButtonProps {
   size?: 'sm' | 'md' | 'lg';
   showCount?: boolean;
   className?: string;
-  postData?: {
-    id: string;
-    content: string;
-    authorId: string;
-    authorName: string;
-    authorUsername?: string | null;
-    authorProfileImageUrl?: string | null;
-    timestamp: string;
-  };
 }
 
 export interface FavoriteButtonProps {

@@ -37,36 +37,39 @@ export function UserMenu() {
       if (userMenuFetchInFlight) return
       userMenuFetchInFlight = true
 
-      const token = typeof window !== 'undefined' ? window.__privyAccessToken : null
-      if (!token) {
+      try {
+        const token = typeof window !== 'undefined' ? window.__privyAccessToken : null
+        if (!token) {
+          userMenuFetchInFlight = false
+          return
+        }
+
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+
+        // Fetch points
+        const balanceResponse = await fetch(`/api/users/${encodeURIComponent(user.id)}/balance`, { headers })
+        if (balanceResponse.ok) {
+          const data = await balanceResponse.json()
+          setPointsData({
+            available: Number(data.balance || 0),
+            total: Number(data.totalDeposited || 0),
+          })
+        }
+
+        // Fetch referral code
+        const referralResponse = await fetch(`/api/users/${encodeURIComponent(user.id)}/referrals`, { headers })
+        if (referralResponse.ok) {
+          const data = await referralResponse.json()
+          setReferralCode(data.user?.referralCode || null)
+        }
+
+        lastFetchedUserIdRef.current = user.id
+      } finally {
         userMenuFetchInFlight = false
-        return
       }
-
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      }
-
-      // Fetch points
-      const balanceResponse = await fetch(`/api/users/${encodeURIComponent(user.id)}/balance`, { headers })
-      if (balanceResponse.ok) {
-        const data = await balanceResponse.json()
-        setPointsData({
-          available: Number(data.balance || 0),
-          total: Number(data.totalDeposited || 0),
-        })
-      }
-
-      // Fetch referral code
-      const referralResponse = await fetch(`/api/users/${encodeURIComponent(user.id)}/referrals`, { headers })
-      if (referralResponse.ok) {
-        const data = await referralResponse.json()
-        setReferralCode(data.user?.referralCode || null)
-      }
-
-      lastFetchedUserIdRef.current = user.id
-      userMenuFetchInFlight = false
     }
 
     // Clear any existing interval
@@ -106,7 +109,7 @@ export function UserMenu() {
   const username = user.username || `user${user.id.slice(0, 8)}`
 
   const trigger = (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-full hover:bg-sidebar-accent cursor-pointer transition-colors">
+    <div className="flex items-center gap-3 p-3 hover:bg-sidebar-accent cursor-pointer transition-colors">
       <Avatar
         id={user.id}
         name={displayName}
@@ -116,10 +119,10 @@ export function UserMenu() {
         imageUrl={user.profileImageUrl || undefined}
       />
       <div className="flex-1 min-w-0">
-        <p className="font-semibold text-sidebar-foreground truncate text-[15px] leading-5">
+        <p className="font-bold text-foreground truncate text-sm">
           {displayName}
         </p>
-        <p className="text-[13px] leading-4 text-muted-foreground truncate">
+        <p className="text-xs text-muted-foreground truncate">
           @{username}
         </p>
       </div>

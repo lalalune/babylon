@@ -8,8 +8,8 @@ import {IDiamondCut} from "../libraries/LibDiamond.sol";
 /// @notice Main diamond proxy contract for Babylon prediction market
 /// @dev Implements EIP-2535 Diamond Standard for upgradeability
 contract Diamond {
-    constructor(address _diamondCutFacet, address _diamondLoupeFacet) payable {
-        LibDiamond.setContractOwner(msg.sender);
+    constructor(address _contractOwner, address _diamondCutFacet) payable {
+        LibDiamond.setContractOwner(_contractOwner);
 
         // Add the diamondCut external function from the diamondCutFacet
         IDiamondCut.FacetCut[] memory cut = new IDiamondCut.FacetCut[](1);
@@ -21,9 +21,6 @@ contract Diamond {
             functionSelectors: functionSelectors
         });
         LibDiamond.diamondCut(cut, address(0), "");
-
-        // Note: _diamondLoupeFacet parameter is accepted for compatibility but loupe
-        // facet should be added via diamondCut() call after deployment
     }
 
     // Find facet for function that is called and execute the

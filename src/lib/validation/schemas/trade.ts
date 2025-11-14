@@ -4,7 +4,7 @@
 
 import { z } from 'zod';
 import {
-  SnowflakeIdSchema,
+  UUIDSchema,
   UserIdSchema,
   OrderSideSchema,
   OrderTypeSchema,
@@ -17,7 +17,7 @@ import {
  * Create trade order schema
  */
 export const CreateTradeOrderSchema = z.object({
-  poolId: SnowflakeIdSchema.optional(), // Optional if personal trade
+  poolId: UUIDSchema.optional(), // Optional if personal trade
   marketType: z.enum(['perp', 'prediction', 'spot']),
   ticker: z.string().optional(), // For perps/spot
   marketId: z.string().optional(), // For prediction markets
@@ -62,7 +62,7 @@ export const CreateTradeOrderSchema = z.object({
  * Update trade order schema (for modifying open orders)
  */
 export const UpdateTradeOrderSchema = z.object({
-  orderId: SnowflakeIdSchema,
+  orderId: UUIDSchema,
   price: z.number().positive().optional(),
   size: z.number().positive().optional(),
   stopPrice: z.number().positive().optional()
@@ -72,14 +72,14 @@ export const UpdateTradeOrderSchema = z.object({
  * Cancel trade order schema
  */
 export const CancelTradeOrderSchema = z.object({
-  orderId: SnowflakeIdSchema
+  orderId: UUIDSchema
 });
 
 /**
  * Close position schema
  */
 export const ClosePositionSchema = z.object({
-  positionId: SnowflakeIdSchema,
+  positionId: UUIDSchema,
   percentage: DecimalPercentageSchema.optional(), // Close partial percentage
   size: z.number().positive().optional() // Or close specific size
 }).refine(
@@ -124,7 +124,7 @@ export const MarketDataQuerySchema = z.object({
  * Position query schema
  */
 export const PositionQuerySchema = z.object({
-  poolId: SnowflakeIdSchema.optional(),
+  poolId: UUIDSchema.optional(),
   userId: UserIdSchema.optional(),
   marketType: z.enum(['perp', 'prediction', 'spot']).optional(),
   ticker: z.string().optional(),
@@ -137,7 +137,7 @@ export const PositionQuerySchema = z.object({
  * Trade history query schema
  */
 export const TradeHistoryQuerySchema = z.object({
-  poolId: SnowflakeIdSchema.optional(),
+  poolId: UUIDSchema.optional(),
   userId: UserIdSchema.optional(),
   marketType: z.enum(['perp', 'prediction', 'spot']).optional(),
   ticker: z.string().optional(),
@@ -166,7 +166,7 @@ export const RiskParametersSchema = z.object({
  * Trade execution response schema
  */
 export const TradeExecutionResponseSchema = z.object({
-  orderId: SnowflakeIdSchema,
+  orderId: UUIDSchema,
   status: z.enum(['PENDING', 'FILLED', 'PARTIALLY_FILLED', 'CANCELLED', 'REJECTED']),
   filledSize: z.number(),
   filledPrice: z.number().optional(),
@@ -180,9 +180,9 @@ export const TradeExecutionResponseSchema = z.object({
  * Position response schema
  */
 export const PositionResponseSchema = z.object({
-  id: SnowflakeIdSchema,
-  poolId: SnowflakeIdSchema.nullable(),
-  userId: SnowflakeIdSchema.nullable(),
+  id: UUIDSchema,
+  poolId: UUIDSchema.nullable(),
+  userId: UUIDSchema.nullable(),
   marketType: z.string(),
   ticker: z.string().nullable(),
   marketId: z.string().nullable(),

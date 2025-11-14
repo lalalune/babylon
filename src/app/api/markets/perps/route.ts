@@ -1,93 +1,7 @@
 /**
  * Perpetual Futures Markets API
- * 
- * @route GET /api/markets/perps
- * @access Public (optional authentication for user positions)
- * 
- * @description
- * Returns all available perpetual futures markets with real-time pricing,
- * 24-hour statistics, open interest, funding rates, and user positions.
- * Perpetual futures allow leveraged trading on company valuations without
- * expiration dates.
- * 
- * **Market Data Includes:**
- * - **Current Price:** Real-time company valuation
- * - **24h Statistics:** Price change, volume, high/low
- * - **Open Interest:** Total notional value of all open positions
- * - **Funding Rate:** Periodic payment between long and short positions
- * - **Leverage Limits:** Maximum leverage available (up to 100x)
- * - **User Positions:** Active positions for authenticated users
- * 
- * **Funding Rate Calculation:**
- * Funding rates balance long/short position imbalance:
- * - Base rate: 1% annual
- * - Adjusted by position imbalance: ±5%
- * - Paid every 8 hours
- * - Longs pay shorts when more longs, vice versa
- * 
- * **24h Statistics:**
- * Calculated from minute-by-minute price history:
- * - Change: Current price vs 24h ago
- * - Change %: Percentage change
- * - High/Low: 24h price range
- * - Volume: Sum of notional values of positions opened
- * 
- * **Open Interest:**
- * Total size of all open positions (long + short) representing
- * market liquidity and trader commitment.
- * 
- * **Authentication:**
- * - Public access: Returns all markets without user positions
- * - Authenticated: Includes user's open positions for each market
- * 
- * @returns {object} Markets list response
- * @property {boolean} success - Operation success
- * @property {array} markets - Array of market objects
- * @property {number} count - Total markets available
- * 
- * **Market Object:**
- * @property {string} ticker - Trading symbol (e.g., 'AAPL', 'GOOGL')
- * @property {string} organizationId - Company/organization ID
- * @property {string} name - Company name
- * @property {number} currentPrice - Current market price
- * @property {number} change24h - 24h price change (absolute)
- * @property {number} changePercent24h - 24h price change (percentage)
- * @property {number} high24h - 24h high price
- * @property {number} low24h - 24h low price
- * @property {number} volume24h - 24h trading volume
- * @property {number} openInterest - Total open interest
- * @property {object} fundingRate - Funding rate information
- * @property {number} fundingRate.rate - Current rate (annual)
- * @property {string} fundingRate.nextFundingTime - Next funding timestamp
- * @property {number} fundingRate.predictedRate - Predicted next rate
- * @property {number} maxLeverage - Maximum leverage allowed (100x)
- * @property {number} minOrderSize - Minimum order size
- * 
- * @throws {500} Internal server error
- * 
- * @example
- * ```typescript
- * // Get all perp markets
- * const response = await fetch('/api/markets/perps');
- * const { markets } = await response.json();
- * 
- * // Display market data
- * markets.forEach(market => {
- *   console.log(`${market.ticker}: $${market.currentPrice}`);
- *   console.log(`24h: ${market.changePercent24h.toFixed(2)}%`);
- *   console.log(`Open Interest: $${market.openInterest.toLocaleString()}`);
- *   console.log(`Funding: ${(market.fundingRate.rate * 100).toFixed(3)}%`);
- * });
- * 
- * // Find most active market
- * const mostActive = markets.reduce((max, m) => 
- *   m.volume24h > max.volume24h ? m : max
- * );
- * ```
- * 
- * @see {@link /lib/database-service} Database service
- * @see {@link /lib/db/context} RLS context for user positions
- * @see {@link /src/app/markets/perps/page.tsx} Perps trading UI
+ *
+ * GET /api/markets/perps - Get all tradeable companies
  */
 
 import type { NextRequest } from 'next/server'
@@ -177,43 +91,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         currentPrice: Number(p.currentPrice),
       }));
 
-      // Open Interest = total notional value of all open positions
-      const openInterest = positions.reduce((sum, p) => sum + (p.size * p.currentPrice), 0);
-
-      // Calculate 24h trading volume from positions opened in last 24 hours
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const recentPositions = (authUser && authUser.userId)
-        ? await asUser(authUser, async (dbPrisma) => {
-            return await dbPrisma.perpPosition.findMany({
-              where: {
-                organizationId: company.id,
-                openedAt: { gte: twentyFourHoursAgo },
-              },
-              select: {
-                size: true,
-                entryPrice: true,
-              },
-            });
-          })
-        : await asPublic(async (dbPrisma) => {
-            return await dbPrisma.perpPosition.findMany({
-              where: {
-                organizationId: company.id,
-                openedAt: { gte: twentyFourHoursAgo },
-              },
-              select: {
-                size: true,
-                entryPrice: true,
-              },
-            });
-          });
-
-      // Volume = sum of notional values (size * entry price)
-      const volume24h = recentPositions.reduce((sum, p) => {
-        const size = Number(p.size);
-        const entryPrice = Number(p.entryPrice);
-        return sum + (size * entryPrice);
-      }, 0);
+      const openInterest = positions.reduce((sum, p) => sum + (p.size * p.leverage), 0);
 
       // Calculate funding rate from position imbalance
       const longs = positions.filter(p => p.side === 'long');
@@ -237,7 +115,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         changePercent24h,
         high24h,
         low24h,
-        volume24h,
+        volume24h: 0, // TODO: Track from trades
         openInterest,
         fundingRate: {
           rate: fundingRate,

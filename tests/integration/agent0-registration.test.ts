@@ -28,7 +28,7 @@ describe('Agent0 Registration Integration', () => {
       })
       
       // Should not throw - model exists
-      expect(config !== undefined || config === null).toBe(true)
+      expect(config).toBeDefined() || expect(config).toBeNull()
     } catch (error) {
       // If error is about model not existing, that's a schema issue
       if (error instanceof Error && error.message.includes('Unknown arg')) {

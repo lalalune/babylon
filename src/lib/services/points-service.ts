@@ -6,12 +6,33 @@
  */
 import { prisma } from '@/lib/database-service';
 import { logger } from '@/lib/logger';
-import { generateSnowflakeId } from '@/lib/snowflake';
-import { POINTS, type PointsReason } from '@/lib/constants/points';
 
 import type { JsonValue } from '@/types/common';
 
-type LeaderboardCategory = 'all' | 'earned' | 'referral';
+// Point award amounts
+export const POINTS = {
+  INITIAL_SIGNUP: 1000,
+  PROFILE_COMPLETION: 1000, // Username + Profile Image + Bio (consolidated)
+  FARCASTER_LINK: 1000,
+  TWITTER_LINK: 1000,
+  WALLET_CONNECT: 1000,
+  SHARE_ACTION: 1000,
+  SHARE_TO_TWITTER: 1000,
+  REFERRAL_SIGNUP: 250,
+} as const;
+
+export type PointsReason =
+  | 'initial_signup'
+  | 'profile_completion'
+  | 'farcaster_link'
+  | 'twitter_link'
+  | 'wallet_connect'
+  | 'share_action'
+  | 'share_to_twitter'
+  | 'referral_signup'
+  | 'admin_award'
+  | 'admin_deduction'
+  | 'purchase'; // x402 payment purchase
 
 interface AwardPointsResult {
   success: boolean;
@@ -72,7 +93,6 @@ export class PointsService {
     // Build update data with proper typing for Prisma
     const updateData: {
       reputationPoints: number
-      invitePoints?: number
       bonusPoints?: number
       pointsAwardedForProfile?: boolean
       pointsAwardedForFarcaster?: boolean
@@ -80,36 +100,22 @@ export class PointsService {
       pointsAwardedForWallet?: boolean
     } = {
       reputationPoints: pointsAfter,
+      bonusPoints: user.bonusPoints + amount, // Add to bonus points for social/profile completions
     };
 
-    // Set the appropriate tracking flag and update correct point type
+    // Set the appropriate tracking flag
     switch (reason) {
-      case 'referral_signup':
-        updateData.invitePoints = user.invitePoints + amount;
-        break;
       case 'profile_completion':
-        updateData.bonusPoints = user.bonusPoints + amount;
         updateData.pointsAwardedForProfile = true;
         break;
       case 'farcaster_link':
-        updateData.bonusPoints = user.bonusPoints + amount;
         updateData.pointsAwardedForFarcaster = true;
         break;
       case 'twitter_link':
-        updateData.bonusPoints = user.bonusPoints + amount;
         updateData.pointsAwardedForTwitter = true;
         break;
       case 'wallet_connect':
-        updateData.bonusPoints = user.bonusPoints + amount;
         updateData.pointsAwardedForWallet = true;
-        break;
-      case 'share_action':
-      case 'share_to_twitter':
-        updateData.bonusPoints = user.bonusPoints + amount;
-        break;
-      default:
-        // For admin awards, purchases, etc - add to bonus
-        updateData.bonusPoints = user.bonusPoints + amount;
         break;
     }
 
@@ -122,7 +128,6 @@ export class PointsService {
 
       await tx.pointsTransaction.create({
         data: {
-          id: await generateSnowflakeId(),
           userId,
           amount,
           pointsBefore,
@@ -281,17 +286,18 @@ export class PointsService {
     const pointsAfter = pointsBefore + pointsAmount
 
     // Execute in transaction
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction([
       // Update user points
-      await tx.user.update({
+      prisma.user.update({
         where: { id: userId },
         data: { reputationPoints: pointsAfter },
-      });
+      }),
       // Create transaction record with payment details
-      await tx.pointsTransaction.create({
+      prisma.pointsTransaction.create({
         data: {
-          id: await generateSnowflakeId(),
-          userId,
+          user: {
+            connect: { id: userId },
+          },
           amount: pointsAmount,
           pointsBefore,
           pointsAfter,
@@ -306,8 +312,8 @@ export class PointsService {
           paymentAmount: amountUSD.toFixed(2),
           paymentVerified: true,
         },
-      });
-    });
+      }),
+    ]);
 
     logger.info(
       `User ${userId} purchased ${pointsAmount} points for $${amountUSD}`,
@@ -357,7 +363,7 @@ export class PointsService {
       select: {
         reputationPoints: true,
         referralCount: true,
-        PointsTransaction: {
+        pointsTransactions: {
           orderBy: { createdAt: 'desc' },
           take: 50,
         },
@@ -371,7 +377,7 @@ export class PointsService {
     return {
       points: user.reputationPoints,
       referralCount: user.referralCount,
-      transactions: user.PointsTransaction,
+      transactions: user.pointsTransactions,
     };
   }
 
@@ -381,30 +387,15 @@ export class PointsService {
   static async getLeaderboard(
     page: number = 1,
     pageSize: number = 100,
-    minPoints: number = 500,
-    pointsCategory: LeaderboardCategory = 'all'
+    minPoints: number = 500
   ) {
     const skip = (page - 1) * pageSize;
 
-    const userWhere: {
-      isActor: false;
-      reputationPoints?: { gte: number };
-      earnedPoints?: { not: number };
-      invitePoints?: { gt: number };
-    } = {
-      isActor: false,
-    };
-
-    if (pointsCategory === 'all') {
-      userWhere.reputationPoints = { gte: minPoints };
-    } else if (pointsCategory === 'earned') {
-      userWhere.earnedPoints = { not: 0 };
-    } else if (pointsCategory === 'referral') {
-      userWhere.invitePoints = { gt: 0 };
-    }
-
     const users = await prisma.user.findMany({
-      where: userWhere,
+      where: {
+        reputationPoints: { gte: minPoints },
+        isActor: false,
+      },
       select: {
         id: true,
         username: true,
@@ -417,6 +408,22 @@ export class PointsService {
         referralCount: true,
         virtualBalance: true,
         lifetimePnL: true,
+        createdAt: true,
+      },
+    });
+
+    const actors = await prisma.actor.findMany({
+      where: {
+        reputationPoints: { gte: minPoints },
+        hasPool: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        profileImageUrl: true,
+        reputationPoints: true,
+        tier: true,
         createdAt: true,
       },
     });
@@ -436,76 +443,27 @@ export class PointsService {
         lifetimePnL: Number(user.lifetimePnL),
         createdAt: user.createdAt,
         isActor: false,
-        tier: null as string | null,
+        tier: null,
+      })),
+      ...actors.map((actor) => ({
+        id: actor.id,
+        username: actor.id,
+        displayName: actor.name,
+        profileImageUrl: actor.profileImageUrl,
+        allPoints: actor.reputationPoints,
+        invitePoints: 0,
+        earnedPoints: 0,
+        bonusPoints: 0,
+        referralCount: 0,
+        balance: 0,
+        lifetimePnL: 0,
+        createdAt: actor.createdAt,
+        isActor: true,
+        tier: actor.tier,
       })),
     ];
 
-    if (pointsCategory === 'all') {
-      const actors = await prisma.actor.findMany({
-        where: {
-          reputationPoints: { gte: minPoints },
-          hasPool: true,
-        },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          profileImageUrl: true,
-          reputationPoints: true,
-          tier: true,
-          createdAt: true,
-        },
-      });
-
-      combined.push(
-        ...actors.map((actor) => ({
-          id: actor.id,
-          username: actor.id,
-          displayName: actor.name,
-          profileImageUrl: actor.profileImageUrl,
-          allPoints: actor.reputationPoints,
-          invitePoints: 0,
-          earnedPoints: 0,
-          bonusPoints: 0,
-          referralCount: 0,
-          balance: 0,
-          lifetimePnL: 0,
-          createdAt: actor.createdAt,
-          isActor: true,
-          tier: actor.tier,
-        }))
-      );
-    }
-
-    const sortField: 'allPoints' | 'earnedPoints' | 'invitePoints' =
-      pointsCategory === 'all'
-        ? 'allPoints'
-        : pointsCategory === 'earned'
-          ? 'earnedPoints'
-          : 'invitePoints';
-
-    combined.sort((a, b) => {
-      const comparison = b[sortField] - a[sortField];
-      if (comparison !== 0) {
-        return comparison;
-      }
-
-      if (pointsCategory === 'referral') {
-        const referralComparison = b.referralCount - a.referralCount;
-        if (referralComparison !== 0) {
-          return referralComparison;
-        }
-      }
-
-      if (pointsCategory === 'earned') {
-        const pnlComparison = b.lifetimePnL - a.lifetimePnL;
-        if (pnlComparison !== 0) {
-          return pnlComparison;
-        }
-      }
-
-      return b.allPoints - a.allPoints;
-    });
+    combined.sort((a, b) => b.allPoints - a.allPoints);
 
     const paginatedResults = combined.slice(skip, skip + pageSize);
 
@@ -520,7 +478,6 @@ export class PointsService {
       page,
       pageSize,
       totalPages: Math.ceil(combined.length / pageSize),
-      pointsCategory,
     };
   }
 

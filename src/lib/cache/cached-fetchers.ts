@@ -17,26 +17,35 @@ import { ReputationService } from '@/lib/services/reputation-service'
  * Calculate 24h trading volume for an organization
  */
 async function calculateVolume24h(organizationId: string): Promise<number> {
-  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
-  
-  const volumeTransactions = await prisma.balanceTransaction.findMany({
-    where: {
-      type: {
-        in: ['PERP_OPEN', 'PERP_CLOSE'],
+  try {
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    
+    const volumeTransactions = await prisma.balanceTransaction.findMany({
+      where: {
+        type: {
+          in: ['PERP_OPEN', 'PERP_CLOSE'],
+        },
+        createdAt: {
+          gte: twentyFourHoursAgo,
+        },
+        description: {
+          contains: organizationId,
+        },
       },
-      createdAt: {
-        gte: twentyFourHoursAgo,
+      select: {
+        amount: true,
       },
-      description: {
-        contains: organizationId,
-      },
-    },
-    select: {
-      amount: true,
-    },
-  })
-  
-  return volumeTransactions.reduce((sum, tx) => sum + Math.abs(Number(tx.amount)), 0)
+    })
+    
+    return volumeTransactions.reduce((sum, tx) => sum + Math.abs(Number(tx.amount)), 0)
+  } catch (error) {
+    logger.error(
+      `Failed to calculate volume24h for ${organizationId}: ${error instanceof Error ? error.message : String(error)}`,
+      undefined,
+      'VolumeTracking'
+    )
+    return 0
+  }
 }
 
 /**
@@ -89,7 +98,7 @@ export async function getCachedPerpMarkets() {
             size: true,
             leverage: true,
           },
-        })
+        }).catch(() => [])
         
         const openInterest = positions.reduce(
           (sum, p) => sum + (Number(p.size) * Number(p.leverage)),
@@ -228,15 +237,15 @@ export async function getCachedPredictions(userId?: string, timeframe?: string) 
           marketId: { in: marketIds as string[] },
         },
         include: {
-          Market: true,
+          market: true,
         },
       })
       
       for (const p of positions) {
-        // Type assertion: Prisma include adds Market property
-        const positionWithMarket = p as typeof p & { Market: { yesShares: number | string; noShares: number | string } | null }
-        if (!positionWithMarket.Market) continue; // Skip if market not loaded
-        const market = positionWithMarket.Market
+        // Type assertion: Prisma include adds market property
+        const positionWithMarket = p as typeof p & { market: { yesShares: number | string; noShares: number | string } | null }
+        if (!positionWithMarket.market) continue; // Skip if market not loaded
+        const market = positionWithMarket.market
         const totalShares = Number(market.yesShares) + Number(market.noShares)
         const currentYesPrice = totalShares > 0 ? Number(market.yesShares) / totalShares : 0.5
         const currentNoPrice = totalShares > 0 ? Number(market.noShares) / totalShares : 0.5
@@ -409,9 +418,9 @@ export async function getCachedRegistry(filters: {
         lifetimePnL: true,
         _count: {
           select: {
-            Position: true,
-            Comment: true,
-            Reaction: true,
+            positions: true,
+            comments: true,
+            reactions: true,
           },
         },
       },
@@ -446,9 +455,9 @@ export async function getCachedRegistry(filters: {
           lifetimePnL: user.lifetimePnL.toString(),
           reputation,
           stats: {
-            positions: user._count.Position,
-            comments: user._count.Comment,
-            reactions: user._count.Reaction,
+            positions: user._count.positions,
+            comments: user._count.comments,
+            reactions: user._count.reactions,
           },
         }
       })
@@ -624,13 +633,13 @@ export async function getCachedMarketChats() {
         gameId: 'continuous',
       },
       include: {
-        Message: {
+        messages: {
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
         _count: {
           select: {
-            Message: true,
+            messages: true,
           },
         },
       },
@@ -645,8 +654,8 @@ export async function getCachedMarketChats() {
         id: chat.id,
         name: chat.name,
         isGroup: chat.isGroup,
-        messageCount: chat._count.Message,
-        lastMessage: chat.Message[0] || null,
+        messageCount: chat._count.messages,
+        lastMessage: chat.messages[0] || null,
       })),
     }
     

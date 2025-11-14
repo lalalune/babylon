@@ -45,8 +45,8 @@ contract DiamondTestSetup is Test {
         predictionMarketFacet = new PredictionMarketFacet();
         oracleFacet = new OracleFacet();
 
-        // Deploy Diamond with DiamondCutFacet and DiamondLoupeFacet
-        diamond = new Diamond(address(diamondCutFacet), address(diamondLoupeFacet));
+        // Deploy Diamond with DiamondCutFacet
+        diamond = new Diamond(owner, address(diamondCutFacet));
 
         // Add DiamondLoupeFacet
         IDiamondCut.FacetCut[] memory loupeCut = new IDiamondCut.FacetCut[](1);

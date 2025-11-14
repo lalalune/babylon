@@ -1,7 +1,7 @@
 'use client'
 
 import { useAuth } from '@/hooks/useAuth'
-// import { logger } from '@/lib/logger'
+import { logger } from '@/lib/logger'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 export interface PortfolioPnLSnapshot {
@@ -12,6 +12,7 @@ export interface PortfolioPnLSnapshot {
   availableBalance: number
   unrealizedPerpPnL: number
   unrealizedPredictionPnL: number
+  unrealizedPoolPnL: number
   totalUnrealizedPnL: number
   totalPnL: number
   accountEquity: number
@@ -65,17 +66,34 @@ export function usePortfolioPnL(): UsePortfolioPnLResult {
     setLoading(true)
     setError(null)
 
-    const [balanceRes, positionsRes] = await Promise.all([
-      fetch(`/api/users/${encodeURIComponent(user.id)}/balance`, {
-        signal: abortController.signal,
-      }),
-      fetch(`/api/markets/positions/${encodeURIComponent(user.id)}`, {
-        signal: abortController.signal,
-      }),
-    ])
+    try {
+      const [balanceRes, positionsRes, poolsRes] = await Promise.all([
+        fetch(`/api/users/${encodeURIComponent(user.id)}/balance`, {
+          signal: abortController.signal,
+        }),
+        fetch(`/api/markets/positions/${encodeURIComponent(user.id)}`, {
+          signal: abortController.signal,
+        }),
+        fetch(`/api/pools/deposits/${encodeURIComponent(user.id)}`, {
+          signal: abortController.signal,
+        }),
+      ])
 
-    const balanceJson = await balanceRes.json()
-    const positionsJson = await positionsRes.json()
+      if (!balanceRes.ok) {
+        throw new Error(`Balance request failed with status ${balanceRes.status}`)
+      }
+
+      if (!positionsRes.ok) {
+        throw new Error(`Positions request failed with status ${positionsRes.status}`)
+      }
+
+      if (!poolsRes.ok) {
+        throw new Error(`Pools request failed with status ${poolsRes.status}`)
+      }
+
+      const balanceJson = await balanceRes.json()
+      const positionsJson = await positionsRes.json()
+      const poolsJson = await poolsRes.json()
 
       const totalDeposited = toNumber(balanceJson.totalDeposited)
       const totalWithdrawn = toNumber(balanceJson.totalWithdrawn)
@@ -94,25 +112,38 @@ export function usePortfolioPnL(): UsePortfolioPnLResult {
         0,
       )
 
-      const totalUnrealizedPnL = perpUnrealized + predictionUnrealized
+      const poolUnrealized = toNumber(poolsJson?.summary?.totalUnrealizedPnL)
+
+      const totalUnrealizedPnL = perpUnrealized + predictionUnrealized + poolUnrealized
       const totalPnL = lifetimePnL + totalUnrealizedPnL
       const netContributions = totalDeposited - totalWithdrawn
       const accountEquity = netContributions + totalPnL
 
-    setData({
-      lifetimePnL,
-      netContributions,
-      totalDeposited,
-      totalWithdrawn,
-      availableBalance,
-      unrealizedPerpPnL: perpUnrealized,
-      unrealizedPredictionPnL: predictionUnrealized,
-      totalUnrealizedPnL,
-      totalPnL,
-      accountEquity,
-    })
-    setLastUpdated(Date.now())
-    setLoading(false)
+      setData({
+        lifetimePnL,
+        netContributions,
+        totalDeposited,
+        totalWithdrawn,
+        availableBalance,
+        unrealizedPerpPnL: perpUnrealized,
+        unrealizedPredictionPnL: predictionUnrealized,
+        unrealizedPoolPnL: poolUnrealized,
+        totalUnrealizedPnL,
+        totalPnL,
+        accountEquity,
+      })
+      setLastUpdated(Date.now())
+    } catch (err) {
+      if ((err as Error)?.name === 'AbortError') {
+        return
+      }
+
+      const message = err instanceof Error ? err.message : 'Failed to load portfolio P&L'
+      setError(message)
+      logger.error('Failed to load portfolio P&L', { error: message }, 'usePortfolioPnL')
+    } finally {
+      setLoading(false)
+    }
   }, [authenticated, user?.id])
 
   useEffect(() => {

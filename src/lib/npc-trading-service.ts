@@ -15,7 +15,6 @@
 
 import { prisma } from './prisma';
 import { logger } from './logger';
-import { generateSnowflakeId } from './snowflake';
 
 interface MarketContext {
   perpMarkets: Array<{
@@ -55,7 +54,7 @@ export class NPCTradingService {
     const actor = await prisma.actor.findUnique({
       where: { id: npcActorId },
       include: {
-        Pool: {
+        pools: {
           where: { isActive: true },
           take: 1,
         },
@@ -76,8 +75,8 @@ export class NPCTradingService {
     for (const signal of signals) {
       await this.executePersonalTrade(actor, signal, postId);
       
-      if (actor.Pool.length > 0) {
-        await this.executePoolTrade(actor, signal, postId, actor.Pool[0]!.id);
+      if (actor.pools.length > 0) {
+        await this.executePoolTrade(actor, signal, postId, actor.pools[0]!.id);
       }
     }
   }
@@ -261,7 +260,6 @@ export class NPCTradingService {
 
     await prisma.nPCTrade.create({
       data: {
-        id: await generateSnowflakeId(),
         npcActorId: actor.id,
         poolId,
         marketType: signal.type,
@@ -305,7 +303,6 @@ export class NPCTradingService {
 
       await tx.poolPosition.create({
         data: {
-          id: await generateSnowflakeId(),
           poolId,
           marketType: 'prediction',
           marketId,
@@ -315,7 +312,6 @@ export class NPCTradingService {
           size: amount,
           shares: amount,
           unrealizedPnL: 0,
-          updatedAt: new Date(),
         },
       });
     });
@@ -352,7 +348,6 @@ export class NPCTradingService {
 
       await tx.poolPosition.create({
         data: {
-          id: await generateSnowflakeId(),
           poolId,
           marketType: 'perp',
           ticker,
@@ -363,7 +358,6 @@ export class NPCTradingService {
           leverage,
           liquidationPrice,
           unrealizedPnL: 0,
-          updatedAt: new Date(),
         },
       });
     });
@@ -432,10 +426,7 @@ export class NPCTradingService {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     
     const recentPosts = await prisma.post.findMany({
-      where: { 
-        createdAt: { gte: oneHourAgo },
-        deletedAt: null, // Filter out deleted posts
-      },
+      where: { createdAt: { gte: oneHourAgo } },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });

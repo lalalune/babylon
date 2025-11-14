@@ -5,7 +5,7 @@ import { Heart, Laugh, Frown } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useInteractionStore } from '@/stores/interactionStore';
 import type { LikeButtonProps } from '@/types/interactions';
-import { Skeleton } from '@/components/shared/Skeleton';
+import { BouncingLogo } from '@/components/shared/BouncingLogo';
 import { useSocialTracking } from '@/hooks/usePostHog';
 
 // Reaction configuration type
@@ -66,12 +66,6 @@ const iconSizes = {
   sm: 18,
   md: 20,
   lg: 22,
-};
-
-const skeletonSizes = {
-  sm: 'w-4 h-4',
-  md: 'w-5 h-5',
-  lg: 'w-5 h-5',
 };
 
 export function LikeButton({
@@ -195,7 +189,7 @@ export function LikeButton({
         )}
       >
         {isLoading ? (
-          <Skeleton className={cn("rounded", skeletonSizes[size])} />
+          <BouncingLogo size={iconSizes[size]} />
         ) : (
           <Icon
             size={iconSizes[size]}

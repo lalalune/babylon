@@ -1,124 +1,6 @@
 /**
- * Points Leaderboard API
- * 
- * @description
- * Returns platform-wide leaderboard ranking users by reputation points,
- * earned points, or referral points. Provides paginated results with
- * comprehensive user statistics and rankings.
- * 
- * **Leaderboard Types:**
- * - **all:** Total reputation points (default)
- * - **earned:** Points earned through activity
- * - **referral:** Points earned from referrals
- * 
- * **Features:**
- * - Configurable minimum points threshold
- * - Pagination support
- * - Multiple sorting categories
- * - User statistics and metadata
- * - Real-time rankings
- * 
- * **User Stats Include:**
- * - Total points and breakdown
- * - Profile information
- * - Activity metrics
- * - Rank position
- * 
- * @openapi
- * /api/leaderboard:
- *   get:
- *     tags:
- *       - Leaderboard
- *     summary: Get points leaderboard
- *     description: Returns paginated leaderboard ranking users by reputation points
- *     parameters:
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           minimum: 1
- *           default: 1
- *         description: Page number
- *       - in: query
- *         name: pageSize
- *         schema:
- *           type: integer
- *           minimum: 1
- *           maximum: 100
- *           default: 100
- *         description: Results per page
- *       - in: query
- *         name: minPoints
- *         schema:
- *           type: integer
- *           minimum: 0
- *           default: 500
- *         description: Minimum points threshold
- *       - in: query
- *         name: pointsType
- *         schema:
- *           type: string
- *           enum: [all, earned, referral]
- *           default: all
- *         description: Points category to rank by
- *     responses:
- *       200:
- *         description: Leaderboard data
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 leaderboard:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       rank:
- *                         type: integer
- *                       id:
- *                         type: string
- *                       username:
- *                         type: string
- *                       displayName:
- *                         type: string
- *                       points:
- *                         type: number
- *                       profileImageUrl:
- *                         type: string
- *                 pagination:
- *                   type: object
- *                   properties:
- *                     page:
- *                       type: integer
- *                     pageSize:
- *                       type: integer
- *                     totalCount:
- *                       type: integer
- *                     totalPages:
- *                       type: integer
- *                 minPoints:
- *                   type: integer
- *                 pointsCategory:
- *                   type: string
- * 
- * @example
- * ```typescript
- * // Get top 50 users by reputation
- * const response = await fetch('/api/leaderboard?page=1&pageSize=50');
- * const { leaderboard, pagination } = await response.json();
- * 
- * // Get referral leaders
- * const referralLeaders = await fetch('/api/leaderboard?pointsType=referral&minPoints=1000');
- * 
- * // Display leaderboard
- * leaderboard.forEach(user => {
- *   console.log(`#${user.rank}: ${user.displayName} - ${user.points} points`);
- * });
- * ```
- * 
- * @see {@link /lib/services/points-service} Points calculation
- * @see {@link /src/app/leaderboard/page.tsx} Leaderboard UI
+ * API Route: /api/leaderboard
+ * Methods: GET (fetch leaderboard with pagination)
  */
 
 import type { NextRequest } from 'next/server'
@@ -140,17 +22,14 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
   // Parse and validate query parameters
   const queryParams = Object.fromEntries(searchParams.entries())
-  const { page, pageSize, minPoints, pointsType } = LeaderboardQuerySchema.parse(queryParams)
+  const { page, pageSize, minPoints } = LeaderboardQuerySchema.parse(queryParams)
 
-  const pointsCategory = (pointsType ?? 'all') as 'all' | 'earned' | 'referral'
-
-  const leaderboard = await PointsService.getLeaderboard(page, pageSize, minPoints, pointsCategory)
+  const leaderboard = await PointsService.getLeaderboard(page, pageSize, minPoints)
 
   logger.info('Leaderboard fetched successfully', {
     page,
     pageSize,
     minPoints,
-    pointsCategory,
     totalCount: leaderboard.totalCount
   }, 'GET /api/leaderboard')
 
@@ -162,8 +41,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       totalCount: leaderboard.totalCount,
       totalPages: leaderboard.totalPages,
     },
-    minPoints: pointsCategory === 'all' ? minPoints : 0,
-    pointsCategory: leaderboard.pointsCategory,
+    minPoints,
   })
 });
 

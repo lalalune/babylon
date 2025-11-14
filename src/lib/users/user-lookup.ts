@@ -4,28 +4,22 @@ import { Prisma, type User } from '@prisma/client'
 
 type SelectArg = Parameters<typeof prisma.user.findUnique>[0]['select']
 
-// Helper type to get the return type based on select
-type UserResult<T extends SelectArg | undefined> = 
-  T extends undefined 
-    ? User | null 
-    : T extends SelectArg 
-      ? Prisma.UserGetPayload<{ select: T }> | null 
-      : never;
-
 export async function findUserByIdentifier<T extends SelectArg | undefined = undefined>(
   identifier: string,
   select?: T
-): Promise<UserResult<T>> {
+): Promise<T extends undefined ? User | null : (T extends SelectArg ? Prisma.UserGetPayload<{ select: T }> | null : never)> {
   // Try to find by ID first
   if (select) {
     const byId = await prisma.user.findUnique({ where: { id: identifier }, select })
     if (byId) {
-      return byId as UserResult<T>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return byId as any
     }
   } else {
     const byId = await prisma.user.findUnique({ where: { id: identifier } })
     if (byId) {
-      return byId as UserResult<T>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return byId as any
     }
   }
 
@@ -34,12 +28,14 @@ export async function findUserByIdentifier<T extends SelectArg | undefined = und
     if (select) {
       const byPrivyId = await prisma.user.findUnique({ where: { privyId: identifier }, select })
       if (byPrivyId) {
-        return byPrivyId as UserResult<T>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return byPrivyId as any
       }
     } else {
       const byPrivyId = await prisma.user.findUnique({ where: { privyId: identifier } })
       if (byPrivyId) {
-        return byPrivyId as UserResult<T>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return byPrivyId as any
       }
     }
   } catch (error) {
@@ -57,10 +53,12 @@ export async function findUserByIdentifier<T extends SelectArg | undefined = und
   // Try to find by username
   if (select) {
     const byUsername = await prisma.user.findUnique({ where: { username: identifier }, select })
-    return byUsername as UserResult<T>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return byUsername as any
   } else {
     const byUsername = await prisma.user.findUnique({ where: { username: identifier } })
-    return byUsername as UserResult<T>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return byUsername as any
   }
 }
 

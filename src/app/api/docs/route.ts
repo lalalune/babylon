@@ -1,7 +1,7 @@
 /**
  * OpenAPI Specification API Route
  * 
- * @description Serves the automatically generated OpenAPI specification in JSON format
+ * @description Serves the generated OpenAPI specification in JSON format
  * 
  * @route GET /api/docs
  * @access Public
@@ -9,13 +9,12 @@
  */
 
 import { NextResponse } from 'next/server';
-import { generateAutoSpec } from '@/lib/swagger/auto-generator';
+import { generateOpenApiSpec } from '@/lib/swagger';
 
 /**
  * GET /api/docs
  * 
- * @description Returns the complete OpenAPI specification for all API routes.
- * Automatically generated from @openapi tags in route files.
+ * @description Returns the complete OpenAPI specification for all API routes
  * 
  * @returns {NextResponse} OpenAPI specification in JSON format
  * 
@@ -27,7 +26,7 @@ import { generateAutoSpec } from '@/lib/swagger/auto-generator';
  * ```
  */
 export async function GET() {
-  const spec = generateAutoSpec(); // Now automated!
+  const spec = generateOpenApiSpec();
   
   return NextResponse.json(spec, {
     headers: {

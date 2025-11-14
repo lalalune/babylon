@@ -58,15 +58,20 @@ export function NPCLeaderboard({
   useEffect(() => {
     const fetchLeaderboard = async () => {
       setLoading(true)
-      const response = await fetch(
-        `/api/npc/performance/leaderboard?limit=${limit}&minValue=${minValue}`
-      )
-      const result = await response.json()
+      try {
+        const response = await fetch(
+          `/api/npc/performance/leaderboard?limit=${limit}&minValue=${minValue}`
+        )
+        const result = await response.json()
 
-      if (result.success) {
-        setData(result)
+        if (result.success) {
+          setData(result)
+        }
+      } catch (error) {
+        console.error('Failed to fetch NPC leaderboard:', error)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
 
     fetchLeaderboard()
@@ -123,7 +128,7 @@ export function NPCLeaderboard({
             )}
           >
             {/* Rank */}
-            <div className="shrink-0 w-8 text-center">
+            <div className="flex-shrink-0 w-8 text-center">
               {entry.rank <= 3 ? (
                 <Trophy className={cn('w-6 h-6', getRankMedalColor(entry.rank))} />
               ) : (
@@ -132,7 +137,7 @@ export function NPCLeaderboard({
             </div>
 
             {/* Profile Image */}
-            <div className="shrink-0">
+            <div className="flex-shrink-0">
               {entry.profileImageUrl ? (
                 <img
                   src={entry.profileImageUrl}
@@ -161,7 +166,7 @@ export function NPCLeaderboard({
             </div>
 
             {/* Performance Stats */}
-            <div className="flex items-center gap-4 shrink-0">
+            <div className="flex items-center gap-4 flex-shrink-0">
               {/* Portfolio Value */}
               <div className="text-right">
                 <div className="flex items-center gap-1 text-sm font-bold text-foreground">

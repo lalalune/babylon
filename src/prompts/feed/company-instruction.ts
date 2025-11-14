@@ -2,7 +2,7 @@ import { definePrompt } from '../define-prompt';
 
 export const companyInstruction = definePrompt({
   id: 'company-instruction',
-  version: '2.0.0',
+  version: '1.0.0',
   category: 'feed',
   description: 'Actor instruction block for batch company post generation',
   temperature: 0.7,
@@ -11,6 +11,6 @@ export const companyInstruction = definePrompt({
    Type: {{companyType}}
 
    Write corporate {{postType}} statement. Stay professional and on-brand.
-   Max 280 chars. No hashtags/emojis.
+   Max 280 chars.
 `.trim()
 });

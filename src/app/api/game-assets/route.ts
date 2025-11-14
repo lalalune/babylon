@@ -1,77 +1,8 @@
 /**
- * Game Assets API
- * 
- * @route GET /api/game-assets
- * @access Public (optional authentication for RLS)
- * 
- * @description
- * Returns game assets including group chats, actors, and other game-related
- * data needed for client-side game initialization. Designed for Vercel
- * serverless deployment where file system access is limited.
- * 
- * **Assets Included:**
- * - **Group Chats:** All game-related group chat rooms
- *   - ID and name for each chat
- *   - Associated with continuous game
- *   - Used for multi-player discussions
- * 
- * **Optional Authentication:**
- * - If authenticated: Returns assets with RLS (Row-Level Security) applied
- * - If unauthenticated: Returns public game assets
- * 
- * **Vercel Compatibility:**
- * Assets are fetched from database rather than filesystem to support
- * serverless deployments. Static assets (actors.json, etc.) should be
- * fetched directly from the public directory by clients.
- * 
- * **Client Integration:**
- * ```typescript
- * // Fetch additional static assets directly
- * const actors = await fetch('/data/actors.json').then(r => r.json());
- * const questions = await fetch('/data/questions.json').then(r => r.json());
- * ```
- * 
- * @returns {object} Game assets
- * @property {boolean} success - Operation success
- * @property {object} assets - Game assets object
- * @property {array} assets.groupChats - Array of group chat objects
- * 
- * **Group Chat Object:**
- * @property {string} id - Chat ID
- * @property {string} name - Chat name/title
- * 
- * @throws {500} Internal server error
- * 
- * @example
- * ```typescript
- * // Get game assets (public)
- * const response = await fetch('/api/game-assets');
- * const { assets } = await response.json();
- * 
- * // Display group chats
- * assets.groupChats.forEach(chat => {
- *   console.log(`Chat: ${chat.name} (${chat.id})`);
- * });
- * 
- * // Combine with static assets
- * const [gameAssets, actors] = await Promise.all([
- *   fetch('/api/game-assets').then(r => r.json()),
- *   fetch('/data/actors.json').then(r => r.json())
- * ]);
- * ```
- * 
- * **Authenticated Access:**
- * ```typescript
- * // With authentication
- * const response = await fetch('/api/game-assets', {
- *   headers: { 'Authorization': `Bearer ${token}` }
- * });
- * // Returns assets visible to authenticated user (RLS applied)
- * ```
- * 
- * @see {@link /lib/db/context} Database context with RLS
- * @see {@link /public/data/actors.json} Static actor data
- * @see {@link /api/games} Games listing endpoint
+ * API Route: /api/game-assets
+ * Methods: GET (get game assets including groupChats)
+ *
+ * Vercel-compatible: Reads from public directory via HTTP or returns from database
  */
 
 import type { NextRequest } from 'next/server'

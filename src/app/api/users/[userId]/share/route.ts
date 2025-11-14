@@ -12,16 +12,15 @@ import { AuthorizationError } from '@/lib/errors'
 import { withErrorHandling } from '@/lib/errors/error-handler'
 import { logger } from '@/lib/logger'
 import { PointsService } from '@/lib/services/points-service'
-import { UserIdParamSchema, SnowflakeIdSchema } from '@/lib/validation/schemas'
+import { UserIdParamSchema, UUIDSchema } from '@/lib/validation/schemas'
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { requireUserByIdentifier } from '@/lib/users/user-lookup'
-import { generateSnowflakeId } from '@/lib/snowflake'
 
 const ShareRequestSchema = z.object({
   platform: z.enum(['twitter', 'farcaster', 'link', 'telegram', 'discord']),
   contentType: z.enum(['post', 'profile', 'market', 'referral', 'leaderboard']),
-  contentId: SnowflakeIdSchema.optional(),
+  contentId: UUIDSchema.optional(),
   url: z.string().url().optional()
 });
 
@@ -52,7 +51,6 @@ export const POST = withErrorHandling(async (
   // Create share action record
   const shareAction = await prisma.shareAction.create({
     data: {
-      id: await generateSnowflakeId(),
       userId: canonicalUserId,
       platform,
       contentType,

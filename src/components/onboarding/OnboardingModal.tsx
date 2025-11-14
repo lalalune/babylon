@@ -7,7 +7,8 @@ import { cn } from '@/lib/utils'
 import { apiFetch } from '@/lib/api/fetch'
 import type { OnboardingProfilePayload } from '@/lib/onboarding/types'
 import { logger } from '@/lib/logger'
-import { Skeleton } from '@/components/shared/Skeleton'
+import { SocialImportStep } from './SocialImportStep'
+import { BouncingLogo } from '@/components/shared/BouncingLogo'
 
 export interface ImportedProfileData {
   platform: 'twitter' | 'farcaster'
@@ -23,14 +24,15 @@ export interface ImportedProfileData {
 
 interface OnboardingModalProps {
   isOpen: boolean
-  stage: 'PROFILE' | 'ONCHAIN' | 'COMPLETED'
+  stage: 'SOCIAL_IMPORT' | 'PROFILE' | 'ONCHAIN' | 'COMPLETED'
   isSubmitting: boolean
   error?: string | null
   onSubmitProfile: (payload: OnboardingProfilePayload) => Promise<void>
   onRetryOnchain: () => Promise<void>
   onSkipOnchain: () => void
+  onSocialImport: (platform: 'twitter' | 'farcaster') => Promise<void>
+  onSkipSocialImport: () => void
   onClose: () => void
-  onLogout?: () => Promise<void>
   user: {
     id?: string
     username?: string
@@ -74,8 +76,9 @@ export function OnboardingModal({
   onSubmitProfile,
   onRetryOnchain,
   onSkipOnchain,
+  onSocialImport,
+  onSkipSocialImport,
   onClose,
-  onLogout,
   user,
   importedData,
 }: OnboardingModalProps) {
@@ -105,14 +108,8 @@ export function OnboardingModal({
   useEffect(() => {
     if (!importedData || stage !== 'PROFILE') return
 
-    logger.info('Pre-filling profile with imported data', { 
-      platform: importedData.platform,
-      hasProfileImage: !!importedData.profileImageUrl,
-      hasCoverImage: !!importedData.coverImageUrl,
-      hasBio: !!importedData.bio
-    }, 'OnboardingModal')
+    logger.info('Pre-filling profile with imported data', { platform: importedData.platform }, 'OnboardingModal')
 
-    // Set text fields from social data
     setDisplayName(importedData.displayName)
     setUsername(importedData.username)
     setBio(importedData.bio || '')
@@ -120,24 +117,16 @@ export function OnboardingModal({
     // If we have a profile image URL from social import, use it
     if (importedData.profileImageUrl) {
       setUploadedProfileImage(importedData.profileImageUrl)
-    } else {
-      // No social profile image - use a random one
-      setUploadedProfileImage(null)
-      setProfilePictureIndex(Math.floor(Math.random() * TOTAL_PROFILE_PICTURES) + 1)
     }
     
     // If we have a cover/banner URL from social import, use it
     if (importedData.coverImageUrl) {
       setUploadedBanner(importedData.coverImageUrl)
-    } else {
-      // No social banner - generate a random one
-      setUploadedBanner(null)
-      setBannerIndex(Math.floor(Math.random() * TOTAL_BANNERS) + 1)
     }
   }, [importedData, stage])
 
   useEffect(() => {
-    if (!isOpen || stage !== 'PROFILE') return
+    if (!isOpen || stage === 'SOCIAL_IMPORT') return
     
     // Don't auto-generate if we have imported data
     if (importedData) {
@@ -148,40 +137,43 @@ export function OnboardingModal({
     const initializeProfile = async () => {
       setIsLoadingDefaults(true)
 
-      const [profileResult, assetsResult] = await Promise.allSettled([
-        apiFetch('/api/onboarding/generate-profile', { auth: false }),
-        apiFetch('/api/onboarding/random-assets', { auth: false }),
-      ]).catch((initError: Error) => {
-        logger.warn('Failed to initialize onboarding defaults', { error: initError }, 'OnboardingModal')
-        return [
-          { status: 'rejected' as const, reason: initError },
-          { status: 'rejected' as const, reason: initError }
-        ]
-      })
+      try {
+        const [profileResult, assetsResult] = await Promise.allSettled([
+          apiFetch('/api/onboarding/generate-profile', { auth: false }),
+          apiFetch('/api/onboarding/random-assets', { auth: false }),
+        ])
 
-      if (profileResult.status === 'fulfilled' && profileResult.value.ok) {
-        const generated = (await profileResult.value.json()) as GeneratedProfileResponse
-        setDisplayName(generated.name)
-        setUsername(generated.username)
-        setBio(generated.bio)
-      } else {
+        if (profileResult.status === 'fulfilled' && profileResult.value.ok) {
+          const generated = (await profileResult.value.json()) as GeneratedProfileResponse
+          setDisplayName(generated.name)
+          setUsername(generated.username)
+          setBio(generated.bio)
+        } else {
+          setDisplayName('New Babylonian')
+          setUsername(`user_${Math.random().toString(36).slice(2, 10)}`)
+          setBio('Just joined Babylon!')
+        }
+
+        if (assetsResult.status === 'fulfilled' && assetsResult.value.ok) {
+          const assets = (await assetsResult.value.json()) as RandomAssetsResponse
+          setProfilePictureIndex(assets.profilePictureIndex)
+          setBannerIndex(assets.bannerIndex)
+        } else {
+          setProfilePictureIndex(Math.floor(Math.random() * TOTAL_PROFILE_PICTURES) + 1)
+          setBannerIndex(Math.floor(Math.random() * TOTAL_BANNERS) + 1)
+        }
+      } catch (initError) {
+        logger.warn('Failed to initialize onboarding defaults', { error: initError }, 'OnboardingModal')
         setDisplayName('New Babylonian')
         setUsername(`user_${Math.random().toString(36).slice(2, 10)}`)
         setBio('Just joined Babylon!')
-      }
-
-      if (assetsResult.status === 'fulfilled' && assetsResult.value.ok) {
-        const assets = (await assetsResult.value.json()) as RandomAssetsResponse
-        setProfilePictureIndex(assets.profilePictureIndex)
-        setBannerIndex(assets.bannerIndex)
-      } else {
         setProfilePictureIndex(Math.floor(Math.random() * TOTAL_PROFILE_PICTURES) + 1)
         setBannerIndex(Math.floor(Math.random() * TOTAL_BANNERS) + 1)
+      } finally {
+        setUploadedProfileImage(null)
+        setUploadedBanner(null)
+        setIsLoadingDefaults(false)
       }
-      
-      setUploadedProfileImage(null)
-      setUploadedBanner(null)
-      setIsLoadingDefaults(false)
     }
 
     void initializeProfile()
@@ -202,18 +194,18 @@ export function OnboardingModal({
       let status: 'available' | 'taken' | null = null
       let suggestion: string | null = null
 
-      const response = await apiFetch(`/api/onboarding/check-username?username=${encodeURIComponent(username)}`, { auth: false }).catch((checkError: Error) => {
+      try {
+        const response = await apiFetch(`/api/onboarding/check-username?username=${encodeURIComponent(username)}`, { auth: false })
+        if (response.ok) {
+          const result = (await response.json()) as { available?: boolean; suggestion?: string }
+          status = result.available ? 'available' : 'taken'
+          suggestion = result.available ? null : result.suggestion ?? null
+        } else {
+          const body = await response.json().catch(() => null)
+          logger.warn('Username availability check failed', { status: response.status, body }, 'OnboardingModal')
+        }
+      } catch (checkError) {
         logger.warn('Username availability check error', { error: checkError }, 'OnboardingModal')
-        return null
-      })
-      
-      if (response?.ok) {
-        const result = (await response.json()) as { available?: boolean; suggestion?: string }
-        status = result.available ? 'available' : 'taken'
-        suggestion = result.available ? null : result.suggestion ?? null
-      } else if (response) {
-        const body = await response.json().catch(() => null)
-        logger.warn('Username availability check failed', { status: response.status, body }, 'OnboardingModal')
       }
 
       if (!cancelled) {
@@ -268,7 +260,6 @@ export function OnboardingModal({
       profileImageUrl: resolveAssetUrl(uploadedProfileImage ?? `/assets/user-profiles/profile-${profilePictureIndex}.jpg`),
       coverImageUrl: resolveAssetUrl(uploadedBanner ?? `/assets/user-banners/banner-${bannerIndex}.jpg`),
       // Include imported social account data if available
-      // These fields trigger automatic reward point awards (1000 points per social account)
       importedFrom: importedData?.platform || null,
       twitterId: importedData?.platform === 'twitter' ? importedData.twitterId : null,
       twitterUsername: importedData?.platform === 'twitter' ? importedData.username : null,
@@ -307,82 +298,89 @@ export function OnboardingModal({
             </button>
           </div>
         </div>
+        <p className="text-xs text-muted-foreground">Click arrows to browse or upload your own</p>
       </div>
 
-      <div className="flex items-start gap-4">
-        <div className="relative w-24 h-24 shrink-0 rounded-full overflow-hidden bg-muted group">
-          <Image
-            src={currentProfileImage}
-            alt="Profile picture"
-            fill
-            className="object-cover"
-            unoptimized
-          />
-          <div className="absolute inset-0 bg-black/50 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-            <button type="button" onClick={() => cycleProfilePicture('prev')} className="p-1.5 bg-background/80 hover:bg-background rounded-lg">
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">Profile Picture</label>
+        <div className="flex items-center gap-4">
+          <div className="relative w-24 h-24 rounded-full overflow-hidden bg-muted group">
+            <Image
+              src={currentProfileImage}
+              alt="Profile picture"
+              fill
+              className="object-cover"
+              unoptimized
+            />
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <label className="p-2 bg-background/80 hover:bg-background rounded-lg cursor-pointer">
+                <Upload className="w-4 h-4" />
+                <input type="file" accept="image/*" onChange={handleProfileImageUpload} className="hidden" />
+              </label>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => cycleProfilePicture('prev')} className="p-2 bg-muted hover:bg-muted/70 rounded-lg">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <label className="p-1.5 bg-background/80 hover:bg-background rounded-lg cursor-pointer">
-              <Upload className="w-4 h-4" />
-              <input type="file" accept="image/*" onChange={handleProfileImageUpload} className="hidden" />
-            </label>
-            <button type="button" onClick={() => cycleProfilePicture('next')} className="p-1.5 bg-background/80 hover:bg-background rounded-lg">
+            <button type="button" onClick={() => cycleProfilePicture('next')} className="p-2 bg-muted hover:bg-muted/70 rounded-lg">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
+          <p className="text-xs text-muted-foreground flex-1">
+            Browse through {TOTAL_PROFILE_PICTURES} AI-generated images or upload your own
+          </p>
         </div>
+      </div>
 
-        <div className="flex-1 space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="displayName" className="block text-sm font-medium">
-              Display Name
-            </label>
-            <input
-              id="displayName"
-              type="text"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Your display name"
-              className="w-full px-3 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066FF]"
-              maxLength={50}
-            />
-          </div>
+      <div className="space-y-2">
+        <label htmlFor="displayName" className="block text-sm font-medium">
+          Display Name
+        </label>
+        <input
+          id="displayName"
+          type="text"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          placeholder="Your display name"
+          className="w-full px-3 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066FF]"
+          maxLength={50}
+        />
+      </div>
 
-          <div className="space-y-2">
-            <label htmlFor="username" className="block text-sm font-medium">
-              Username
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">@</span>
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter your handle"
-                className="w-full pl-8 pr-3 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066FF]"
-                maxLength={20}
-              />
-              {isCheckingUsername && (
-                <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
-              )}
-              {usernameStatus === 'available' && !isCheckingUsername && (
-                <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-green-500" />
-              )}
-              {usernameStatus === 'taken' && !isCheckingUsername && (
-                <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-red-500" />
-              )}
-            </div>
-            {usernameStatus === 'taken' && usernameSuggestion && (
-              <p className="text-xs text-muted-foreground">
-                Suggestion:{' '}
-                <button type="button" className="underline" onClick={() => setUsername(usernameSuggestion)}>
-                  {usernameSuggestion}
-                </button>
-              </p>
-            )}
-          </div>
+      <div className="space-y-2">
+        <label htmlFor="username" className="block text-sm font-medium">
+          Username
+        </label>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">@</span>
+          <input
+            id="username"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Enter your handle"
+            className="w-full pl-8 pr-3 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0066FF]"
+            maxLength={20}
+          />
+          {isCheckingUsername && (
+            <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+          )}
+          {usernameStatus === 'available' && !isCheckingUsername && (
+            <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-green-500" />
+          )}
+          {usernameStatus === 'taken' && !isCheckingUsername && (
+            <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-red-500" />
+          )}
         </div>
+        {usernameStatus === 'taken' && usernameSuggestion && (
+          <p className="text-xs text-muted-foreground">
+            Suggestion:{' '}
+            <button type="button" className="underline" onClick={() => setUsername(usernameSuggestion)}>
+              {usernameSuggestion}
+            </button>
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -401,15 +399,8 @@ export function OnboardingModal({
         <p className="text-xs text-muted-foreground text-right">{bio.length}/280</p>
       </div>
 
-      {(formError || error) && (
-        <div className="flex items-center gap-2 text-red-500 text-sm">
-          <AlertCircle className="w-4 h-4" />
-          <span>{formError || error}</span>
-        </div>
-      )}
-
-      <div className="flex items-start gap-4">
-        <label className="flex items-start gap-3 cursor-pointer group flex-1">
+      <div className="space-y-3 border-t border-border pt-4">
+        <label className="flex items-start gap-3 cursor-pointer group">
           <input
             type="checkbox"
             checked={acceptedTerms}
@@ -439,16 +430,38 @@ export function OnboardingModal({
             </a>
           </span>
         </label>
+      </div>
+
+      {(formError || error) && (
+        <div className="flex items-center gap-2 text-red-500 text-sm">
+          <AlertCircle className="w-4 h-4" />
+          <span>{formError || error}</span>
+        </div>
+      )}
+
+      <div className="flex justify-between items-center">
         <button
-          type="submit"
-          className={cn(
-            'px-4 py-2 bg-[#0066FF] text-primary-foreground rounded-lg whitespace-nowrap hover:bg-[#0066FF]/90',
-            isSubmitting && 'opacity-60'
-          )}
+          type="button"
+          className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+          onClick={handleSkip}
           disabled={isSubmitting}
+          title="Use generated profile and continue"
         >
-          {isSubmitting ? 'Saving...' : 'Continue'}
+          Use Generated Profile
         </button>
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            className={cn(
+              'px-4 py-2 bg-[#0066FF] text-white rounded-lg flex items-center gap-2 hover:bg-[#0066FF]/90',
+              isSubmitting && 'opacity-60'
+            )}
+            disabled={isSubmitting}
+          >
+            {isSubmitting && <BouncingLogo size={16} />}
+            {isSubmitting ? 'Saving...' : 'Continue'}
+          </button>
+        </div>
       </div>
     </form>
   )
@@ -493,47 +506,38 @@ export function OnboardingModal({
     reader.readAsDataURL(file)
   }
 
-  const canClose = !isSubmitting // Allow closing at any stage when not submitting
-  const canLogout = stage !== 'COMPLETED' && !isSubmitting && onLogout
+  const handleSkip = () => {
+    if (stage !== 'PROFILE' || isSubmitting) return
 
-  const handleLogout = async () => {
-    if (onLogout) {
-      await onLogout();
+    const profilePayload: OnboardingProfilePayload = {
+      username: username || `user_${Math.random().toString(36).substring(2, 10)}`,
+      displayName: displayName || 'New User',
+      bio: bio || 'Just joined Babylon!',
+      profileImageUrl: resolveAssetUrl(uploadedProfileImage ?? `/assets/user-profiles/profile-${profilePictureIndex}.jpg`),
+      coverImageUrl: resolveAssetUrl(uploadedBanner ?? `/assets/user-banners/banner-${bannerIndex}.jpg`),
     }
+
+    void onSubmitProfile(profilePayload)
   }
 
-  const [isVisible, setIsVisible] = useState(false)
+  const canClose = !isSubmitting // Allow closing at any stage when not submitting
+  const canLogout = stage !== 'COMPLETED' && !isSubmitting
 
-  // Trigger fade-in animation after mount
-  useEffect(() => {
-    if (isOpen) {
-      // Small delay to trigger CSS transition
-      const timer = setTimeout(() => setIsVisible(true), 50)
-      return () => clearTimeout(timer)
+  const handleLogout = () => {
+    // Use Privy's logout
+    if (typeof window !== 'undefined' && window.location) {
+      window.location.href = '/api/auth/logout'
     }
-    setIsVisible(false)
-    return undefined
-  }, [isOpen])
-
-  if (!isOpen) return null
+  }
 
   return (
     <>
       <div
-        className={cn(
-          "fixed inset-0 bg-black/70 z-[100] backdrop-blur-sm transition-opacity duration-300 rounded-lg",
-          isVisible ? "opacity-100" : "opacity-0"
-        )}
+        className="fixed inset-0 bg-black/70 z-[100] backdrop-blur-sm"
         onClick={canClose ? onClose : undefined}
       />
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
-        <div 
-          className={cn(
-            "bg-background border border-border rounded-lg shadow-xl w-full max-w-2xl my-8 transition-all duration-300",
-            isVisible ? "opacity-100 scale-100" : "opacity-0 scale-95"
-          )}
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="bg-background border border-border rounded-lg shadow-xl w-full max-w-2xl my-8" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between p-6 border-b border-border">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-[#0066FF]/10 rounded-lg">
@@ -542,18 +546,15 @@ export function OnboardingModal({
               <div>
                 <h2 className="text-2xl font-bold">Welcome to Babylon!</h2>
                 <p className="text-sm text-muted-foreground">
-                  {stage === 'PROFILE' 
+                  {stage === 'SOCIAL_IMPORT' 
+                    ? 'Connect your account' 
+                    : stage === 'PROFILE' 
                     ? 'Set up your profile' 
                     : stage === 'ONCHAIN' 
                     ? 'Complete registration' 
                     : 'Setup complete!'}
                 </p>
-                {stage === 'PROFILE' && importedData && (
-                  <p className="text-xs text-[#0066FF] mt-1">
-                    Imported from {importedData.platform === 'twitter' ? '𝕏' : 'Farcaster'}
-                  </p>
-                )}
-                {user?.username && stage !== 'PROFILE' && (
+                {user?.username && stage !== 'PROFILE' && stage !== 'SOCIAL_IMPORT' && (
                   <p className="text-xs text-muted-foreground mt-1">@{user.username}</p>
                 )}
               </div>
@@ -568,13 +569,19 @@ export function OnboardingModal({
             </button>
           </div>
 
-          {stage === 'COMPLETED' ? (
+          {stage === 'SOCIAL_IMPORT' ? (
+            <SocialImportStep
+              onImport={onSocialImport}
+              onSkip={onSkipSocialImport}
+              isLoading={isSubmitting}
+            />
+          ) : stage === 'COMPLETED' ? (
             <div className="p-12 flex flex-col items-center gap-4">
               <Check className="w-10 h-10 text-[#0066FF]" />
               <p className="text-lg font-semibold">Onboarding complete! Enjoy Babylon 🎉</p>
               <button
                 type="button"
-                className="px-4 py-2 bg-[#0066FF] text-primary-foreground rounded-lg"
+                className="px-4 py-2 bg-[#0066FF] text-white rounded-lg"
                 onClick={onClose}
               >
                 Close
@@ -584,10 +591,7 @@ export function OnboardingModal({
             <div className="p-8 flex flex-col items-center gap-4 text-center">
               {isSubmitting ? (
                 <>
-                  <div className="space-y-3 w-full max-w-md">
-                    <Skeleton className="h-8 w-full" />
-                    <Skeleton className="h-4 w-3/4 mx-auto" />
-                  </div>
+                  <BouncingLogo size={32} />
                   <p className="text-lg font-semibold">Finalising on-chain registration...</p>
                   <p className="text-sm text-muted-foreground max-w-md">
                     Waiting for blockchain confirmation. This may take 10-30 seconds.
@@ -625,7 +629,7 @@ export function OnboardingModal({
                     <div className="flex gap-2 mt-4">
                       <button
                         type="button"
-                        className="px-4 py-2 bg-[#0066FF] text-primary-foreground rounded-lg disabled:opacity-50"
+                        className="px-4 py-2 bg-[#0066FF] text-white rounded-lg disabled:opacity-50"
                         onClick={onRetryOnchain}
                         disabled={isSubmitting}
                       >
@@ -663,7 +667,7 @@ export function OnboardingModal({
                   <div className="flex flex-col gap-2 mt-4 w-full max-w-xs">
                     <button
                       type="button"
-                      className="w-full px-4 py-2 bg-[#0066FF] text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-[#0066FF]/90"
+                      className="w-full px-4 py-2 bg-[#0066FF] text-white rounded-lg disabled:opacity-50 hover:bg-[#0066FF]/90"
                       onClick={onRetryOnchain}
                       disabled={isSubmitting}
                     >
@@ -682,12 +686,8 @@ export function OnboardingModal({
             </div>
           ) : isLoadingDefaults ? (
             <div className="p-12 flex flex-col items-center gap-4">
-              <div className="space-y-3 w-full max-w-md">
-                <Skeleton className="h-40 w-full" />
-                <Skeleton className="h-24 w-24 rounded-full mx-auto" />
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </div>
+              <BouncingLogo size={32} />
+              <p className="text-muted-foreground">Generating your profile...</p>
             </div>
           ) : (
             renderProfileForm()

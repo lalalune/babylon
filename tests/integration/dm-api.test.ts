@@ -6,21 +6,11 @@
 
 import { describe, test, expect } from 'bun:test'
 
-const BASE_URL = process.env.TEST_API_URL || 'http://localhost:3000'
-// Check server availability at module load time
-const serverAvailable = await (async () => {
-  try {
-    const response = await fetch(BASE_URL, { signal: AbortSignal.timeout(2000) })
-    return response.status < 500
-  } catch {
-    console.log(`⚠️  Server not available at ${BASE_URL} - Skipping DM API tests`)
-    return false
-  }
-})()
-
 describe('DM Creation API', () => {
+  const BASE_URL = process.env.TEST_API_URL || 'http://localhost:3000'
+
   describe('POST /api/chats/dm', () => {
-    test.skipIf(!serverAvailable)('should reject request without authentication', async () => {
+    test('should reject request without authentication', async () => {
       const response = await fetch(`${BASE_URL}/api/chats/dm`, {
         method: 'POST',
         headers: {
@@ -34,7 +24,7 @@ describe('DM Creation API', () => {
       expect(response.status).toBe(401)
     })
 
-    test.skipIf(!serverAvailable)('should reject self-DM attempts', async () => {
+    test('should reject self-DM attempts', async () => {
       const response = await fetch(`${BASE_URL}/api/chats/dm`, {
         method: 'POST',
         headers: {
@@ -46,12 +36,15 @@ describe('DM Creation API', () => {
         }),
       })
 
+      // Should return 400 with SELF_DM_NOT_ALLOWED error
       expect([400, 401]).toContain(response.status)
-      const data = await response.json()
-      expect(data.error).toBeDefined()
+      if (response.status === 400) {
+        const data = await response.json()
+        expect(data.error).toBeDefined()
+      }
     })
 
-    test.skipIf(!serverAvailable)('should reject DM to non-existent user', async () => {
+    test('should reject DM to non-existent user', async () => {
       const response = await fetch(`${BASE_URL}/api/chats/dm`, {
         method: 'POST',
         headers: {
@@ -63,10 +56,12 @@ describe('DM Creation API', () => {
         }),
       })
 
-      expect([400, 401, 404]).toContain(response.status)
+      expect([400, 404]).toContain(response.status)
     })
 
-    test.skipIf(!serverAvailable)('should have proper response structure for valid DM creation', async () => {
+    test('should have proper response structure for valid DM creation', async () => {
+      // Note: This test will likely fail without valid auth
+      // but validates the expected response structure
       const response = await fetch(`${BASE_URL}/api/chats/dm`, {
         method: 'POST',
         headers: {
@@ -86,9 +81,6 @@ describe('DM Creation API', () => {
         expect(data.chat.isGroup).toBe(false)
         expect(data.chat.otherUser).toBeDefined()
         expect(data.chat.otherUser.id).toBe('demo-user-babylon-support')
-      } else {
-        // Auth failed - this is expected with test-token
-        expect(response.status).toBe(401)
       }
     })
   })
@@ -115,7 +107,7 @@ describe('DM Messaging API', () => {
   const BASE_URL = process.env.TEST_API_URL || 'http://localhost:3000'
 
   describe('POST /api/chats/[id]/message', () => {
-    test.skipIf(!serverAvailable)('should require authentication', async () => {
+    test('should require authentication', async () => {
       const response = await fetch(`${BASE_URL}/api/chats/dm-test-chat/message`, {
         method: 'POST',
         headers: {
@@ -129,7 +121,7 @@ describe('DM Messaging API', () => {
       expect(response.status).toBe(401)
     })
 
-    test.skipIf(!serverAvailable)('should validate message content', async () => {
+    test('should validate message content', async () => {
       const response = await fetch(`${BASE_URL}/api/chats/dm-test-chat/message`, {
         method: 'POST',
         headers: {
@@ -144,7 +136,7 @@ describe('DM Messaging API', () => {
       expect([400, 401]).toContain(response.status)
     })
 
-    test.skipIf(!serverAvailable)('should enforce minimum message length', async () => {
+    test('should enforce minimum message length', async () => {
       const response = await fetch(`${BASE_URL}/api/chats/dm-test-chat/message`, {
         method: 'POST',
         headers: {
@@ -156,10 +148,11 @@ describe('DM Messaging API', () => {
         }),
       })
 
+      // Either validation error or auth error
       expect([400, 401]).toContain(response.status)
     })
 
-    test.skipIf(!serverAvailable)('should have proper response structure for DM messages', async () => {
+    test('should have proper response structure for DM messages', async () => {
       const response = await fetch(`${BASE_URL}/api/chats/dm-test-chat/message`, {
         method: 'POST',
         headers: {
@@ -178,10 +171,8 @@ describe('DM Messaging API', () => {
         expect(data.message.content).toBeDefined()
         expect(data.quality).toBeDefined()
         expect(data.chatType).toBe('dm')
+        // DMs should not have membership stats
         expect(data.membership).toBeUndefined()
-      } else {
-        // Auth failed - this is expected with test-token
-        expect(response.status).toBe(401)
       }
     })
   })
@@ -191,30 +182,33 @@ describe('DM Chat Fetch API', () => {
   const BASE_URL = process.env.TEST_API_URL || 'http://localhost:3000'
 
   describe('GET /api/chats', () => {
-    test.skipIf(!serverAvailable)('should separate group chats and direct chats', async () => {
+    test('should separate group chats and direct chats', async () => {
       const response = await fetch(`${BASE_URL}/api/chats`, {
         headers: {
           'Authorization': 'Bearer test-token',
         },
       })
 
-      // Auth will fail with test token - this is expected
-      expect([200, 401]).toContain(response.status)
-      
       if (response.status === 200) {
         const data = await response.json()
         
-        // If we got data, validate structure
-        if (data.groupChats || data.directChats) {
-          expect(Array.isArray(data.groupChats) || data.groupChats === undefined).toBe(true)
-          expect(Array.isArray(data.directChats) || data.directChats === undefined).toBe(true)
+        // Should have both arrays
+        expect(Array.isArray(data.groupChats)).toBe(true)
+        expect(Array.isArray(data.directChats)).toBe(true)
+        
+        // Direct chats should have otherUser field
+        if (data.directChats.length > 0) {
+          const dm = data.directChats[0]
+          expect(dm.isGroup).toBe(false)
+          expect(dm.otherUser).toBeDefined()
+          expect(dm.otherUser.id).toBeDefined()
         }
       }
     })
   })
 
   describe('GET /api/chats/[id]', () => {
-    test.skipIf(!serverAvailable)('should include otherUser for DM chats', async () => {
+    test('should include otherUser for DM chats', async () => {
       const dmChatId = 'dm-test-user-1-test-user-2'
       
       const response = await fetch(`${BASE_URL}/api/chats/${dmChatId}`, {
@@ -223,13 +217,12 @@ describe('DM Chat Fetch API', () => {
         },
       })
 
-      // Auth will likely fail with test token, or chat won't exist
-      expect([200, 401, 404]).toContain(response.status)
-      
       if (response.status === 200) {
         const data = await response.json()
         
-        if (data.chat && !data.chat.isGroup) {
+        expect(data.chat).toBeDefined()
+        if (!data.chat.isGroup) {
+          // DM should have otherUser info
           expect(data.chat.otherUser).toBeDefined()
         }
       }
@@ -254,6 +247,7 @@ describe('DM Validation Rules', () => {
   test('should reject invalid user IDs', () => {
     const invalidIds = [
       '',
+      ' ',
       null,
       undefined,
     ]
@@ -261,9 +255,6 @@ describe('DM Validation Rules', () => {
     for (const id of invalidIds) {
       expect(id).toBeFalsy()
     }
-    
-    // Whitespace should be rejected as invalid
-    expect(' '.trim()).toBeFalsy()
   })
 })
 

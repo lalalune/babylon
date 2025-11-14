@@ -1,34 +1,11 @@
 /**
- * QuestionManager Test Suite
- * 
- * @module engine/__tests__/QuestionManager.test
- * 
- * @description
- * Comprehensive test suite for the QuestionManager prediction market question
- * lifecycle system. Verifies question creation, resolution, and constraint enforcement.
- * 
- * **Test Coverage:**
- * - Question resolution detection (by date)
- * - Days until resolution calculation
- * - Resolution time constraints (1-7 days)
- * - Question status transitions (active → resolved)
- * - Active vs resolved question filtering
- * - Maximum 20 questions enforcement
- * 
- * **Key Features Tested:**
- * - Date-based resolution triggering
- * - Day calculation accuracy
- * - Status tracking (active/resolved)
- * - Question filtering utilities
- * - Constraint validation (max questions)
- * 
- * **Testing Approach:**
- * - Unit tests with mock LLM client
- * - No external dependencies
- * - Pure function testing
- * - Edge case coverage
- * 
- * @see {@link QuestionManager} - Class under test
+ * QuestionManager Tests
+ *
+ * Verifies:
+ * - Question creation with correct dates
+ * - Question resolution logic
+ * - Max 20 questions enforcement
+ * - Resolution time constraints (24h-7d)
  */
 
 import { describe, test, expect } from 'bun:test';
@@ -38,21 +15,11 @@ import { QuestionManager } from '../QuestionManager';
 // Mock LLM client for testing
 const mockLLM = {
   generateJSON: async () => ({ questions: [] }),
-  client: null,
-  provider: 'openai' as const,
-  groqKey: '',
-  openaiKey: '',
-  anthropicKey: '',
-  model: 'gpt-4',
-  temperature: 0.7,
-  maxTokens: 2000,
-  generateText: async () => '',
-  generateStream: async function* () { yield ''; },
-} as unknown as typeof import('../../generator/llm/openai-client').BabylonLLMClient;
+} as { generateJSON: () => Promise<{ questions: unknown[] }> };
 
 describe('QuestionManager', () => {
   test('detects questions that should be resolved', () => {
-    const manager = new QuestionManager(mockLLM as any);
+    const manager = new QuestionManager(mockLLM);
     const questions: Question[] = [
       {
         id: 1,
@@ -87,7 +54,7 @@ describe('QuestionManager', () => {
   });
 
   test('calculates days until resolution correctly', () => {
-    const manager = new QuestionManager(mockLLM as any);
+    const manager = new QuestionManager(mockLLM);
     const question: Question = {
       id: 1,
       text: 'Test Question',
@@ -122,7 +89,7 @@ describe('QuestionManager', () => {
   });
 
   test('tracks question status transitions', () => {
-    const manager = new QuestionManager(mockLLM as any);
+    const manager = new QuestionManager(mockLLM);
     const question: Question = {
       id: 1,
       text: 'Test Question',
@@ -142,7 +109,7 @@ describe('QuestionManager', () => {
   });
 
   test('filters active vs resolved questions', () => {
-    const manager = new QuestionManager(mockLLM as any);
+    const manager = new QuestionManager(mockLLM);
     const questions: Question[] = [
       {
         id: 1,

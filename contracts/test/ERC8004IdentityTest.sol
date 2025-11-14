@@ -199,8 +199,6 @@ contract ERC8004IdentityTest is Test {
         );
 
         // Transfer to agent2
-        // Note: ERC721 transferFrom doesn't return a value - it reverts on failure
-        // This is expected behavior and safe in test context
         vm.prank(agent1);
         registry.transferFrom(agent1, agent2, tokenId);
 

@@ -1,0 +1,130 @@
+{
+  "name": "@babylonai/plugin-babylon",
+  "description": "ElizaOS plugin for autonomous AI agents to participate in Babylon prediction markets",
+  "version": "2.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "packageType": "plugin",
+  "platform": "node",
+  "license": "MIT",
+  "author": "Babylon AI",
+  "keywords": [
+    "plugin",
+    "elizaos",
+    "prediction-markets",
+    "trading",
+    "ai-agent",
+    "autonomous",
+    "babylon"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elizaos/babylon.git",
+    "directory": "plugin-babylon"
+  },
+  "homepage": "https://github.com/elizaos/babylon/tree/main/plugin-babylon#readme",
+  "bugs": {
+    "url": "https://github.com/elizaos/babylon/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    ".npmignore",
+    ".gitignore",
+    "package.json"
+  ],
+  "scripts": {
+    "start": "elizaos start",
+    "dev": "elizaos dev",
+    "build": "bun run build.ts",
+    "test": "bun test src/__tests__",
+    "test:watch": "bun test --watch src/__tests__",
+    "build:watch": "bun run build.ts --watch",
+    "format": "prettier --write ./src",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.ts\"",
+    "lint:fix": "eslint \"src/**/*.ts\" --fix"
+  },
+  "dependencies": {
+    "@elizaos/core": "^1.6.3",
+    "zod": "4.1.11"
+  },
+  "devDependencies": {
+    "@elizaos/cli": "workspace:*",
+    "@types/node": "^24.9.1",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
+    "dotenv": "16.4.5",
+    "eslint": "^9.38.0",
+    "prettier": "3.5.3",
+    "typescript": "5.8.2"
+  },
+  "resolutions": {
+    "// Note": "langchain 0.3.30 fixes @langchain/core zod/v3 import issues",
+    "zod": "4.1.11",
+    "langchain": "0.3.30",
+    "@langchain/core": "0.3.30"
+  },
+  "overrides": {
+    "@langchain/core": "0.3.30"
+  },
+  "agentConfig": {
+    "pluginType": "elizaos:plugin:1.0.0",
+    "pluginParameters": {
+      "BABYLON_API_URL": {
+        "type": "string",
+        "description": "Base URL for Babylon API",
+        "default": "http://localhost:3000"
+      },
+      "BABYLON_AGENT_ID": {
+        "type": "string",
+        "description": "Agent identifier for authentication",
+        "default": "babylon-agent-default"
+      },
+      "BABYLON_AGENT_SECRET": {
+        "type": "string",
+        "description": "Secret key for agent authentication (enables trading)"
+      },
+      "BABYLON_MAX_TRADE_SIZE": {
+        "type": "string",
+        "description": "Maximum trade size in USD",
+        "default": "100"
+      },
+      "BABYLON_MAX_POSITION_SIZE": {
+        "type": "string",
+        "description": "Maximum total position size in USD",
+        "default": "500"
+      },
+      "BABYLON_MIN_CONFIDENCE": {
+        "type": "string",
+        "description": "Minimum confidence threshold for trades (0-1)",
+        "default": "0.6"
+      }
+    }
+  },
+  "environment": {
+    "required": ["OPENAI_API_KEY"],
+    "optional": [
+      "BABYLON_AGENT_ID",
+      "BABYLON_AGENT_SECRET",
+      "BABYLON_API_URL",
+      "BABYLON_MAX_TRADE_SIZE",
+      "BABYLON_MAX_POSITION_SIZE",
+      "BABYLON_MIN_CONFIDENCE"
+    ]
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

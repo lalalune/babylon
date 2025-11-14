@@ -1,97 +1,6 @@
 /**
- * User Search API
- * 
- * @description
- * Search for users by username or display name with fuzzy matching.
- * Returns real users only (excludes NPCs, banned users, and current user).
- * Designed for user mention autocomplete, friend finding, and social discovery.
- * 
- * **Features:**
- * - Case-insensitive search
- * - Matches username OR display name
- * - Excludes current user (no self-mentions)
- * - Excludes NPCs/actors
- * - Excludes banned users
- * - Limits to 20 results (performance)
- * - Alphabetically sorted results
- * 
- * **Search Behavior:**
- * - Minimum 2 characters required
- * - Substring matching (contains)
- * - Searches both username and display name fields
- * - Returns empty array if query too short
- * 
- * **Use Cases:**
- * - User mention autocomplete (@username)
- * - Friend search
- * - DM recipient selection
- * - Group chat member addition
- * - Follow/unfollow user search
- * 
- * @openapi
- * /api/users/search:
- *   get:
- *     tags:
- *       - Users
- *     summary: Search for users
- *     description: Search for users by username or display name (min 2 chars, max 20 results)
- *     security:
- *       - PrivyAuth: []
- *     parameters:
- *       - in: query
- *         name: q
- *         required: true
- *         schema:
- *           type: string
- *           minLength: 2
- *         description: Search query (username or display name)
- *         example: alice
- *     responses:
- *       200:
- *         description: Search results
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 users:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: string
- *                       username:
- *                         type: string
- *                       displayName:
- *                         type: string
- *                       profileImageUrl:
- *                         type: string
- *                       bio:
- *                         type: string
- *       401:
- *         description: Unauthorized
- * 
- * @example
- * ```typescript
- * // Search for users
- * const response = await fetch('/api/users/search?q=alice', {
- *   headers: { 'Authorization': `Bearer ${token}` }
- * });
- * const { users } = await response.json();
- * 
- * // Display in autocomplete
- * users.forEach(user => {
- *   console.log(`@${user.username} - ${user.displayName}`);
- * });
- * 
- * // Too short query
- * const empty = await fetch('/api/users/search?q=a');
- * // Returns { users: [] }
- * ```
- * 
- * @see {@link /lib/db/context} RLS context
- * @see {@link /src/components/MentionAutocomplete} Autocomplete UI
+ * API Route: /api/users/search
+ * Methods: GET (search for users)
  */
 
 import type { NextRequest } from 'next/server'
@@ -173,6 +82,4 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     users,
   })
 })
-
-
 

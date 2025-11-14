@@ -9,7 +9,6 @@ import { Agent0Client } from '@/agents/agent0/Agent0Client'
 import type { AgentMetadata } from '@/agents/agent0/IPFSPublisher'
 import { logger } from '@/lib/logger'
 import { prisma } from '@/lib/database-service'
-import { generateSnowflakeId } from '@/lib/snowflake'
 
 export interface BabylonRegistrationResult {
   tokenId: number
@@ -419,10 +418,9 @@ export async function registerBabylonGame(): Promise<BabylonRegistrationResult |
     }
 
     // 2. Register with Agent0 SDK (which handles IPFS publishing internally)
-    logger.info('Registering Babylon with Agent0 SDK on Ethereum Sepolia...', undefined, 'BabylonRegistry')
-    logger.info('Game operates on Base network with cross-chain discovery via agent0', undefined, 'BabylonRegistry')
+    logger.info('Registering Babylon with Agent0 SDK...', undefined, 'BabylonRegistry')
 
-    // Use Ethereum Sepolia RPC (where agent0 contracts are deployed)
+    // Use Ethereum Sepolia RPC (where contracts are deployed)
     const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || process.env.SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com'
 
     // Configure IPFS - use Pinata if available, otherwise use public IPFS node
@@ -437,10 +435,8 @@ export async function registerBabylonGame(): Promise<BabylonRegistrationResult |
       ...ipfsConfig
     })
 
-    // Register Babylon directly with registerAgent to provide full metadata payload
-    // - Game metadata and capabilities
-    // - MCP and A2A endpoint configuration
-    // - Cross-chain network info (points to Base where game operates)
+    // Note: This will throw an error until Agent0 SDK is properly installed
+    // The error message will guide users to install the SDK
     let result: { tokenId: number; txHash: string; metadataCID?: string }
 
     try {
@@ -455,14 +451,9 @@ export async function registerBabylonGame(): Promise<BabylonRegistrationResult |
           markets: babylonCard.capabilities.markets,
           actions: babylonCard.capabilities.actions,
           version: '1.0.0',
-          x402Support: true // Babylon supports ERC-402 micropayments for premium actions
+          x402Support: false // Babylon doesn't require ERC-402 payment for access
         }
       })
-
-      logger.info('✅ Babylon registered on agent0 (Ethereum Sepolia)', undefined, 'BabylonRegistry')
-      logger.info(`   Discovery: External agents can find Babylon via agent0`, undefined, 'BabylonRegistry')
-      logger.info(`   Game Network: Base ${process.env.BASE_CHAIN_ID || '8453'}`, undefined, 'BabylonRegistry')
-      logger.info(`   Registry: ${process.env.BASE_IDENTITY_REGISTRY_ADDRESS}`, undefined, 'BabylonRegistry')
     } catch (error) {
       // If Agent0 SDK is not available, registration failed
       logger.error(
@@ -482,7 +473,6 @@ export async function registerBabylonGame(): Promise<BabylonRegistrationResult |
   await prisma.gameConfig.upsert({
     where: { key: 'agent0_registration' },
     create: {
-      id: await generateSnowflakeId(),
       key: 'agent0_registration',
       value: {
         registered: true,
@@ -490,8 +480,7 @@ export async function registerBabylonGame(): Promise<BabylonRegistrationResult |
         metadataCID,
         txHash: result.txHash,
         registeredAt: new Date().toISOString()
-      },
-      updatedAt: new Date()
+      }
     },
     update: {
       value: {
@@ -510,3 +499,4 @@ export async function registerBabylonGame(): Promise<BabylonRegistrationResult |
     registeredAt: new Date().toISOString()
   }
 }
+

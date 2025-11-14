@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   // For unauthenticated users, use cached widget data
   if (!authUser || !authUser.userId) {
     const formattedMarkets = await getCacheOrFetch(
-      'markets-widget-v2', // v2 to invalidate old cache without price changes
+      'markets-widget',
       async () => {
         const questions = await db.getActiveQuestions()
 
@@ -40,63 +40,6 @@ export async function GET(request: NextRequest) {
 
         const marketMap = new Map(markets.map(m => [m.id, m]))
 
-        // Get recent positions to calculate price changes
-        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
-        const recentPositions = await asPublic(async (dbPrisma) => {
-          return await dbPrisma.position.findMany({
-            where: {
-              marketId: { in: marketIds },
-              createdAt: {
-                gte: twentyFourHoursAgo,
-              },
-            },
-            orderBy: {
-              createdAt: 'asc',
-            },
-          })
-        })
-
-        // Calculate price changes based on position activity
-        const priceChangeMap = new Map<string, number>()
-        
-        for (const marketId of marketIds) {
-          const marketPositions = recentPositions.filter(p => p.marketId === marketId)
-          if (marketPositions.length > 0) {
-            // Calculate initial and final prices from positions
-            const market = marketMap.get(marketId)
-            if (market) {
-              const currentYesShares = Number(market.yesShares)
-              const currentNoShares = Number(market.noShares)
-              const currentTotal = currentYesShares + currentNoShares
-              
-              if (currentTotal > 0) {
-                // Estimate 24h ago price by subtracting recent position changes
-                let pastYesShares = currentYesShares
-                let pastNoShares = currentNoShares
-                
-                marketPositions.forEach(pos => {
-                  const shares = Number(pos.shares)
-                  if (pos.side) {
-                    pastYesShares -= shares
-                  } else {
-                    pastNoShares -= shares
-                  }
-                })
-                
-                const pastTotal = pastYesShares + pastNoShares
-                if (pastTotal > 0) {
-                  const pastYesPrice = pastYesShares / pastTotal
-                  const currentYesPrice = currentYesShares / currentTotal
-                  const priceChange = currentYesPrice - pastYesPrice
-                  const changePercent = pastYesPrice > 0 ? (priceChange / pastYesPrice) * 100 : 0
-                  
-                  priceChangeMap.set(marketId, changePercent)
-                }
-              }
-            }
-          }
-        }
-
         return questions
           // Don't filter out questions without markets - show all active questions
           .filter(q => q.status === 'active')
@@ -108,7 +51,6 @@ export async function GET(request: NextRequest) {
 
             const yesPrice = totalShares > 0 ? yesShares / totalShares : 0.5
             const noPrice = totalShares > 0 ? noShares / totalShares : 0.5
-            const changePercent24h = priceChangeMap.get(String(q.id))
 
             return {
               id: String(q.id),
@@ -117,7 +59,6 @@ export async function GET(request: NextRequest) {
               noPrice,
               volume: totalShares,
               endDate: q.resolutionDate,
-              changePercent24h: changePercent24h !== undefined ? changePercent24h : undefined,
             }
           })
           .sort((a, b) => {
@@ -133,7 +74,7 @@ export async function GET(request: NextRequest) {
 
             return bScore - aScore
           })
-          .slice(0, 10) // Get top 10 instead of 5 to have more for top movers
+          .slice(0, 5)
       },
       {
         namespace: CACHE_KEYS.WIDGET,
@@ -171,63 +112,6 @@ export async function GET(request: NextRequest) {
 
   const marketMap = new Map(markets.map(m => [m.id, m]))
 
-  // Get recent positions to calculate price changes
-  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
-  const recentPositions = await asUser(authUser, async (dbPrisma) => {
-    return await dbPrisma.position.findMany({
-      where: {
-        marketId: { in: marketIds },
-        createdAt: {
-          gte: twentyFourHoursAgo,
-        },
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-    })
-  })
-
-  // Calculate price changes based on position activity
-  const priceChangeMap = new Map<string, number>()
-  
-  for (const marketId of marketIds) {
-    const marketPositions = recentPositions.filter(p => p.marketId === marketId)
-    if (marketPositions.length > 0) {
-      // Calculate initial and final prices from positions
-      const market = marketMap.get(marketId)
-      if (market) {
-        const currentYesShares = Number(market.yesShares)
-        const currentNoShares = Number(market.noShares)
-        const currentTotal = currentYesShares + currentNoShares
-        
-        if (currentTotal > 0) {
-          // Estimate 24h ago price by subtracting recent position changes
-          let pastYesShares = currentYesShares
-          let pastNoShares = currentNoShares
-          
-          marketPositions.forEach(pos => {
-            const shares = Number(pos.shares)
-            if (pos.side) {
-              pastYesShares -= shares
-            } else {
-              pastNoShares -= shares
-            }
-          })
-          
-          const pastTotal = pastYesShares + pastNoShares
-          if (pastTotal > 0) {
-            const pastYesPrice = pastYesShares / pastTotal
-            const currentYesPrice = currentYesShares / currentTotal
-            const priceChange = currentYesPrice - pastYesPrice
-            const changePercent = pastYesPrice > 0 ? (priceChange / pastYesPrice) * 100 : 0
-            
-            priceChangeMap.set(marketId, changePercent)
-          }
-        }
-      }
-    }
-  }
-
   const formattedMarkets = questions
     // Don't filter out questions without markets - show all active questions
     .filter(q => q.status === 'active')
@@ -239,7 +123,6 @@ export async function GET(request: NextRequest) {
 
       const yesPrice = totalShares > 0 ? yesShares / totalShares : 0.5
       const noPrice = totalShares > 0 ? noShares / totalShares : 0.5
-      const changePercent24h = priceChangeMap.get(String(q.id))
 
       return {
         id: String(q.id),
@@ -248,7 +131,6 @@ export async function GET(request: NextRequest) {
         noPrice,
         volume: totalShares,
         endDate: q.resolutionDate,
-        changePercent24h: changePercent24h !== undefined ? changePercent24h : undefined,
       }
     })
     .sort((a, b) => {
@@ -264,7 +146,7 @@ export async function GET(request: NextRequest) {
 
       return bScore - aScore
     })
-    .slice(0, 10) // Get top 10 instead of 5 to have more for top movers
+    .slice(0, 5)
 
   return NextResponse.json({
     success: true,

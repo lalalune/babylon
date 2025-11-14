@@ -108,10 +108,10 @@ export function InviteFriendsBanner({ onDismiss }: InviteFriendsBannerProps) {
 
   return (
     <Link 
-      href="/rewards"
+      href="/referrals"
       className="block border-b border-border hover:bg-muted/30 transition-colors group"
     >
-      <div className="max-w-feed mx-auto p-4">
+      <div className="max-w-[600px] mx-auto p-4">
         <div className="relative rounded-xl bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 p-4 hover:border-purple-500/40 transition-colors">
           {/* Dismiss button */}
           <button

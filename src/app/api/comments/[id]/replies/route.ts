@@ -7,10 +7,9 @@ import type { NextRequest } from 'next/server';
 import { authenticate } from '@/lib/api/auth-middleware';
 import { asUser } from '@/lib/db/context';
 import { withErrorHandling, successResponse } from '@/lib/errors/error-handler';
-import { NotFoundError } from '@/lib/errors';
+import {  NotFoundError } from '@/lib/errors';
 import { IdParamSchema, CreateCommentSchema } from '@/lib/validation/schemas';
 import { logger } from '@/lib/logger';
-import { generateSnowflakeId } from '@/lib/snowflake';
 /**
  * POST /api/comments/[id]/replies
  * Add a reply to a comment
@@ -65,19 +64,15 @@ export const POST = withErrorHandling(async (
     }
 
     // Create reply (comment with parentCommentId)
-    const now = new Date();
     const newReply = await db.comment.create({
       data: {
-        id: await generateSnowflakeId(),
         content: content.trim(),
         postId: parentComment.postId,
         authorId: user.userId,
         parentCommentId,
-        createdAt: now,
-        updatedAt: now,
       },
       include: {
-        User: {
+        author: {
           select: {
             id: true,
             displayName: true,
@@ -87,8 +82,8 @@ export const POST = withErrorHandling(async (
         },
         _count: {
           select: {
-            Reaction: true,
-            other_Comment: true,
+            reactions: true,
+            replies: true,
           },
         },
       },
@@ -108,9 +103,9 @@ export const POST = withErrorHandling(async (
       parentCommentId: reply.parentCommentId,
       createdAt: reply.createdAt,
       updatedAt: reply.updatedAt,
-      author: reply.User,
-      likeCount: reply._count.Reaction,
-      replyCount: reply._count.other_Comment,
+      author: reply.author,
+      likeCount: reply._count.reactions,
+      replyCount: reply._count.replies,
     },
     201
   );

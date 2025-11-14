@@ -107,8 +107,8 @@ Provides utilities for:
 - Base URL configuration
 - Server readiness checks
 - Mock authentication tokens
-- Test user creation (future)
-- Test data cleanup (future)
+- Test user creation (TODO)
+- Test data cleanup (TODO)
 
 **Usage**:
 ```typescript
@@ -395,8 +395,4 @@ When adding new tests:
 - Playwright Docs: https://playwright.dev
 - Test Issues: Check test output and traces
 - API Documentation: http://localhost:3000/api-docs
-
-
-
-
 

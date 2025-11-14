@@ -9,17 +9,13 @@ export default [
       "dist/**",
       "out/**",
       "build/**",
+      "contracts/**",
+      "plugin-babylon/**",
       "**/*.config.*",
       "**/*.test.ts",
+      "**/*.test.tsx",
       "**/__tests__/**",
-      "src/lib/agents/plugins/babylon/**",
-      "src/lib/agents/plugins/plugin-trajectory-logger/**",
-      "src/lib/training/**",
-      "src/lib/benchmark/**",
-      "src/lib/agents/examples/**",
-      "src/lib/agents/autonomous/a2a-only/**",
-      "src/a2a/**",
-      "src/app/.well-known/**"
+      "**/tests/**"
     ]
   },
   {
@@ -81,5 +77,4 @@ export default [
     }
   }
 ];
-
 

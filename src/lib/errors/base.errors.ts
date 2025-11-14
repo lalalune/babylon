@@ -93,13 +93,9 @@ export class AuthorizationError extends BabylonError {
  * Not found error for missing resources
  */
 export class NotFoundError extends BabylonError {
-  constructor(resource: string, identifier?: string | number, customMessage?: string) {
-    const message = customMessage || (identifier !== undefined 
-      ? `${resource} not found: ${identifier}`
-      : `${resource} not found`);
-    
+  constructor(resource: string, identifier: string | number) {
     super(
-      message,
+      `${resource} not found: ${identifier}`,
       'NOT_FOUND',
       404,
       true,

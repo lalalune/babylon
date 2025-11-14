@@ -77,7 +77,7 @@ export function CommentCard({
       )}
     >
       {/* Avatar - Round */}
-      <div className="shrink-0">
+      <div className="flex-shrink-0">
         <Avatar
           id={comment.userId}
           name={comment.userName}
@@ -98,7 +98,7 @@ export function CommentCard({
               @{comment.userUsername || comment.userName}
             </span>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {/* Timestamp - Right aligned */}
             <span className="text-xs text-muted-foreground">
               {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
@@ -165,7 +165,7 @@ export function CommentCard({
             <textarea
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
-              className="w-full p-2 text-sm bg-muted rounded-md border border-border focus:outline-none focus:border-border resize-none min-h-[60px]"
+              className="w-full p-2 text-sm bg-muted rounded-md border border-border focus:outline-none focus:border-primary resize-none min-h-[60px]"
               autoFocus
             />
             <div className="flex gap-2 mt-2">

@@ -1,113 +1,98 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, useState } from 'react'
 import { Activity, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/shared/Avatar'
-import { Skeleton } from '@/components/shared/Skeleton'
-import { z } from 'zod'
+import { BouncingLogo } from '@/components/shared/BouncingLogo'
 
-const TradeTypeSchema = z.enum(['balance', 'npc', 'position']);
-type TradeType = z.infer<typeof TradeTypeSchema>;
+type TradeType = 'balance' | 'npc' | 'position'
 
-const UserSchema = z.object({
-  id: z.string(),
-  username: z.string().nullable(),
-  displayName: z.string().nullable(),
-  profileImageUrl: z.string().nullable(),
-  isActor: z.boolean(),
-});
+interface BaseTrade {
+  type: TradeType
+  id: string
+  timestamp: Date | string
+  user: {
+    id: string
+    username: string | null
+    displayName: string | null
+    profileImageUrl: string | null
+    isActor: boolean
+  }
+}
 
-const BaseTradeSchema = z.object({
-  type: TradeTypeSchema,
-  id: z.string(),
-  timestamp: z.coerce.date(),
-  user: UserSchema.nullable(),
-});
+interface BalanceTrade extends BaseTrade {
+  type: 'balance'
+  amount: string
+  balanceBefore: string
+  balanceAfter: string
+  transactionType: string
+  description: string | null
+  relatedId: string | null
+}
 
-const BalanceTradeSchema = BaseTradeSchema.extend({
-  type: z.literal('balance'),
-  amount: z.string(),
-  balanceBefore: z.string(),
-  balanceAfter: z.string(),
-  transactionType: z.string(),
-  description: z.string().nullable(),
-  relatedId: z.string().nullable(),
-});
-type BalanceTrade = z.infer<typeof BalanceTradeSchema>;
+interface NPCTrade extends BaseTrade {
+  type: 'npc'
+  marketType: string
+  ticker: string | null
+  marketId: string | null
+  action: string
+  side: string | null
+  amount: number
+  price: number
+  sentiment: number | null
+  reason: string | null
+  pool: {
+    id: string
+    name: string
+  } | null
+}
 
-const NPCTradeSchema = BaseTradeSchema.extend({
-  type: z.literal('npc'),
-  marketType: z.string(),
-  ticker: z.string().nullable(),
-  marketId: z.string().nullable(),
-  action: z.string(),
-  side: z.string().nullable(),
-  amount: z.number(),
-  price: z.number(),
-  sentiment: z.number().nullable(),
-  reason: z.string().nullable(),
-});
-type NPCTrade = z.infer<typeof NPCTradeSchema>;
+interface PositionTrade extends BaseTrade {
+  type: 'position'
+  market: {
+    id: string
+    question: string
+    resolved: boolean
+    resolution: boolean | null
+  }
+  side: string
+  shares: string
+  avgPrice: string
+  createdAt: Date | string
+}
 
-const PositionTradeSchema = BaseTradeSchema.extend({
-  type: z.literal('position'),
-  market: z.object({
-    id: z.string(),
-    question: z.string(),
-    resolved: z.boolean(),
-    resolution: z.boolean().nullable(),
-  }),
-  side: z.string(),
-  shares: z.string(),
-  avgPrice: z.string(),
-  createdAt: z.coerce.date(),
-});
-type PositionTrade = z.infer<typeof PositionTradeSchema>;
-
-const TradeSchema = z.discriminatedUnion('type', [
-  BalanceTradeSchema,
-  NPCTradeSchema,
-  PositionTradeSchema,
-]);
-type Trade = z.infer<typeof TradeSchema>;
+type Trade = BalanceTrade | NPCTrade | PositionTrade
 
 export function TradingFeedTab() {
   const [trades, setTrades] = useState<Trade[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | TradeType>('all')
-  const [isRefreshing, startRefresh] = useTransition();
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
     fetchTrades()
-    const interval = setInterval(() => fetchTrades(), 10000) // Refresh every 10s
+    const interval = setInterval(fetchTrades, 10000) // Refresh every 10s
     return () => clearInterval(interval)
   }, [filter])
 
-  const fetchTrades = (showRefreshing = false) => {
-    if (showRefreshing) {
-      startRefresh(async () => {
-        await fetchAndSetTrades();
-      });
-    } else {
-      fetchAndSetTrades();
+  const fetchTrades = async (showRefreshing = false) => {
+    if (showRefreshing) setRefreshing(true)
+    try {
+      const url = filter === 'all' 
+        ? '/api/admin/trades?limit=50'
+        : `/api/admin/trades?limit=50&type=${filter}`
+      
+      const response = await fetch(url)
+      if (!response.ok) throw new Error('Failed to fetch trades')
+      const data = await response.json()
+      setTrades(data.trades || [])
+    } catch (error) {
+      console.error('Failed to fetch trades:', error)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
     }
-  };
-
-  const fetchAndSetTrades = async () => {
-    const url = filter === 'all' 
-      ? '/api/admin/trades?limit=50'
-      : `/api/admin/trades?limit=50&type=${filter}`
-    
-    const response = await fetch(url)
-    if (!response.ok) throw new Error('Failed to fetch trades')
-    const data = await response.json()
-    const validation = z.array(TradeSchema).safeParse(data.trades);
-    if (!validation.success) {
-      throw new Error('Invalid trade data structure');
-    }
-    setTrades(validation.data || [])
-    setLoading(false)
   }
 
   const formatCurrency = (value: string | number) => {
@@ -133,13 +118,10 @@ export function TradingFeedTab() {
   }
 
   const TradeCard = ({ trade }: { trade: Trade }) => {
-    // Handle null user (should not happen, but be safe)
-    if (!trade.user) return null
-    
     const displayName = trade.user.displayName || trade.user.username || 'Anonymous'
     
     return (
-      <div className="bg-card border border-border rounded-2xl p-4 hover:border-primary/50 transition-colors">
+      <div className="bg-card border border-border rounded-lg p-4 hover:border-primary/50 transition-colors">
         <div className="flex items-start gap-3">
           <Avatar
             src={trade.user.profileImageUrl || undefined}
@@ -246,6 +228,11 @@ export function TradingFeedTab() {
         {trade.reason && (
           <p className="text-xs text-muted-foreground italic">&quot;{trade.reason}&quot;</p>
         )}
+        {trade.pool && (
+          <div className="text-xs text-muted-foreground">
+            Pool: {trade.pool.name}
+          </div>
+        )}
       </div>
     )
   }
@@ -286,11 +273,7 @@ export function TradingFeedTab() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="space-y-3 w-full">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
-        </div>
+        <BouncingLogo size={48} />
       </div>
     )
   }
@@ -318,10 +301,10 @@ export function TradingFeedTab() {
         
         <button
           onClick={() => fetchTrades(true)}
-          disabled={isRefreshing}
+          disabled={refreshing}
           className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded bg-muted hover:bg-muted/80 transition-colors disabled:opacity-50"
         >
-          <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />
+          <RefreshCw className={cn('w-4 h-4', refreshing && 'animate-spin')} />
           Refresh
         </button>
       </div>

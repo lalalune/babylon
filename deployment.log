@@ -1,0 +1,1288 @@
+
+🚀 Starting contract deployment to base-sepolia
+============================================================
+
+📦 Compiling contracts...
+No files changed, compilation skipped
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/core/DiamondLoupeFacet.sol:6:8
+  |
+6 | import "@openzeppelin/contracts/interfaces/IERC165.sol";
+  |        ------------------------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/identity/ERC8004IdentityRegistry.sol:4:8
+  |
+4 | import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+  |        -------------------------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/identity/ERC8004IdentityRegistry.sol:5:8
+  |
+5 | import "@openzeppelin/contracts/access/Ownable.sol";
+  |        --------------------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/core/OracleFacet.sol:4:8
+  |
+4 | import "../libraries/LibMarket.sol";
+  |        ----------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/core/OracleFacet.sol:5:8
+  |
+5 | import "../libraries/LibDiamond.sol";
+  |        -----------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/core/OracleFacet.sol:6:8
+  |
+6 | import "../oracles/ChainlinkOracleMock.sol";
+  |        ------------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/test/DiamondTestSetup.sol:4:8
+  |
+4 | import "forge-std/Test.sol";
+  |        --------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/test/DiamondTestSetup.sol:5:8
+  |
+5 | import "../core/Diamond.sol";
+  |        ---------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/oracles/ChainlinkOracleMock.sol:4:8
+  |
+4 | import "@openzeppelin/contracts/access/Ownable.sol";
+  |        --------------------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/core/OracleFacet.sol:7:8
+  |
+7 | import "../oracles/UMAOracleMock.sol";
+  |        ------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/test/OracleTest.sol:4:8
+  |
+4 | import "./DiamondTestSetup.sol";
+  |        ------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[mixed-case-variable]: mutable variables should use mixedCase
+   --> /home/cid/babylon/contracts/test/OracleTest.sol:208:17
+    |
+208 |         address newUMA = makeAddr("newUMA");
+    |                 ------
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#mixed-case-variable
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/test/ERC8004IdentityTest.sol:4:8
+  |
+4 | import "forge-std/Test.sol";
+  |        --------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/test/PredictionMarketTest.sol:4:8
+  |
+4 | import "./DiamondTestSetup.sol";
+  |        ------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/identity/ERC8004ReputationSystem.sol:4:8
+  |
+4 | import "./ERC8004IdentityRegistry.sol";
+  |        -------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/identity/ERC8004ReputationSystem.sol:5:8
+  |
+5 | import "@openzeppelin/contracts/access/Ownable.sol";
+  |        --------------------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/core/PredictionMarketFacet.sol:4:8
+  |
+4 | import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+  |        ---------------------------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/test/ERC8004IdentityTest.sol:5:8
+  |
+5 | import "../identity/ERC8004IdentityRegistry.sol";
+  |        -----------------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/test/DiamondTestSetup.sol:6:8
+  |
+6 | import "../core/DiamondCutFacet.sol";
+  |        -----------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/test/DiamondTestSetup.sol:7:8
+  |
+7 | import "../core/DiamondLoupeFacet.sol";
+  |        -------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/core/PredictionMarketFacet.sol:5:8
+  |
+5 | import "../libraries/LibMarket.sol";
+  |        ----------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/oracles/UMAOracleMock.sol:4:8
+  |
+4 | import "@openzeppelin/contracts/access/Ownable.sol";
+  |        --------------------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+warning[divide-before-multiply]: multiplication should occur before division to avoid loss of precision
+   --> /home/cid/babylon/contracts/identity/ERC8004ReputationSystem.sol:192:35
+    |
+192 |             uint256 decayFactor = (timeSinceUpdate / DECAY_PERIOD) * 100; // 1% per period
+    |                                   --------------------------------------
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#divide-before-multiply
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/test/ERC8004IdentityTest.sol:6:8
+  |
+6 | import "../identity/ERC8004ReputationSystem.sol";
+  |        -----------------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/core/PredictionMarketFacet.sol:6:8
+  |
+6 | import "../libraries/LibDiamond.sol";
+  |        -----------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/test/DiamondTestSetup.sol:8:8
+  |
+8 | import "../core/PredictionMarketFacet.sol";
+  |        -----------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/script/DeployBabylon.s.sol:4:8
+  |
+4 | import "forge-std/Script.sol";
+  |        ----------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+warning[erc20-unchecked-transfer]: ERC20 'transfer' and 'transferFrom' calls should check the return value
+   --> /home/cid/babylon/contracts/test/ERC8004IdentityTest.sol:203:9
+    |
+203 |         registry.transferFrom(agent1, agent2, tokenId);
+    |         ----------------------------------------------
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#erc20-unchecked-transfer
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/oracles/UMAOracleMock.sol:5:8
+  |
+5 | import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+  |        ------------------------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/contracts/test/DiamondTestSetup.sol:9:8
+  |
+9 | import "../core/OracleFacet.sol";
+  |        -------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[mixed-case-function]: function names should use mixedCase
+  --> /home/cid/babylon/contracts/core/OracleFacet.sol:47:14
+   |
+47 |     function requestUMAResolution(
+   |              --------------------
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#mixed-case-function
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+  --> /home/cid/babylon/contracts/test/DiamondTestSetup.sol:10:8
+   |
+10 | import "../libraries/LibDiamond.sol";
+   |        -----------------------------
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/script/DeployBabylon.s.sol:5:8
+  |
+5 | import "../contracts/core/Diamond.sol";
+  |        -------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/script/DeployBabylon.s.sol:6:8
+  |
+6 | import "../contracts/core/DiamondCutFacet.sol";
+  |        ---------------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/script/DeployBabylon.s.sol:7:8
+  |
+7 | import "../contracts/core/DiamondLoupeFacet.sol";
+  |        -----------------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+  --> /home/cid/babylon/contracts/test/DiamondTestSetup.sol:11:8
+   |
+11 | import "../oracles/ChainlinkOracleMock.sol";
+   |        ------------------------------------
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[mixed-case-function]: function names should use mixedCase
+   --> /home/cid/babylon/contracts/core/OracleFacet.sol:121:14
+    |
+121 |     function setUMAOracle(address _oracle) external {
+    |              ------------
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#mixed-case-function
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/script/DeployBabylon.s.sol:8:8
+  |
+8 | import "../contracts/core/PredictionMarketFacet.sol";
+  |        ---------------------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+  --> /home/cid/babylon/contracts/test/DiamondTestSetup.sol:12:8
+   |
+12 | import "../oracles/UMAOracleMock.sol";
+   |        ------------------------------
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+ --> /home/cid/babylon/script/DeployBabylon.s.sol:9:8
+  |
+9 | import "../contracts/core/OracleFacet.sol";
+  |        -----------------------------------
+  |
+  = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+  --> /home/cid/babylon/script/DeployBabylon.s.sol:10:8
+   |
+10 | import "../contracts/identity/ERC8004IdentityRegistry.sol";
+   |        ---------------------------------------------------
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+  --> /home/cid/babylon/script/DeployBabylon.s.sol:11:8
+   |
+11 | import "../contracts/identity/ERC8004ReputationSystem.sol";
+   |        ---------------------------------------------------
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+  --> /home/cid/babylon/script/DeployBabylon.s.sol:12:8
+   |
+12 | import "../contracts/oracles/ChainlinkOracleMock.sol";
+   |        ----------------------------------------------
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+  --> /home/cid/babylon/script/DeployBabylon.s.sol:13:8
+   |
+13 | import "../contracts/oracles/UMAOracleMock.sol";
+   |        ----------------------------------------
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+note[unaliased-plain-import]: use named imports '{A, B}' or alias 'import ".." as X'
+  --> /home/cid/babylon/script/DeployBabylon.s.sol:14:8
+   |
+14 | import "../contracts/libraries/LibDiamond.sol";
+   |        ---------------------------------------
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#unaliased-plain-import
+
+warning[unchecked-call]: Low-level calls should check the success return value
+   --> /home/cid/babylon/contracts/oracles/UMAOracleMock.sol:162:9
+    |
+162 | /         _requester.call(
+163 | |             abi.encodeWithSignature(
+...   |
+167 | |             )
+168 | |         );
+    | |_________-
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#unchecked-call
+
+
+1️⃣  Deploying ERC-8004 Identity Registry...
+  Executing: forge create contracts/identity/ERC8004IdentityRegistry.sol:ERC8004IdentityRegistry
+Warning: Dry run enabled, not broadcasting transaction
+
+Warning: To broadcast this transaction, add --broadcast to the previous command. See forge create --help for more.
+Forge output: No files changed, compilation skipped
+Contract: ERC8004IdentityRegistry
+Transaction: {
+  "from": "0xffa6a2ac8bcae47af29b623b97071e676647556a",
+  "to": null,
+  "maxFeePerGas": "0xf42d2",
+  "maxPriorityFeePerGas": "0xf4240",
+  "gas": "0x1f0e42",
+  "input": "0x60806040526001600a55348015610014575f5ffd5b50336040518060400160405280600c81526020016b1098589e5b1bdb9059d95b9d60a21b81525060405180604001604052806006815260200165109051d1539560d21b815250815f9081610068919061019d565b506001610075828261019d565b5050506001600160a01b0381166100a557604051631e4fbdf760e01b81525f600482015260240160405180910390fd5b6100ae816100b4565b50610257565b600680546001600160a01b038381166001600160a01b0319831681179093556040519116919082907f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0905f90a35050565b634e487b7160e01b5f52604160045260245ffd5b600181811c9082168061012d57607f821691505b60208210810361014b57634e487b7160e01b5f52602260045260245ffd5b50919050565b601f82111561019857805f5260205f20601f840160051c810160208510156101765750805b601f840160051c820191505b81811015610195575f8155600101610182565b50505b505050565b81516001600160401b038111156101b6576101b6610105565b6101ca816101c48454610119565b84610151565b6020601f8211600181146101fc575f83156101e55750848201515b5f19600385901b1c1916600184901b178455610195565b5f84815260208120601f198516915b8281101561022b578785015182556020948501946001909201910161020b565b508482101561024857868401515f19600387901b60f8161c191681555b50505050600190811b01905550565b6121ae806102645f395ff3fe608060405234801561000f575f5ffd5b50600436106101a1575f3560e01c806395d89b41116100f3578063c36fe3d611610093578063e985e9c51161006e578063e985e9c5146103bb578063f098a7ae146103ce578063f1537686146103e1578063f2fde38b14610409575f5ffd5b8063c36fe3d614610359578063c3c5a5471461037e578063c87b56dd146103a8575f5ffd5b8063a85d7c44116100ce578063a85d7c4414610318578063b07ee8761461032b578063b88d4fde1461033e578063c1599e4d14610351575f5ffd5b806395d89b41146102f55780639a4fbf5b146102fd578063a22cb46514610305575f5ffd5b80636352211e1161015e57806370a082311161013957806370a08231146102b6578063715018a6146102c95780638854d336146102d15780638da5cb5b146102e4575f5ffd5b80636352211e146102485780636511bf2e1461025b5780636917a59414610288575f5ffd5b806301ffc9a7146101a557806306fdde03146101cd578063081812fc146101e2578063095ea7b31461020d57806323b872dd1461022257806342842e0e14610235575b5f5ffd5b6101b86101b336600461192e565b61041c565b60405190151581526020015b60405180910390f35b6101d561046d565b6040516101c49190611977565b6101f56101f0366004611989565b6104fc565b6040516001600160a01b0390911681526020016101c4565b61022061021b3660046119bb565b610523565b005b6102206102303660046119e3565b610532565b6102206102433660046119e3565b6105c0565b6101f5610256366004611989565b6105df565b61027a610269366004611a1d565b60086020525f908152604090205481565b6040519081526020016101c4565b6101b8610296366004611abf565b805160208183018101805160098252928201919093012091525460ff1681565b61027a6102c4366004611a1d565b6105e9565b61022061062e565b6101b86102df3660046119bb565b610641565b6006546001600160a01b03166101f5565b6101d5610687565b610220610696565b610220610313366004611b03565b610737565b610220610326366004611b80565b610742565b61027a610339366004611bf7565b61091d565b61022061034c366004611c9c565b610c4b565b610220610c63565b61036c610367366004611989565b610d07565b6040516101c496959493929190611d12565b6101b861038c366004611a1d565b6001600160a01b03165f90815260086020526040902054151590565b6101d56103b6366004611989565b610ed5565b6101b86103c9366004611d6b565b610f45565b61036c6103dc366004611989565b610f72565b61027a6103ef366004611a1d565b6001600160a01b03165f9081526008602052604090205490565b610220610417366004611a1d565b611168565b5f6001600160e01b031982166380ac58cd60e01b148061044c57506001600160e01b03198216635b5e139f60e01b145b8061046757506301ffc9a760e01b6001600160e01b03198316145b92915050565b60605f805461047b90611d9c565b80601f01602080910402602001604051908101604052809291908181526020018280546104a790611d9c565b80156104f25780601f106104c9576101008083540402835291602001916104f2565b820191905f5260205f20905b8154815290600101906020018083116104d557829003601f168201915b5050505050905090565b5f610506826111a5565b505f828152600460205260409020546001600160a01b0316610467565b61052e8282336111dd565b5050565b6001600160a01b03821661056057604051633250574960e11b81525f60048201526024015b60405180910390fd5b5f61056c8383336111ea565b9050836001600160a01b0316816001600160a01b0316146105ba576040516364283d7b60e01b81526001600160a01b0380861660048301526024820184905282166044820152606401610557565b50505050565b6105da83838360405180602001604052805f815250610c4b565b505050565b5f610467826111a5565b5f6001600160a01b038216610613576040516322718ad960e21b81525f6004820152602401610557565b506001600160a01b03165f9081526003602052604090205490565b610636611253565b61063f5f611280565b565b6001600160a01b0382165f90815260086020526040812054821480156106805750826001600160a01b0316610675836105df565b6001600160a01b0316145b9392505050565b60606001805461047b90611d9c565b335f90815260086020526040812054908190036106c55760405162461bcd60e51b815260040161055790611dd4565b336106cf826105df565b6001600160a01b0316146106f55760405162461bcd60e51b815260040161055790611dfc565b5f81815260076020526040808220600401805460ff191690555182917fc2fb7f8575ac3990e70361684edfc4d283931ea9a03dfa28766bf376a3934aa291a250565b61052e3383836112d1565b335f90815260086020526040812054908190036107715760405162461bcd60e51b815260040161055790611dd4565b3361077b826105df565b6001600160a01b0316146107a15760405162461bcd60e51b815260040161055790611dfc565b5f818152600760205260409081902090516107c0906001830190611e1f565b604051809103902087876040516107d8929190611e90565b6040518091039020146108c157600987876040516107f7929190611e90565b9081526040519081900360200190205460ff16156108485760405162461bcd60e51b815260206004820152600e60248201526d22b7323837b4b73a103a30b5b2b760911b6044820152606401610557565b5f60098260010160405161085c9190611e1f565b908152604051908190036020018120805492151560ff1990931692909217909155600190600990610890908a908a90611e90565b908152604051908190036020019020805491151560ff19909216919091179055600181016108bf878983611ee3565b505b60028101859055600581016108d7848683611ee3565b50817f7a9de553b3c29b982e75187c50b72f3d7dbe65b9f5c16a18cb4d8b992db0d5c988888860405161090c93929190611fc4565b60405180910390a250505050505050565b335f908152600860205260408120541561096e5760405162461bcd60e51b8152602060048201526012602482015271105b1c9958591e481c9959da5cdd195c995960721b6044820152606401610557565b60098686604051610980929190611e90565b9081526040519081900360200190205460ff16156109d95760405162461bcd60e51b815260206004820152601660248201527522b7323837b4b73a1030b63932b0b23c903a30b5b2b760511b6044820152606401610557565b86610a165760405162461bcd60e51b815260206004820152600d60248201526c13985b59481c995c5d5a5c9959609a1b6044820152606401610557565b84610a575760405162461bcd60e51b8152602060048201526011602482015270115b991c1bda5b9d081c995c5d5a5c9959607a1b6044820152606401610557565b600a8054905f610a6683611fe7565b919050559050610a76338261136f565b6040518060c0016040528089898080601f0160208091040260200160405190810160405280939291908181526020018383808284375f92019190915250505090825250604080516020601f8a01819004810282018101909252888152918101919089908990819084018382808284375f92019190915250505090825250602080820187905242604080840191909152600160608401528051601f87018390048302810183019091528581526080909201919086908690819084018382808284375f92018290525093909452505083815260076020526040902082519091508190610b60908261200b565b5060208201516001820190610b75908261200b565b506040820151600282015560608201516003820155608082015160048201805460ff191691151591909117905560a08201516005820190610bb6908261200b565b5050335f90815260086020526040908190208390555160019150600990610be09089908990611e90565b908152604051908190036020018120805492151560ff1990931692909217909155339082907f1fa075d34b5040b9bc683d1cc54ae270f345511dd00e1b9f68e82fd47b16f52490610c38908c908c908c908c906120c5565b60405180910390a3979650505050505050565b610c56848484610532565b6105ba33858585856113d0565b335f9081526008602052604081205490819003610c925760405162461bcd60e51b815260040161055790611dd4565b33610c9c826105df565b6001600160a01b031614610cc25760405162461bcd60e51b815260040161055790611dfc565b5f81815260076020526040808220600401805460ff191660011790555182917f7cce21c1f4552995dccace889e9ad45febf59c654d3fd1d7ab0457fa1439aa2c91a250565b60076020525f9081526040902080548190610d2190611d9c565b80601f0160208091040260200160405190810160405280929190818152602001828054610d4d90611d9c565b8015610d985780601f10610d6f57610100808354040283529160200191610d98565b820191905f5260205f20905b815481529060010190602001808311610d7b57829003601f168201915b505050505090806001018054610dad90611d9c565b80601f0160208091040260200160405190810160405280929190818152602001828054610dd990611d9c565b8015610e245780601f10610dfb57610100808354040283529160200191610e24565b820191905f5260205f20905b815481529060010190602001808311610e0757829003601f168201915b5050506002840154600385015460048601546005870180549697939692955060ff909116935090610e5490611d9c565b80601f0160208091040260200160405190810160405280929190818152602001828054610e8090611d9c565b8015610ecb5780601f10610ea257610100808354040283529160200191610ecb565b820191905f5260205f20905b815481529060010190602001808311610eae57829003601f168201915b5050505050905086565b6060610ee0826111a5565b505f610ef660408051602081019091525f815290565b90505f815111610f145760405180602001604052805f815250610680565b80610f1e846114f8565b604051602001610f2f92919061210d565b6040516020818303038152906040529392505050565b6001600160a01b039182165f90815260056020908152604080832093909416825291909152205460ff1690565b6060805f5f5f60605f60075f8981526020019081526020015f209050805f018160010182600201548360030154846004015f9054906101000a900460ff1685600501858054610fc090611d9c565b80601f0160208091040260200160405190810160405280929190818152602001828054610fec90611d9c565b80156110375780601f1061100e57610100808354040283529160200191611037565b820191905f5260205f20905b81548152906001019060200180831161101a57829003601f168201915b5050505050955084805461104a90611d9c565b80601f016020809104026020016040519081016040528092919081815260200182805461107690611d9c565b80156110c15780601f10611098576101008083540402835291602001916110c1565b820191905f5260205f20905b8154815290600101906020018083116110a457829003601f168201915b505050505094508080546110d490611d9c565b80601f016020809104026020016040519081016040528092919081815260200182805461110090611d9c565b801561114b5780601f106111225761010080835404028352916020019161114b565b820191905f5260205f20905b81548152906001019060200180831161112e57829003601f168201915b505050505090509650965096509650965096505091939550919395565b611170611253565b6001600160a01b03811661119957604051631e4fbdf760e01b81525f6004820152602401610557565b6111a281611280565b50565b5f818152600260205260408120546001600160a01b03168061046757604051637e27328960e01b815260048101849052602401610557565b6105da8383836001611587565b5f5f6111f785858561168b565b90506001600160a01b03811615611221576001600160a01b0381165f908152600860205260408120555b6001600160a01b0385161561124b576001600160a01b0385165f9081526008602052604090208490555b949350505050565b6006546001600160a01b0316331461063f5760405163118cdaa760e01b8152336004820152602401610557565b600680546001600160a01b038381166001600160a01b0319831681179093556040519116919082907f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0905f90a35050565b6001600160a01b03821661130357604051630b61174360e31b81526001600160a01b0383166004820152602401610557565b6001600160a01b038381165f81815260056020908152604080832094871680845294825291829020805460ff191686151590811790915591519182527f17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31910160405180910390a3505050565b6001600160a01b03821661139857604051633250574960e11b81525f6004820152602401610557565b5f6113a483835f6111ea565b90506001600160a01b038116156105da576040516339e3563760e11b81525f6004820152602401610557565b6001600160a01b0383163b156114f157604051630a85bd0160e11b81526001600160a01b0384169063150b7a0290611412908890889087908790600401612121565b6020604051808303815f875af192505050801561144c575060408051601f3d908101601f191682019092526114499181019061215d565b60015b6114b3573d808015611479576040519150601f19603f3d011682016040523d82523d5f602084013e61147e565b606091505b5080515f036114ab57604051633250574960e11b81526001600160a01b0385166004820152602401610557565b805160208201fd5b6001600160e01b03198116630a85bd0160e11b146114ef57604051633250574960e11b81526001600160a01b0385166004820152602401610557565b505b5050505050565b60605f6115048361177d565b60010190505f816001600160401b0381111561152257611522611a36565b6040519080825280601f01601f19166020018201604052801561154c576020820181803683370190505b5090508181016020015b5f19016f181899199a1a9b1b9c1cb0b131b232b360811b600a86061a8153600a850494508461155657509392505050565b808061159b57506001600160a01b03821615155b1561165c575f6115aa846111a5565b90506001600160a01b038316158015906115d65750826001600160a01b0316816001600160a01b031614155b80156115e957506115e78184610f45565b155b156116125760405163a9fbf51f60e01b81526001600160a01b0384166004820152602401610557565b811561165a5783856001600160a01b0316826001600160a01b03167f8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b92560405160405180910390a45b505b50505f90815260046020526040902080546001600160a01b0319166001600160a01b0392909216919091179055565b5f828152600260205260408120546001600160a01b03908116908316156116b7576116b7818486611854565b6001600160a01b038116156116f1576116d25f855f5f611587565b6001600160a01b0381165f90815260036020526040902080545f190190555b6001600160a01b0385161561171f576001600160a01b0385165f908152600360205260409020805460010190555b5f8481526002602052604080822080546001600160a01b0319166001600160a01b0389811691821790925591518793918516917fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef91a4949350505050565b5f8072184f03e93ff9f4daa797ed6e38ed64bf6a1f0160401b83106117bb5772184f03e93ff9f4daa797ed6e38ed64bf6a1f0160401b830492506040015b6d04ee2d6d415b85acef810000000083106117e7576d04ee2d6d415b85acef8100000000830492506020015b662386f26fc10000831061180557662386f26fc10000830492506010015b6305f5e100831061181d576305f5e100830492506008015b612710831061183157612710830492506004015b60648310611843576064830492506002015b600a83106104675760010192915050565b61185f8383836118b8565b6105da576001600160a01b03831661188d57604051637e27328960e01b815260048101829052602401610557565b60405163177e802f60e01b81526001600160a01b038316600482015260248101829052604401610557565b5f6001600160a01b0383161580159061124b5750826001600160a01b0316846001600160a01b031614806118f157506118f18484610f45565b8061124b5750505f908152600460205260409020546001600160a01b03908116911614919050565b6001600160e01b0319811681146111a2575f5ffd5b5f6020828403121561193e575f5ffd5b813561068081611919565b5f81518084528060208401602086015e5f602082860101526020601f19601f83011685010191505092915050565b602081525f6106806020830184611949565b5f60208284031215611999575f5ffd5b5035919050565b80356001600160a01b03811681146119b6575f5ffd5b919050565b5f5f604083850312156119cc575f5ffd5b6119d5836119a0565b946020939093013593505050565b5f5f5f606084860312156119f5575f5ffd5b6119fe846119a0565b9250611a0c602085016119a0565b929592945050506040919091013590565b5f60208284031215611a2d575f5ffd5b610680826119a0565b634e487b7160e01b5f52604160045260245ffd5b5f5f6001600160401b03841115611a6357611a63611a36565b50604051601f19601f85018116603f011681018181106001600160401b0382111715611a9157611a91611a36565b604052838152905080828401851015611aa8575f5ffd5b838360208301375f60208583010152509392505050565b5f60208284031215611acf575f5ffd5b81356001600160401b03811115611ae4575f5ffd5b8201601f81018413611af4575f5ffd5b61124b84823560208401611a4a565b5f5f60408385031215611b14575f5ffd5b611b1d836119a0565b915060208301358015158114611b31575f5ffd5b809150509250929050565b5f5f83601f840112611b4c575f5ffd5b5081356001600160401b03811115611b62575f5ffd5b602083019150836020828501011115611b79575f5ffd5b9250929050565b5f5f5f5f5f60608688031215611b94575f5ffd5b85356001600160401b03811115611ba9575f5ffd5b611bb588828901611b3c565b9096509450506020860135925060408601356001600160401b03811115611bda575f5ffd5b611be688828901611b3c565b969995985093965092949392505050565b5f5f5f5f5f5f5f6080888a031215611c0d575f5ffd5b87356001600160401b03811115611c22575f5ffd5b611c2e8a828b01611b3c565b90985096505060208801356001600160401b03811115611c4c575f5ffd5b611c588a828b01611b3c565b9096509450506040880135925060608801356001600160401b03811115611c7d575f5ffd5b611c898a828b01611b3c565b989b979a50959850939692959293505050565b5f5f5f5f60808587031215611caf575f5ffd5b611cb8856119a0565b9350611cc6602086016119a0565b92506040850135915060608501356001600160401b03811115611ce7575f5ffd5b8501601f81018713611cf7575f5ffd5b611d0687823560208401611a4a565b91505092959194509250565b60c081525f611d2460c0830189611949565b8281036020840152611d368189611949565b9050866040840152856060840152841515608084015282810360a0840152611d5e8185611949565b9998505050505050505050565b5f5f60408385031215611d7c575f5ffd5b611d85836119a0565b9150611d93602084016119a0565b90509250929050565b600181811c90821680611db057607f821691505b602082108103611dce57634e487b7160e01b5f52602260045260245ffd5b50919050565b6020808252600e908201526d139bdd081c9959da5cdd195c995960921b604082015260600190565b6020808252600990820152682737ba1037bbb732b960b91b604082015260600190565b5f5f8354611e2c81611d9c565b600182168015611e435760018114611e5857611e85565b60ff1983168652811515820286019350611e85565b865f5260205f205f5b83811015611e7d57815488820152600190910190602001611e61565b505081860193505b509195945050505050565b818382375f9101908152919050565b601f8211156105da57805f5260205f20601f840160051c81016020851015611ec45750805b601f840160051c820191505b818110156114f1575f8155600101611ed0565b6001600160401b03831115611efa57611efa611a36565b611f0e83611f088354611d9c565b83611e9f565b5f601f841160018114611f3f575f8515611f285750838201355b5f19600387901b1c1916600186901b1783556114f1565b5f83815260208120601f198716915b82811015611f6e5786850135825560209485019460019092019101611f4e565b5086821015611f8a575f1960f88860031b161c19848701351681555b505060018560011b0183555050505050565b81835281816020850137505f828201602090810191909152601f909101601f19169091010190565b604081525f611fd7604083018587611f9c565b9050826020830152949350505050565b5f6001820161200457634e487b7160e01b5f52601160045260245ffd5b5060010190565b81516001600160401b0381111561202457612024611a36565b612038816120328454611d9c565b84611e9f565b6020601f82116001811461206a575f83156120535750848201515b5f19600385901b1c1916600184901b1784556114f1565b5f84815260208120601f198516915b828110156120995787850151825560209485019460019092019101612079565b50848210156120b657868401515f19600387901b60f8161c191681555b50505050600190811b01905550565b604081525f6120d8604083018688611f9c565b82810360208401526120eb818587611f9c565b979650505050505050565b5f81518060208401855e5f93019283525090919050565b5f61124b61211b83866120f6565b846120f6565b6001600160a01b03858116825284166020820152604081018390526080606082018190525f9061215390830184611949565b9695505050505050565b5f6020828403121561216d575f5ffd5b81516106808161191956fea2646970667358221220349d6e595230ba1f88fc6ef5f80343aa9c6e41f394927aac8e99c1d84c387ffc64736f6c634300081b0033",
+  "nonce": "0x0",
+  "chainId": "0x14a34"
+}
+ABI: [
+  {
+    "type": "constructor",
+    "inputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "addressToTokenId",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "approve",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "balanceOf",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "deactivateAgent",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "endpointTaken",
+    "inputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAgentProfile",
+    "inputs": [
+      {
+        "name": "_tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "name",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "endpoint",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "capabilitiesHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "registeredAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "isActive",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "metadata",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getApproved",
+    "inputs": [
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getTokenId",
+    "inputs": [
+      {
+        "name": "_address",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isApprovedForAll",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "operator",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isRegistered",
+    "inputs": [
+      {
+        "name": "_address",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "name",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "ownerOf",
+    "inputs": [
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "profiles",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "name",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "endpoint",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "capabilitiesHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "registeredAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "isActive",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "metadata",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "reactivateAgent",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "registerAgent",
+    "inputs": [
+      {
+        "name": "_name",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "_endpoint",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "_capabilitiesHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "_metadata",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "renounceOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "safeTransferFrom",
+    "inputs": [
+      {
+        "name": "from",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "safeTransferFrom",
+    "inputs": [
+      {
+        "name": "from",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "data",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setApprovalForAll",
+    "inputs": [
+      {
+        "name": "operator",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "approved",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "supportsInterface",
+    "inputs": [
+      {
+        "name": "interfaceId",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "symbol",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "tokenURI",
+    "inputs": [
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "transferFrom",
+    "inputs": [
+      {
+        "name": "from",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "transferOwnership",
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "updateAgent",
+    "inputs": [
+      {
+        "name": "_endpoint",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "_capabilitiesHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "_metadata",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "verifyAgent",
+    "inputs": [
+      {
+        "name": "_address",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "AgentDeactivated",
+    "inputs": [
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AgentReactivated",
+    "inputs": [
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AgentRegistered",
+    "inputs": [
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      },
+      {
+        "name": "endpoint",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AgentUpdated",
+    "inputs": [
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "endpoint",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      },
+      {
+        "name": "capabilitiesHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Approval",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "approved",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ApprovalForAll",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "operator",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "approved",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferred",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Transfer",
+    "inputs": [
+      {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "ERC721IncorrectOwner",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC721InsufficientApproval",
+    "inputs": [
+      {
+        "name": "operator",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC721InvalidApprover",
+    "inputs": [
+      {
+        "name": "approver",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC721InvalidOperator",
+    "inputs": [
+      {
+        "name": "operator",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC721InvalidOwner",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC721InvalidReceiver",
+    "inputs": [
+      {
+        "name": "receiver",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC721InvalidSender",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC721NonexistentToken",
+    "inputs": [
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableInvalidOwner",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableUnauthorizedAccount",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  }
+]
+
+
+❌ Failed to deploy ERC8004IdentityRegistry: 185 |       if (addressMatch) {
+186 |         return addressMatch[1]
+187 |       }
+188 | 
+189 |       console.error('Forge output:', output)
+190 |       throw new Error('Could not find deployment address in output')
+                      ^
+error: Could not find deployment address in output
+      at deployContract (/home/cid/babylon/scripts/deploy-contracts.ts:190:17)
+      at deployContract (/home/cid/babylon/scripts/deploy-contracts.ts:145:5)
+      at deploy (/home/cid/babylon/scripts/deploy-contracts.ts:55:41)
+      at deploy (/home/cid/babylon/scripts/deploy-contracts.ts:45:45)
+      at main (/home/cid/babylon/scripts/deploy-contracts.ts:311:18)
+      at main (/home/cid/babylon/scripts/deploy-contracts.ts:288:20)
+      at /home/cid/babylon/scripts/deploy-contracts.ts:315:1
+      at loadAndEvaluateModule (2:1)
+
+❌ Deployment failed: 185 |       if (addressMatch) {
+186 |         return addressMatch[1]
+187 |       }
+188 | 
+189 |       console.error('Forge output:', output)
+190 |       throw new Error('Could not find deployment address in output')
+                      ^
+error: Could not find deployment address in output
+      at deployContract (/home/cid/babylon/scripts/deploy-contracts.ts:190:17)
+      at deployContract (/home/cid/babylon/scripts/deploy-contracts.ts:145:5)
+      at deploy (/home/cid/babylon/scripts/deploy-contracts.ts:55:41)
+      at deploy (/home/cid/babylon/scripts/deploy-contracts.ts:45:45)
+      at main (/home/cid/babylon/scripts/deploy-contracts.ts:311:18)
+      at main (/home/cid/babylon/scripts/deploy-contracts.ts:288:20)
+      at /home/cid/babylon/scripts/deploy-contracts.ts:315:1
+      at loadAndEvaluateModule (2:1)
+
+Error: Failed to decode private key

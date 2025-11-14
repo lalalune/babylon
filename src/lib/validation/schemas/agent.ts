@@ -4,7 +4,7 @@
 
 import { z } from 'zod';
 import {
-  SnowflakeIdSchema,
+  UUIDSchema,
   createTrimmedStringSchema,
   URLSchema
 } from './common';
@@ -13,7 +13,7 @@ import {
  * Agent authentication schema
  */
 export const AgentAuthSchema = z.object({
-  agentId: SnowflakeIdSchema,
+  agentId: UUIDSchema,
   agentSecret: z.string().min(32, { message: 'Agent secret must be at least 32 characters' })
 });
 
@@ -39,7 +39,7 @@ export const AgentOnboardSchema = z.object({
  * Agent metadata schema (for responses)
  */
 export const AgentMetadataSchema = z.object({
-  id: SnowflakeIdSchema,
+  id: UUIDSchema,
   name: z.string(),
   endpoint: URLSchema.nullable(),
   onChainRegistered: z.boolean(),

@@ -24,7 +24,7 @@ export default function RewardsLoading() {
           <Skeleton className="h-4 w-full max-w-2xl" />
           <div className="flex gap-2 flex-wrap">
             <Skeleton className="h-10 flex-1 min-w-[200px]" />
-            <Skeleton className="h-10 w-24 shrink-0" />
+            <Skeleton className="h-10 w-24 flex-shrink-0" />
           </div>
         </div>
 
@@ -37,7 +37,7 @@ export default function RewardsLoading() {
                   <Skeleton className="h-5 w-32 max-w-full" />
                   <Skeleton className="h-4 w-48 max-w-full" />
                 </div>
-                <Skeleton className="h-6 w-16 shrink-0" />
+                <Skeleton className="h-6 w-16 flex-shrink-0" />
               </div>
             </div>
           ))}

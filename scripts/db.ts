@@ -33,8 +33,10 @@ const COMPOSE_FILE = 'docker-compose.yml';
 async function checkDocker(): Promise<void> {
   logger.info('Checking Docker installation...', undefined, 'Script');
 
-  // Check if Docker is installed
-  await $`docker --version`.quiet().catch(() => {
+  try {
+    // Check if Docker is installed
+    await $`docker --version`.quiet();
+  } catch (error) {
     logger.error('ERROR: Docker is not installed!', undefined, 'Script');
     logger.error('Docker is required to run the PostgreSQL database.', undefined, 'Script');
     logger.error('Install Docker:', {
@@ -43,14 +45,16 @@ async function checkDocker(): Promise<void> {
       windows: 'https://docs.docker.com/desktop/install/windows-install/'
     }, 'Script');
     process.exit(1);
-  });
+  }
 
-  // Check if Docker daemon is running
-  await $`docker info`.quiet().catch(() => {
+  try {
+    // Check if Docker daemon is running
+    await $`docker info`.quiet();
+  } catch (error) {
     logger.error('ERROR: Docker is installed but not running!', undefined, 'Script');
     logger.error('Please start Docker Desktop or the Docker daemon.', undefined, 'Script');
     process.exit(1);
-  });
+  }
 
   logger.info('Docker is installed and running', undefined, 'Script');
 }
@@ -72,16 +76,24 @@ function checkComposeFile(): void {
  * Check if PostgreSQL container is running
  */
 async function isContainerRunning(): Promise<boolean> {
-  const result = await $`docker ps --filter name=${CONTAINER_NAME} --format "{{.Names}}"`.quiet().text().catch(() => '');
-  return result.trim() === CONTAINER_NAME;
+  try {
+    const result = await $`docker ps --filter name=${CONTAINER_NAME} --format "{{.Names}}"`.quiet().text();
+    return result.trim() === CONTAINER_NAME;
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Check if PostgreSQL container exists (running or stopped)
  */
 async function doesContainerExist(): Promise<boolean> {
-  const result = await $`docker ps -a --filter name=${CONTAINER_NAME} --format "{{.Names}}"`.quiet().text().catch(() => '');
-  return result.trim() === CONTAINER_NAME;
+  try {
+    const result = await $`docker ps -a --filter name=${CONTAINER_NAME} --format "{{.Names}}"`.quiet().text();
+    return result.trim() === CONTAINER_NAME;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -101,29 +113,39 @@ async function startDatabase(): Promise<void> {
     return;
   }
 
-  await $`docker-compose up -d postgres`;
-  
-  logger.info('Waiting for PostgreSQL to be ready...', undefined, 'Script');
-  
-  // Wait for health check
-  let attempts = 0;
-  const maxAttempts = 30;
-  
-  while (attempts < maxAttempts) {
-    const health = await $`docker inspect --format='{{.State.Health.Status}}' ${CONTAINER_NAME}`.quiet().text().catch(() => '');
+  try {
+    await $`docker-compose up -d postgres`;
     
-    if (health.trim() === 'healthy') {
-      logger.info('PostgreSQL is ready!', undefined, 'Script');
-      await showConnectionInfo();
-      return;
+    logger.info('Waiting for PostgreSQL to be ready...', undefined, 'Script');
+    
+    // Wait for health check
+    let attempts = 0;
+    const maxAttempts = 30;
+    
+    while (attempts < maxAttempts) {
+      try {
+        const health = await $`docker inspect --format='{{.State.Health.Status}}' ${CONTAINER_NAME}`.quiet().text();
+        
+        if (health.trim() === 'healthy') {
+          logger.info('PostgreSQL is ready!', undefined, 'Script');
+          await showConnectionInfo();
+          return;
+        }
+      } catch {
+        // Container might not have health check yet
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      attempts++;
     }
     
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    attempts++;
+    logger.warn('PostgreSQL started but health check timeout. It may still be starting...', undefined, 'Script');
+    await showConnectionInfo();
+    
+  } catch (error) {
+    logger.error('Failed to start PostgreSQL:', error, 'Script');
+    process.exit(1);
   }
-  
-  logger.warn('PostgreSQL started but health check timeout. It may still be starting...', undefined, 'Script');
-  await showConnectionInfo();
 }
 
 /**
@@ -141,8 +163,13 @@ async function stopDatabase(): Promise<void> {
     return;
   }
 
-  await $`docker-compose stop postgres`;
-  logger.info('PostgreSQL stopped', undefined, 'Script');
+  try {
+    await $`docker-compose stop postgres`;
+    logger.info('PostgreSQL stopped', undefined, 'Script');
+  } catch (error) {
+    logger.error('Failed to stop PostgreSQL:', error, 'Script');
+    process.exit(1);
+  }
 }
 
 /**
@@ -177,14 +204,14 @@ async function showStatus(): Promise<void> {
   if (isRunning) {
     logger.info('Status: Running', undefined, 'Script');
     
-    const uptime = await $`docker inspect --format='{{.State.StartedAt}}' ${CONTAINER_NAME}`.quiet().text().catch(() => '');
-    if (uptime) {
+    try {
+      const uptime = await $`docker inspect --format='{{.State.StartedAt}}' ${CONTAINER_NAME}`.quiet().text();
       logger.info(`Started: ${uptime.trim()}`, undefined, 'Script');
-    }
-    
-    const health = await $`docker inspect --format='{{.State.Health.Status}}' ${CONTAINER_NAME}`.quiet().text().catch(() => '');
-    if (health) {
+      
+      const health = await $`docker inspect --format='{{.State.Health.Status}}' ${CONTAINER_NAME}`.quiet().text();
       logger.info(`Health: ${health.trim()}`, undefined, 'Script');
+    } catch {
+      // Health check might not be available yet
     }
     
     await showConnectionInfo();
@@ -222,8 +249,13 @@ async function runMigrations(): Promise<void> {
     process.exit(1);
   }
 
-  await $`bunx prisma migrate dev`;
-  logger.info('Migrations complete', undefined, 'Script');
+  try {
+    await $`bunx prisma migrate dev`;
+    logger.info('Migrations complete', undefined, 'Script');
+  } catch (error) {
+    logger.error('Migration failed:', error, 'Script');
+    process.exit(1);
+  }
 }
 
 /**
@@ -240,8 +272,13 @@ async function seedDatabase(): Promise<void> {
     process.exit(1);
   }
 
-  await $`bunx prisma db seed`;
-  logger.info('Database seeded', undefined, 'Script');
+  try {
+    await $`bunx prisma db seed`;
+    logger.info('Database seeded', undefined, 'Script');
+  } catch (error) {
+    logger.error('Seed failed:', error, 'Script');
+    process.exit(1);
+  }
 }
 
 /**
@@ -258,9 +295,14 @@ async function resetDatabase(): Promise<void> {
     process.exit(1);
   }
 
-  logger.info('Dropping database...', undefined, 'Script');
-  await $`bunx prisma migrate reset --force`;
-  logger.info('Database reset complete', undefined, 'Script');
+  try {
+    logger.info('Dropping database...', undefined, 'Script');
+    await $`bunx prisma migrate reset --force`;
+    logger.info('Database reset complete', undefined, 'Script');
+  } catch (error) {
+    logger.error('Reset failed:', error, 'Script');
+    process.exit(1);
+  }
 }
 
 /**
@@ -344,7 +386,10 @@ async function main(): Promise<void> {
 
 // Run if called directly
 if (import.meta.main) {
-  main();
+  main().catch(error => {
+    logger.error('Error:', error.message, 'Script');
+    process.exit(1);
+  });
 }
 
 export { main };

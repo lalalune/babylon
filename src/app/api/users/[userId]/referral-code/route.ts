@@ -14,7 +14,6 @@ import { logger } from '@/lib/logger';
 import { UserIdParamSchema } from '@/lib/validation/schemas';
 import type { NextRequest } from 'next/server';
 import { requireUserByIdentifier } from '@/lib/users/user-lookup';
-import { generateSnowflakeId } from '@/lib/snowflake';
 
 /**
  * Generate a unique referral code
@@ -110,7 +109,6 @@ export const GET = withErrorHandling(async (
   if (!existingReferral) {
     await prisma.referral.create({
       data: {
-        id: await generateSnowflakeId(),
         referrerId: canonicalUserId,
         referralCode: user.referralCode!,
         status: 'pending',
@@ -123,6 +121,6 @@ export const GET = withErrorHandling(async (
   return successResponse({
     referralCode: user.referralCode,
     referralCount: user.referralCount,
-    referralUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://babylon.market'}?ref=${user.referralCode}`,
+    referralUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://babylon.game'}?ref=${user.referralCode}`,
   });
 });

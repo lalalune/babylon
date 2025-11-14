@@ -1,104 +1,11 @@
 /**
- * Posts Feed API
+ * Posts API Route
  * 
- * @route GET /api/posts - Get posts feed
- * @route POST /api/posts - Create new post
- * @access GET: Public, POST: Authenticated
- * 
- * @description
- * Core API for the social feed system. Handles post retrieval with advanced
- * filtering, caching, and repost detection. POST creates new posts with
- * mention notifications, rate limiting, and real-time SSE broadcasting.
- * 
- * **GET - Retrieve Posts Feed**
- * 
- * Returns paginated posts with comprehensive metadata including:
- * - Author details (users, agents/actors, organizations)
- * - Interaction counts (likes, comments, shares)
- * - Repost metadata with original post tracking
- * - Following feed filtering
- * - Post type filtering (articles, standard posts)
- * 
- * **Query Parameters:**
- * @query {number} limit - Posts per page (default: 100, max recommended: 100)
- * @query {number} offset - Pagination offset (default: 0)
- * @query {string} actorId - Filter by specific actor/agent
- * @query {boolean} following - Show only followed users' posts
- * @query {string} userId - Required with following=true
- * @query {string} type - Filter by post type ('article', 'post', etc.)
- * 
- * **Caching Strategy:**
- * - Recent posts cached for 60s
- * - Following feeds cached for 120s
- * - Actor-specific posts cached per actor
- * - Cache invalidation on new post creation
- * 
- * **Repost Detection:**
- * Automatically parses repost content format:
- * ```
- * [Quote comment]
- *
- * --- Reposted from @originalAuthor ---
- * [Original content]
- * ```
- * 
- * @returns {object} Posts feed response
- * @property {boolean} success - Operation success
- * @property {array} posts - Array of post objects with metadata
- * @property {number} limit - Applied limit
- * @property {number} offset - Applied offset
- * @property {string} source - Feed source ('following' or undefined)
- * 
- * **POST - Create New Post**
- * 
- * Creates a new post with automatic processing:
- * - Content validation (max 280 characters)
- * - Rate limiting (prevents spam)
- * - Duplicate detection
- * - Mention extraction and notification (@username)
- * - Real-time SSE broadcast to feed subscribers
- * - Cache invalidation
- * - PostHog analytics tracking
- * 
- * @param {string} content - Post content (required, 1-280 chars)
- * 
- * @returns {object} Created post
- * @property {boolean} success - Operation success
- * @property {object} post - Created post with author details
- * 
- * @throws {400} Invalid content (empty, too long, duplicate, rate limited)
- * @throws {401} Unauthorized - authentication required
- * @throws {500} Internal server error
- * 
- * @example
- * ```typescript
- * // Get recent posts
- * const feed = await fetch('/api/posts?limit=20&offset=0');
- * const { posts } = await feed.json();
- * 
- * // Get following feed
- * const following = await fetch(`/api/posts?following=true&userId=${userId}&limit=50`);
- * 
- * // Get actor's posts
- * const actorPosts = await fetch(`/api/posts?actorId=${actorId}`);
- * 
- * // Create post
- * const response = await fetch('/api/posts', {
- *   method: 'POST',
- *   body: JSON.stringify({
- *     content: 'Hello @friend, check this out!'
- *   })
- * });
- * ```
- * 
- * @see {@link /lib/cached-database-service} Caching layer
- * @see {@link /lib/sse/event-broadcaster} Real-time broadcasts
- * @see {@link /lib/services/notification-service} Mention notifications
- * @see {@link /src/components/feed} Feed UI components
+ * GET /api/posts - Get recent posts from database
+ * POST /api/posts - Create a new post
  */
 
-import { authenticate, successResponse } from '@/lib/api/auth-middleware';
-import { withErrorHandling } from '@/lib/errors/error-handler';
+import { authenticate, errorResponse, isAuthenticationError, successResponse } from '@/lib/api/auth-middleware';
 import { getCacheOrFetch } from '@/lib/cache-service';
 import { cachedDb } from '@/lib/cached-database-service';
 import { logger } from '@/lib/logger';
@@ -109,8 +16,6 @@ import { ensureUserForAuth } from '@/lib/users/ensure-user';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { trackServerEvent } from '@/lib/posthog/server';
-import { checkRateLimitAndDuplicates, RATE_LIMIT_CONFIGS, DUPLICATE_DETECTION_CONFIGS } from '@/lib/rate-limiting';
-import { notifyMention } from '@/lib/services/notification-service';
 
 /**
  * Safely convert a date value to ISO string
@@ -138,42 +43,15 @@ function toISOStringSafe(date: Date | string | null | undefined): string {
   return new Date().toISOString();
 }
 
-/**
- * Parse repost content to extract metadata
- * Returns null if not a repost, otherwise returns parsed data
- */
-function parseRepostContent(content: string): {
-  isRepost: true;
-  quoteComment: string | null;
-  originalContent: string;
-  originalAuthorUsername: string;
-} | null {
-  const separatorPattern = /\n\n--- Reposted from @(.+?) ---\n/;
-  const match = content.match(separatorPattern);
-  
-  if (!match) return null;
-  
-  const parts = content.split(separatorPattern);
-  const quoteComment = parts[0]?.trim() || null;
-  const originalContent = parts[2]?.trim() || '';
-  const originalAuthorUsername = match[1] || '';
-  
-  return {
-    isRepost: true,
-    quoteComment,
-    originalContent,
-    originalAuthorUsername,
-  };
-}
-
-export const GET = withErrorHandling(async (request: Request) => {
-  const { searchParams } = new URL(request.url)
-  const limit = parseInt(searchParams.get('limit') || '100')
-  const offset = parseInt(searchParams.get('offset') || '0')
-  const actorId = searchParams.get('actorId') || undefined
-  const following = searchParams.get('following') === 'true'
-  const userId = searchParams.get('userId') || undefined
-  const type = searchParams.get('type') || undefined
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get('limit') || '100');
+    const offset = parseInt(searchParams.get('offset') || '0');
+    const actorId = searchParams.get('actorId') || undefined;
+    const following = searchParams.get('following') === 'true';
+    const userId = searchParams.get('userId') || undefined; // For following feed, need userId
+    const type = searchParams.get('type') || undefined; // Filter by post type (article, post, etc.)
 
     // If following feed is requested, filter by followed users/actors
     if (following && userId) {
@@ -245,7 +123,7 @@ export const GET = withErrorHandling(async (request: Request) => {
       
       // Get interaction counts for all posts in parallel
       const postIds = posts.map(p => p.id);
-      const [allReactions, allComments] = await Promise.all([
+      const [allReactions, allComments, allShares] = await Promise.all([
         prisma.reaction.groupBy({
           by: ['postId'],
           where: { postId: { in: postIds }, type: 'like' },
@@ -256,110 +134,22 @@ export const GET = withErrorHandling(async (request: Request) => {
           where: { postId: { in: postIds } },
           _count: { postId: true },
         }),
+        prisma.share.groupBy({
+          by: ['postId'],
+          where: { postId: { in: postIds } },
+          _count: { postId: true },
+        }),
       ]);
       
       // Create maps for quick lookup
       const reactionMap = new Map(allReactions.map(r => [r.postId, r._count.postId]));
       const commentMap = new Map(allComments.map(c => [c.postId, c._count.postId]));
+      const shareMap = new Map(allShares.map(s => [s.postId, s._count.postId]));
       
-      // OPTIMIZED: Batch repost metadata lookups to avoid N+1
-      // First, identify all reposts and extract original usernames
-      const repostDataMap = new Map<string, ReturnType<typeof parseRepostContent>>();
-      const originalUsernames = new Set<string>();
-      
-      for (const post of posts) {
-        const repostData = parseRepostContent(post.content || '');
-        if (repostData) {
-          repostDataMap.set(post.id, repostData);
-          originalUsernames.add(repostData.originalAuthorUsername);
-        }
-      }
-
-      // Batch lookup original authors (users and actors)
-      const originalAuthorsMap = new Map<string, { id: string; name: string; username: string; profileImageUrl: string | null }>();
-      
-      if (originalUsernames.size > 0) {
-        const usernameArray = Array.from(originalUsernames);
-        const [originalUsers, originalActors] = await Promise.all([
-          prisma.user.findMany({
-            where: { username: { in: usernameArray } },
-            select: { id: true, username: true, displayName: true, profileImageUrl: true },
-          }),
-          prisma.actor.findMany({
-            where: { id: { in: usernameArray } },
-            select: { id: true, name: true, profileImageUrl: true },
-          }),
-        ]);
-
-        // Map users
-        for (const user of originalUsers) {
-          originalAuthorsMap.set(user.username!, {
-            id: user.id,
-            name: user.displayName || user.username || user.id,
-            username: user.username!,
-            profileImageUrl: user.profileImageUrl,
-          });
-        }
-
-        // Map actors
-        for (const actor of originalActors) {
-          originalAuthorsMap.set(actor.id, {
-            id: actor.id,
-            name: actor.name,
-            username: actor.id,
-            profileImageUrl: actor.profileImageUrl,
-          });
-        }
-
-        // Batch lookup share records for all reposters
-        const reposterIds = posts.filter(p => repostDataMap.has(p.id)).map(p => p.authorId).filter((id): id is string => !!id);
-        const shareRecords = await prisma.share.findMany({
-          where: { userId: { in: reposterIds } },
-          select: { postId: true, userId: true },
-          orderBy: { createdAt: 'desc' },
-        });
-
-        const shareMap = new Map(shareRecords.map(s => [s.userId, s.postId]));
-
-        // Build repost metadata lookup
-        const repostMetadataMap = new Map<string, Record<string, unknown>>();
-        for (const [postId, repostData] of repostDataMap.entries()) {
-          if (!repostData) continue; // Skip null entries
-          
-          const originalAuthor = originalAuthorsMap.get(repostData.originalAuthorUsername);
-          const post = posts.find(p => p.id === postId);
-          const shareRecord = post?.authorId ? shareMap.get(post.authorId) : undefined;
-
-          if (originalAuthor) {
-            repostMetadataMap.set(postId, {
-              isRepost: true,
-              quoteComment: repostData.quoteComment,
-              originalContent: repostData.originalContent,
-              originalPostId: shareRecord ?? null,
-              originalAuthorId: originalAuthor.id,
-              originalAuthorName: originalAuthor.name,
-              originalAuthorUsername: originalAuthor.username,
-              originalAuthorProfileImageUrl: originalAuthor.profileImageUrl,
-            });
-          } else {
-            repostMetadataMap.set(postId, {
-              isRepost: true,
-              quoteComment: repostData.quoteComment,
-              originalContent: repostData.originalContent,
-              originalPostId: null,
-              originalAuthorId: repostData.originalAuthorUsername,
-              originalAuthorName: repostData.originalAuthorUsername,
-              originalAuthorUsername: repostData.originalAuthorUsername,
-              originalAuthorProfileImageUrl: null,
-            });
-          }
-        }
-
-        // Format following posts synchronously using lookup maps
-        const formattedFollowingPosts = posts.map((post) => {
+      return NextResponse.json({
+        success: true,
+        posts: posts.map((post) => {
           const user = post.authorId ? userMap.get(post.authorId) : undefined;
-          const repostMetadata = repostMetadataMap.get(post.id) || {};
-          
           return {
             id: post.id,
             content: post.content,
@@ -371,21 +161,16 @@ export const GET = withErrorHandling(async (request: Request) => {
             createdAt: toISOStringSafe(post.createdAt),
             likeCount: reactionMap.get(post.id) ?? 0,
             commentCount: commentMap.get(post.id) ?? 0,
-            shareCount: 0, // Share count not currently tracked in feed
+            shareCount: shareMap.get(post.id) ?? 0,
             isLiked: false,
             isShared: false,
-            ...repostMetadata,
           };
-        });
-        
-        return NextResponse.json({
-          success: true,
-          posts: formattedFollowingPosts,
-          limit,
-          offset,
-          source: 'following',
-        });
-      }
+        }),
+        total: posts.length,
+        limit,
+        offset,
+        source: 'following',
+      });
     }
     // Get posts from database with caching
     let posts;
@@ -396,10 +181,7 @@ export const GET = withErrorHandling(async (request: Request) => {
       // Filter by type (e.g., 'article')
       logger.info('Filtering posts by type', { type, limit, offset }, 'GET /api/posts');
       posts = await prisma.post.findMany({
-        where: { 
-          type,
-          deletedAt: null, // Filter out deleted posts
-        },
+        where: { type },
         orderBy: { timestamp: 'desc' },
         take: limit,
         skip: offset,
@@ -476,139 +258,74 @@ export const GET = withErrorHandling(async (request: Request) => {
     const commentMap = new Map(allComments.map(c => [c.postId, c._count.postId]));
     const shareMap = new Map(allShares.map(s => [s.postId, s._count.postId]));
     
-    const formattedPosts = await Promise.all(posts.map(async (post) => {
-      logger.warn('Invalid post structure detected', { post }, 'GET /api/posts')
-
-      const user = userMap.get(post.authorId!)
-      const actor = actorMap.get(post.authorId!)
-      const org = orgMap.get(post.authorId!)
-      
-      let authorName = post.authorId!
-      let authorUsername: string | null = null
-      let authorProfileImageUrl: string | null = null
-      
-      if (actor) {
-        authorName = actor.name
-        authorProfileImageUrl = actor.profileImageUrl!
-      } else if (org) {
-        authorName = org.name
-        authorProfileImageUrl = org.imageUrl!
-      } else if (user) {
-        authorName = user.displayName!
-        authorUsername = user.username!
-        authorProfileImageUrl = user.profileImageUrl
-      }
-      
-      const timestamp = toISOStringSafe(post.timestamp)
-      const createdAt = toISOStringSafe(post.createdAt)
-      
-      // Check if this is a repost by parsing content or checking originalPostId field
-      const parsedRepostData = parseRepostContent(post.content!)
-      let repostMetadata = {}
-      
-      if (parsedRepostData || post.originalPostId) {
-        // Try to get original author info
-        let originalAuthor = null
-        const originalPostId = post.originalPostId || null
-        let effectiveRepostData = parsedRepostData
-        
-        if (parsedRepostData) {
-          // Parse from content if available (fallback for old posts)
-          originalAuthor = await prisma.user.findUnique({
-            where: { username: parsedRepostData.originalAuthorUsername },
-            select: { id: true, username: true, displayName: true, profileImageUrl: true },
-          }) || await prisma.actor.findFirst({
-            where: { id: parsedRepostData.originalAuthorUsername },
-            select: { id: true, name: true, profileImageUrl: true },
-          }) || await prisma.organization.findFirst({
-            where: { id: parsedRepostData.originalAuthorUsername },
-            select: { id: true, name: true, imageUrl: true },
-          })
+    // Format posts to match FeedPost interface
+    const formattedPosts = posts.map((post) => {
+      try {
+        // Validate post structure
+        if (!post || !post.id) {
+          logger.warn('Invalid post structure detected', { post }, 'GET /api/posts');
+          return null;
         }
         
-        // If we have originalPostId but no author info yet, fetch from original post
-        if (originalPostId && !originalAuthor) {
-          const originalPost = await prisma.post.findUnique({
-            where: { id: originalPostId },
-            select: { authorId: true, content: true },
-          })
-          
-          if (originalPost) {
-            // Fetch author details
-            const [user, actor, org] = await Promise.all([
-              prisma.user.findUnique({
-                where: { id: originalPost.authorId },
-                select: { id: true, username: true, displayName: true, profileImageUrl: true },
-              }),
-              prisma.actor.findUnique({
-                where: { id: originalPost.authorId },
-                select: { id: true, name: true, profileImageUrl: true },
-              }),
-              prisma.organization.findUnique({
-                where: { id: originalPost.authorId },
-                select: { id: true, name: true, imageUrl: true },
-              }),
-            ])
-            
-            originalAuthor = user || actor || org
-            
-            // Create repostData with actual original content if not already set
-            if (!effectiveRepostData || !effectiveRepostData.originalContent) {
-              effectiveRepostData = {
-                ...(effectiveRepostData || {}),
-                isRepost: true,
-                quoteComment: effectiveRepostData?.quoteComment ?? null,
-                originalContent: originalPost.content,
-                originalAuthorUsername: user?.username || originalPost.authorId,
-              };
-            }
-          }
+        // Look up author from user, actor, or organization
+        const user = post.authorId ? userMap.get(post.authorId) : undefined;
+        const actor = post.authorId ? actorMap.get(post.authorId) : undefined;
+        const org = post.authorId ? orgMap.get(post.authorId) : undefined;
+        
+        // Determine author info based on what was found
+        let authorName = post.authorId || 'Unknown';
+        let authorUsername: string | null = null;
+        let authorProfileImageUrl: string | null = null;
+        
+        if (actor) {
+          authorName = actor.name;
+          // Use database profileImageUrl or construct path from actor ID
+          authorProfileImageUrl = actor.profileImageUrl || `/images/actors/${actor.id}.jpg`;
+        } else if (org) {
+          authorName = org.name;
+          // Use database imageUrl or construct path from organization ID  
+          authorProfileImageUrl = org.imageUrl || `/images/organizations/${org.id}.jpg`;
+        } else if (user) {
+          authorName = user.displayName || user.username || post.authorId || 'Unknown';
+          authorUsername = user.username || null;
+          authorProfileImageUrl = user.profileImageUrl || null;
         }
         
-        if (originalAuthor && effectiveRepostData) {
-          repostMetadata = {
-            isRepost: true,
-            quoteComment: effectiveRepostData.quoteComment,
-            originalContent: effectiveRepostData.originalContent,
-            originalPostId: originalPostId,
-            originalAuthorId: originalAuthor.id,
-            originalAuthorName: 'name' in originalAuthor ? originalAuthor.name : originalAuthor.displayName!,
-            originalAuthorUsername: 'username' in originalAuthor ? originalAuthor.username! : originalAuthor.id,
-            originalAuthorProfileImageUrl: 'imageUrl' in originalAuthor ? originalAuthor.imageUrl : originalAuthor.profileImageUrl,
-          }
-        }
+        // Safely convert dates with null checks
+        const timestamp = toISOStringSafe(post.timestamp);
+        const createdAt = toISOStringSafe(post.createdAt);
+        
+        return {
+          id: post.id,
+          type: post.type || undefined,
+          content: post.content || '',
+          fullContent: post.fullContent || undefined,
+          articleTitle: post.articleTitle || undefined,
+          byline: post.byline || undefined,
+          biasScore: post.biasScore !== undefined ? post.biasScore : undefined,
+          sentiment: post.sentiment || undefined,
+          slant: post.slant || undefined,
+          category: post.category || undefined,
+          author: post.authorId, // Use authorId as author
+          authorId: post.authorId,
+          authorName,
+          authorUsername,
+          authorProfileImageUrl,
+          timestamp,
+          createdAt,
+          gameId: post.gameId || undefined,
+          dayNumber: post.dayNumber || undefined,
+          likeCount: reactionMap.get(post.id) ?? 0,
+          commentCount: commentMap.get(post.id) ?? 0,
+          shareCount: shareMap.get(post.id) ?? 0,
+          isLiked: false, // Will be updated by interaction store polling
+          isShared: false, // Will be updated by interaction store polling
+        };
+      } catch (error) {
+        logger.error('Error formatting post', { error, postId: post?.id, post }, 'GET /api/posts');
+        return null;
       }
-      
-      return {
-        id: post.id,
-        type: post.type || undefined,
-        content: post.content!,
-        fullContent: post.fullContent || undefined,
-        articleTitle: post.articleTitle || undefined,
-        byline: post.byline || undefined,
-        biasScore: post.biasScore !== undefined ? post.biasScore : undefined,
-        sentiment: post.sentiment || undefined,
-        slant: post.slant || undefined,
-        category: post.category || undefined,
-        author: post.authorId,
-        authorId: post.authorId,
-        authorName,
-        authorUsername,
-        authorProfileImageUrl,
-        timestamp,
-        createdAt,
-        gameId: post.gameId || undefined,
-        dayNumber: post.dayNumber || undefined,
-        likeCount: reactionMap.get(post.id) ?? 0,
-        commentCount: commentMap.get(post.id) ?? 0,
-        shareCount: shareMap.get(post.id) ?? 0,
-        isLiked: false,
-        isShared: false,
-        ...repostMetadata,
-      }
-
-      logger.error('Error formatting post', { postId: post?.id, post }, 'GET /api/posts')
-    }))
+    }).filter((post): post is NonNullable<typeof post> => post !== null);
     
     logger.info('Formatted posts', { 
       originalCount: posts.length, 
@@ -629,122 +346,149 @@ export const GET = withErrorHandling(async (request: Request) => {
     const response = NextResponse.json({
       success: true,
       posts: formattedPosts,
+      total: formattedPosts.length,
       limit,
       offset,
     });
     
     // Real-time feeds should not be cached (no-store)
     // This ensures WebSocket updates reflect immediately
-  response.headers.set('Cache-Control', 'no-store, must-revalidate')
-  
-  return response
-})
+    response.headers.set('Cache-Control', 'no-store, must-revalidate');
+    
+    return response;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    logger.error('API Error in GET /api/posts', {
+      error: errorMessage,
+      stack: errorStack,
+      errorType: error?.constructor?.name,
+      errorString: String(error),
+    }, 'GET /api/posts');
+    
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: 'Failed to load posts',
+        message: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      },
+      { status: 500 }
+    );
+  }
+}
 
 /**
  * POST /api/posts - Create a new post
  */
-export const POST = withErrorHandling(async (request: NextRequest) => {
-  const authUser = await authenticate(request)
+export async function POST(request: NextRequest) {
+  try {
+    // Authenticate user
+    const authUser = await authenticate(request);
 
-  const body = await request.json()
-  const { content } = body
+    // Parse request body
+    const body = await request.json();
+    const { content } = body;
 
-  checkRateLimitAndDuplicates(
-    authUser.userId,
-    content,
-    RATE_LIMIT_CONFIGS.CREATE_POST,
-    DUPLICATE_DETECTION_CONFIGS.POST
-  )
+    // Validate input
+    if (!content || typeof content !== 'string' || content.trim().length === 0) {
+      return errorResponse('Post content is required', 400);
+    }
 
-  const fallbackDisplayName = authUser.walletAddress
-    ? `${authUser.walletAddress.slice(0, 6)}...${authUser.walletAddress.slice(-4)}`
-    : 'Anonymous'
+    if (content.length > 280) {
+      return errorResponse('Post content must be 280 characters or less', 400);
+    }
 
-  const { user: canonicalUser } = await ensureUserForAuth(authUser, {
-    displayName: fallbackDisplayName,
-  })
-  const canonicalUserId = canonicalUser.id
+    const fallbackDisplayName = authUser.walletAddress
+      ? `${authUser.walletAddress.slice(0, 6)}...${authUser.walletAddress.slice(-4)}`
+      : 'Anonymous';
 
-  const post = await prisma.post.create({
-    data: {
-      id: await generateSnowflakeId(),
-      content: content.trim(),
-      authorId: canonicalUserId,
-      timestamp: new Date(),
-    },
-    include: {
-      Comment: false,
-      Reaction: false,
-      Share: false,
-    },
-  })
+    const { user: canonicalUser } = await ensureUserForAuth(authUser, {
+      displayName: fallbackDisplayName,
+    });
+    const canonicalUserId = canonicalUser.id;
 
-  const authorName = canonicalUser.username!
+    // Create post with Snowflake ID
+    const post = await prisma.post.create({
+      data: {
+        id: generateSnowflakeId(),
+        content: content.trim(),
+        authorId: canonicalUserId,
+        timestamp: new Date(),
+      },
+      include: {
+        comments: false,
+        reactions: false,
+        shares: false,
+      },
+    });
 
-  await cachedDb.invalidatePostsCache()
-  await cachedDb.invalidateActorPostsCache(canonicalUserId)
-  logger.info('Invalidated post caches', { postId: post.id }, 'POST /api/posts')
+    // Determine author name for display (prefer username or displayName, fallback to generated name)
+    const authorName = canonicalUser.username || canonicalUser.displayName || `user_${authUser.userId.slice(0, 8)}`;
 
-  broadcastToChannel('feed', {
-    type: 'new_post',
-    post: {
-      id: post.id,
-      content: post.content,
-      authorId: post.authorId,
-      authorName: authorName,
-      authorUsername: canonicalUser.username,
-      authorDisplayName: canonicalUser.displayName,
-      authorProfileImageUrl: canonicalUser.profileImageUrl,
-      timestamp: post.timestamp.toISOString(),
-    },
-  })
-  logger.info('Broadcast new user post to feed channel', { postId: post.id }, 'POST /api/posts')
+    // Invalidate post caches
+    try {
+      await cachedDb.invalidatePostsCache();
+      await cachedDb.invalidateActorPostsCache(canonicalUserId);
+      logger.info('Invalidated post caches', { postId: post.id }, 'POST /api/posts');
+    } catch (error) {
+      logger.error('Failed to invalidate post caches:', error, 'POST /api/posts');
+      // Don't fail the request if cache invalidation fails
+    }
 
-  const mentions = content.match(/@(\w+)/g)!
-  const usernames = [...new Set(mentions.map((m: string) => m.substring(1)))]
-  
-  const mentionedUsers = await prisma.user.findMany({
-    where: {
-      username: { in: usernames as string[] },
-    },
-    select: { id: true, username: true },
-  })
+    // Broadcast new post to SSE feed channel for real-time updates
+    try {
+      broadcastToChannel('feed', {
+        type: 'new_post',
+        post: {
+          id: post.id,
+          content: post.content,
+          authorId: post.authorId,
+          authorName: authorName,
+          authorUsername: canonicalUser.username,
+          authorDisplayName: canonicalUser.displayName,
+          authorProfileImageUrl: canonicalUser.profileImageUrl,
+          timestamp: post.timestamp.toISOString(),
+        },
+      });
+      logger.info('Broadcast new user post to feed channel', { postId: post.id }, 'POST /api/posts');
+    } catch (error) {
+      logger.error('Failed to broadcast post to SSE:', error, 'POST /api/posts');
+      // Don't fail the request if SSE broadcast fails
+    }
 
-  await Promise.all(
-    mentionedUsers.map(mentionedUser =>
-      notifyMention(
-        mentionedUser.id,
-        canonicalUserId,
-        post.id,
-        undefined
-      )
-    )
-  )
+    // Track post creation with PostHog
+    trackServerEvent(canonicalUserId, 'post_created', {
+      postId: post.id,
+      contentLength: content.trim().length,
+      hasUsername: Boolean(canonicalUser.username),
+    }).catch((trackError) => {
+      logger.warn('Failed to track post creation with PostHog', { error: trackError });
+    });
 
-  logger.info('Sent mention notifications', { 
-    postId: post.id, 
-    mentionCount: mentionedUsers.length,
-    mentionedUsernames: mentionedUsers.map(u => u.username!)
-  }, 'POST /api/posts')
-
-  trackServerEvent(canonicalUserId, 'post_created', {
-    postId: post.id,
-    contentLength: content.trim().length,
-    hasUsername: Boolean(canonicalUser.username),
-  })
-
-  return successResponse({
-    success: true,
-    post: {
-      id: post.id,
-      content: post.content,
-      authorId: post.authorId,
-      authorName: authorName,
-      authorUsername: canonicalUser.username,
-      authorDisplayName: canonicalUser.displayName,
-      authorProfileImageUrl: canonicalUser.profileImageUrl,
-      timestamp: post.timestamp.toISOString(),
-      createdAt: post.createdAt.toISOString(),
-    },
-  })
-});
+    return successResponse({
+      success: true,
+      post: {
+        id: post.id,
+        content: post.content,
+        authorId: post.authorId,
+        authorName: authorName,
+          authorUsername: canonicalUser.username,
+          authorDisplayName: canonicalUser.displayName,
+          authorProfileImageUrl: canonicalUser.profileImageUrl,
+        timestamp: post.timestamp.toISOString(),
+        createdAt: post.createdAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    logger.error('Error creating post:', error, 'POST /api/posts');
+    
+    if (isAuthenticationError(error)) {
+      const message =
+        (error instanceof Error && error.message) || 'Authentication required';
+      return errorResponse(message, 401);
+    }
+    
+    return errorResponse('Failed to create post', 500);
+  }
+}

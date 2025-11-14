@@ -58,6 +58,22 @@ export class PositionError extends BusinessLogicError {
   }
 }
 
+/**
+ * Pool error for pool-related operations
+ */
+export class PoolError extends BusinessLogicError {
+  constructor(
+    message: string,
+    public readonly poolId: string,
+    public readonly reason: 'INACTIVE' | 'FULL' | 'LOCKED' | 'DRAWDOWN_EXCEEDED' | 'MIN_DEPOSIT' | 'MAX_DEPOSIT'
+  ) {
+    super(
+      message,
+      `POOL_${reason}`,
+      { poolId, reason }
+    );
+  }
+}
 
 /**
  * Agent error for A2A operations

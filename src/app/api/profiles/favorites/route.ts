@@ -37,7 +37,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         userId: user.userId,
       },
       include: {
-        User_Favorite_targetUserIdToUser: {
+        targetUser: {
           select: {
             id: true,
             displayName: true,
@@ -47,7 +47,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
             isActor: true,
             _count: {
               select: {
-                Favorite_Favorite_targetUserIdToUser: true,
+                favoritedBy: true,
               },
             },
           },
@@ -63,19 +63,19 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       favorites.map(async (favorite) => {
         const postCount = await db.post.count({
           where: {
-            authorId: favorite.User_Favorite_targetUserIdToUser.id,
+            authorId: favorite.targetUser.id,
           },
         });
 
         return {
-          id: favorite.User_Favorite_targetUserIdToUser.id,
-          displayName: favorite.User_Favorite_targetUserIdToUser.displayName,
-          username: favorite.User_Favorite_targetUserIdToUser.username,
-          profileImageUrl: favorite.User_Favorite_targetUserIdToUser.profileImageUrl,
-          bio: favorite.User_Favorite_targetUserIdToUser.bio,
-          isActor: favorite.User_Favorite_targetUserIdToUser.isActor,
+          id: favorite.targetUser.id,
+          displayName: favorite.targetUser.displayName,
+          username: favorite.targetUser.username,
+          profileImageUrl: favorite.targetUser.profileImageUrl,
+          bio: favorite.targetUser.bio,
+          isActor: favorite.targetUser.isActor,
           postCount,
-          favoriteCount: favorite.User_Favorite_targetUserIdToUser._count.Favorite_Favorite_targetUserIdToUser,
+          favoriteCount: favorite.targetUser._count.favoritedBy,
           favoritedAt: favorite.createdAt,
           isFavorited: true,
         };

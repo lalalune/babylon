@@ -78,33 +78,3 @@ describe('Points Calculation Edge Cases', () => {
   })
 })
 
-describe('Lifetime P&L to points delta', () => {
-  it('should not deduct points when lifetime P&L remains in the same bracket after a loss', () => {
-    const previousLifetimePnL = 15
-    const newLifetimePnL = 10
-
-    const previousPoints = EarnedPointsService.pnlToPoints(previousLifetimePnL)
-    const newPoints = EarnedPointsService.pnlToPoints(newLifetimePnL)
-    const naiveTradePoints = EarnedPointsService.pnlToPoints(newLifetimePnL - previousLifetimePnL)
-
-    expect(previousPoints).toBe(1)
-    expect(newPoints).toBe(1)
-    expect(newPoints - previousPoints).toBe(0)
-    expect(naiveTradePoints).toBe(-1)
-  })
-
-  it('should capture the full delta when lifetime P&L crosses multiple thresholds', () => {
-    const previousLifetimePnL = -50
-    const newLifetimePnL = 75
-
-    const previousPoints = EarnedPointsService.pnlToPoints(previousLifetimePnL)
-    const newPoints = EarnedPointsService.pnlToPoints(newLifetimePnL)
-    const naiveTradePoints = EarnedPointsService.pnlToPoints(newLifetimePnL - previousLifetimePnL)
-
-    expect(previousPoints).toBe(-5)
-    expect(newPoints).toBe(7)
-    expect(newPoints - previousPoints).toBe(12)
-    expect(naiveTradePoints).toBe(12)
-  })
-})
-

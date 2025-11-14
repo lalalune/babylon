@@ -1,3 +1,60 @@
+/**
+ * User Balance API Route
+ * 
+ * @description Retrieves user's virtual balance, deposits, withdrawals, and lifetime PnL
+ * 
+ * @route GET /api/users/[userId]/balance
+ * @access Private (requires authentication - users can only view their own balance)
+ * 
+ * @swagger
+ * /api/users/{userId}/balance:
+ *   get:
+ *     tags:
+ *       - Users
+ *     summary: Get user balance
+ *     description: Retrieves user's virtual balance, deposits, withdrawals, and lifetime profit/loss. Users can only view their own balance.
+ *     operationId: getUserBalance
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: User ID (must match authenticated user)
+ *         example: "user_123abc"
+ *     responses:
+ *       200:
+ *         description: Balance retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 balance:
+ *                   type: string
+ *                   description: Current virtual balance (as string for precision)
+ *                   example: "10000.50"
+ *                 totalDeposited:
+ *                   type: string
+ *                   description: Total amount deposited
+ *                   example: "15000.00"
+ *                 totalWithdrawn:
+ *                   type: string
+ *                   description: Total amount withdrawn
+ *                   example: "5000.00"
+ *                 lifetimePnL:
+ *                   type: string
+ *                   description: Lifetime profit and loss
+ *                   example: "500.50"
+ *       401:
+ *         description: Unauthorized - authentication required
+ *       403:
+ *         description: Forbidden - can only view own balance
+ *       404:
+ *         description: User balance not found
+ */
 
 import { optionalAuth } from '@/lib/api/auth-middleware';
 import { cachedDb } from '@/lib/cached-database-service';
@@ -7,7 +64,6 @@ import { successResponse, withErrorHandling } from '@/lib/errors/error-handler';
 import { logger } from '@/lib/logger';
 import { findUserByIdentifier } from '@/lib/users/user-lookup';
 import { UserIdParamSchema } from '@/lib/validation/schemas';
-import { convertBalanceToStrings } from '@/lib/utils/decimal-converter';
 import type { NextRequest } from 'next/server';
 
 /**
@@ -58,7 +114,6 @@ export const GET = withErrorHandling(async (
         id: userId,
         privyId: userId,
         isActor: false,
-        updatedAt: new Date(),
       },
     });
   }
@@ -77,19 +132,17 @@ export const GET = withErrorHandling(async (
     throw new BusinessLogicError('User balance not found', 'BALANCE_NOT_FOUND');
   }
 
-  // Safely convert balance fields to strings
-  // When data comes from cache, Decimal objects may be serialized as strings or numbers
-  const balanceInfo = convertBalanceToStrings({
-    virtualBalance: balanceData.virtualBalance,
-    totalDeposited: balanceData.totalDeposited,
-    totalWithdrawn: balanceData.totalWithdrawn,
-    lifetimePnL: balanceData.lifetimePnL,
-  });
+  const balanceInfo = {
+    balance: balanceData.virtualBalance.toString(),
+    totalDeposited: balanceData.totalDeposited.toString(),
+    totalWithdrawn: balanceData.totalWithdrawn.toString(),
+    lifetimePnL: balanceData.lifetimePnL.toString(),
+  };
 
-  logger.info('Balance fetched successfully (cached)', { userId: canonicalUserId, balance: balanceInfo.virtualBalance }, 'GET /api/users/[userId]/balance');
+  logger.info('Balance fetched successfully (cached)', { userId: canonicalUserId, balance: balanceInfo.balance }, 'GET /api/users/[userId]/balance');
 
   return successResponse({
-    balance: balanceInfo.virtualBalance,
+    balance: balanceInfo.balance,
     totalDeposited: balanceInfo.totalDeposited,
     totalWithdrawn: balanceInfo.totalWithdrawn,
     lifetimePnL: balanceInfo.lifetimePnL,

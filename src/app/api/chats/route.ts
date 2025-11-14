@@ -1,101 +1,14 @@
 /**
- * Chat Management API
- * 
- * @route GET /api/chats - List user's chats
- * @route POST /api/chats - Create new chat
- * @access Authenticated
- * 
- * @description
- * Manages both group chats and direct messages (DMs). Provides chat listings
- * with participant information, message counts, and last message previews.
- * Supports both user-specific chats and all game chats retrieval.
- * 
- * **GET - List User's Chats**
- * 
- * Returns all chats the authenticated user participates in, separated into:
- * - **Group Chats:** Multi-participant group conversations
- * - **Direct Messages:** One-on-one chats with other real users
- * 
- * **Features:**
- * - Quality scoring for group chats
- * - Last message preview
- * - Message count tracking
- * - Participant metadata
- * - DM participant profile details
- * - Filters out NPC/actor DMs (only real user DMs shown)
- * 
- * @query {boolean} all - Get all game chats (public, no auth required)
- * @query {boolean} debug - Enable debug logging
- * 
- * **All Game Chats Mode (all=true):**
- * Returns all group chats for the game without authentication.
- * Used for public game chat discovery.
- * 
- * @returns {object} Chat listings
- * @property {array} groupChats - User's group chat memberships
- * @property {array} directChats - User's direct message chats
- * @property {number} total - Total chat count
- * 
- * **POST - Create New Chat**
- * 
- * Creates a new chat (group or DM) and adds participants.
- * Creator is automatically added as the first participant.
- * 
- * @param {string} name - Chat name (optional for DMs)
- * @param {boolean} isGroup - Whether chat is a group chat (default: false)
- * @param {array} participantIds - Array of user IDs to add (optional)
- * 
- * @returns {object} Created chat
- * @property {object} chat - Created chat object
- * 
- * @throws {400} Invalid input parameters
- * @throws {401} Unauthorized - authentication required
- * @throws {500} Internal server error
- * 
- * @example
- * ```typescript
- * // Get user's chats
- * const chats = await fetch('/api/chats', {
- *   headers: { 'Authorization': `Bearer ${token}` }
- * });
- * const { groupChats, directChats } = await chats.json();
- * 
- * // Get all game chats (public)
- * const gameChats = await fetch('/api/chats?all=true');
- * const { chats } = await gameChats.json();
- * 
- * // Create group chat
- * const newGroup = await fetch('/api/chats', {
- *   method: 'POST',
- *   body: JSON.stringify({
- *     name: 'Strategy Discussion',
- *     isGroup: true,
- *     participantIds: ['user1', 'user2', 'user3']
- *   })
- * });
- * 
- * // Create DM
- * const newDM = await fetch('/api/chats', {
- *   method: 'POST',
- *   body: JSON.stringify({
- *     isGroup: false,
- *     participantIds: ['otherUserId']
- *   })
- * });
- * ```
- * 
- * @see {@link /lib/db/context} Database context with RLS
- * @see {@link /lib/validation/schemas} Request validation schemas
- * @see {@link /src/app/chats/page.tsx} Chat list UI
+ * API Route: /api/chats
+ * Methods: GET (list user's chats), POST (create new chat)
  */
 
-import { authenticate } from '@/lib/api/auth-middleware';
-import { asSystem, asUser } from '@/lib/db/context';
-import { successResponse, withErrorHandling } from '@/lib/errors/error-handler';
-import { logger } from '@/lib/logger';
-import { generateSnowflakeId } from '@/lib/snowflake';
-import { ChatCreateSchema, ChatQuerySchema } from '@/lib/validation/schemas';
 import type { NextRequest } from 'next/server';
+import { authenticate } from '@/lib/api/auth-middleware';
+import { asUser, asSystem } from '@/lib/db/context';
+import { withErrorHandling, successResponse } from '@/lib/errors/error-handler';
+import { logger } from '@/lib/logger';
+import { ChatQuerySchema, ChatCreateSchema } from '@/lib/validation/schemas';
 
 /**
  * GET /api/chats
@@ -103,9 +16,6 @@ import type { NextRequest } from 'next/server';
  * Query params: ?all=true - Get all game chats (not just user's chats)
  */
 export const GET = withErrorHandling(async (request: NextRequest) => {
-  console.log('[API /api/chats] GET request received');
-  logger.info('GET /api/chats - Request received', undefined, 'GET /api/chats');
-  
   // Validate query parameters
   const { searchParams } = new URL(request.url);
   const query: Record<string, string> = {};
@@ -116,16 +26,12 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   if (all) query.all = all;
   if (debug) query.debug = debug;
   
-  console.log('[API /api/chats] Query params:', { all, debug });
-  
   const validatedQuery = Object.keys(query).length > 0 
     ? ChatQuerySchema.parse(query) 
     : { all: undefined, debug: undefined };
 
   // Check if requesting all game chats
   const getAllChats = validatedQuery.all === 'true';
-  
-  console.log('[API /api/chats] getAllChats:', getAllChats);
 
   if (getAllChats) {
     // Return all game chats (no auth required for read-only game data)
@@ -136,13 +42,13 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
           gameId: 'continuous',
         },
         include: {
-          Message: {
+          messages: {
             orderBy: { createdAt: 'desc' },
             take: 1,
           },
           _count: {
             select: {
-              Message: true,
+              messages: true,
             },
           },
         },
@@ -159,23 +65,16 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         id: chat.id,
         name: chat.name,
         isGroup: chat.isGroup,
-        messageCount: chat._count.Message,
-        lastMessage: chat.Message[0] || null,
+        messageCount: chat._count.messages,
+        lastMessage: chat.messages[0] || null,
       })),
     });
   }
 
   const user = await authenticate(request);
 
-  logger.info('Fetching chats for user', { 
-    userId: user.userId,
-    privyId: user.privyId,
-    dbUserId: user.dbUserId,
-    fullUser: user
-  }, 'GET /api/chats');
-
-  // Get user's chats - TEMPORARILY BYPASS RLS FOR DEBUGGING
-  const { groupChats, directChats } = await asSystem(async (db) => {
+  // Get user's chats with RLS
+  const { groupChats, directChats } = await asUser(user, async (db) => {
     // Get user's group chat memberships
     const memberships = await db.groupChatMembership.findMany({
       where: {
@@ -194,7 +93,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         id: { in: groupChatIds },
       },
       include: {
-        Message: {
+        messages: {
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
@@ -210,12 +109,6 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       },
     });
 
-    logger.info('Found DM participants (using asSystem bypass)', { 
-      userId: user.userId, 
-      count: dmParticipants.length,
-      participants: dmParticipants 
-    }, 'GET /api/chats');
-
     const dmChatIds = dmParticipants.map((p) => p.chatId);
     const dmChatsDetails = await db.chat.findMany({
       where: {
@@ -223,8 +116,8 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         isGroup: false,
       },
       include: {
-        ChatParticipant: true,
-        Message: {
+        participants: true,
+        messages: {
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
@@ -240,7 +133,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
           id: membership.chatId,
           name: chat.name || 'Unnamed Group',
           isGroup: true,
-          lastMessage: chat.Message[0] || null,
+          lastMessage: chat.messages[0] || null,
           messageCount: membership.messageCount,
           qualityScore: membership.qualityScore,
           lastMessageAt: membership.lastMessageAt,
@@ -253,7 +146,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     const directChats = await Promise.all(
       dmChatsDetails.map(async (chat) => {
         // Find the other participant (not the current user)
-        const otherParticipant = chat.ChatParticipant.find((p) => p.userId !== user.userId);
+        const otherParticipant = chat.participants.find((p) => p.userId !== user.userId);
         let chatName = chat.name || 'Direct Message';
         let otherUserDetails = null;
         
@@ -290,8 +183,8 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
           id: chat.id,
           name: chatName,
           isGroup: false,
-          lastMessage: chat.Message[0] || null,
-          participants: chat.ChatParticipant.length,
+          lastMessage: chat.messages[0] || null,
+          participants: chat.participants.length,
           updatedAt: chat.updatedAt,
           otherUser: otherUserDetails,
         };
@@ -324,21 +217,16 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   // Create the chat with RLS
   const chat = await asUser(user, async (db) => {
     // Create the chat
-    const now = new Date();
     const newChat = await db.chat.create({
       data: {
-        id: await generateSnowflakeId(),
         name: name || null,
         isGroup: isGroup || false,
-        createdAt: now,
-        updatedAt: now,
       },
     });
 
     // Add creator as participant
     await db.chatParticipant.create({
       data: {
-        id: await generateSnowflakeId(),
         chatId: newChat.id,
         userId: user.userId,
       },
@@ -346,15 +234,16 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
     // Add other participants if provided
     if (participantIds && Array.isArray(participantIds)) {
-      for (const participantId of participantIds) {
-        await db.chatParticipant.create({
-          data: {
-            id: await generateSnowflakeId(),
-            chatId: newChat.id,
-            userId: participantId,
-          },
-        });
-      }
+      await Promise.all(
+        participantIds.map((participantId: string) =>
+          db.chatParticipant.create({
+            data: {
+              chatId: newChat.id,
+              userId: participantId,
+            },
+          })
+        )
+      );
     }
 
     return newChat;

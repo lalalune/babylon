@@ -52,9 +52,8 @@ const RETRYABLE_ERROR_MESSAGES = [
 
 /**
  * Check if error is retryable based on error code and message
- * Exported for testing
  */
-export function isRetryableError(error: unknown): boolean {
+function isRetryableError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
@@ -72,10 +71,10 @@ export function isRetryableError(error: unknown): boolean {
     return true;
   }
 
-  // Only retry initialization errors (connection issues)
-  // DO NOT retry PrismaClientKnownRequestError - these are usually validation/logic errors
-  // that won't be fixed by retrying (like InvalidArg, unique constraint violations, etc.)
-  if (error.name === 'PrismaClientInitializationError') {
+  // Check error name
+  if (error.name === 'PrismaClientInitializationError' || 
+      error.name === 'PrismaClientKnownRequestError' ||
+      error.name === 'PrismaClientUnknownRequestError') {
     return true;
   }
 
@@ -110,24 +109,6 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Extract error details for logging (without Symbol properties)
- */
-function extractErrorDetails(error: Error, operation: string): Record<string, string | number> {
-  const details: Record<string, string | number> = {
-    operation,
-    error: error.message,
-    errorName: error.name,
-  };
-  
-  const errorCode = (error as Error & { code?: string | number }).code;
-  if (errorCode !== undefined && typeof errorCode !== 'symbol') {
-    details.errorCode = errorCode;
-  }
-  
-  return details;
-}
-
-/**
  * Execute operation with retry logic
  */
 export async function withRetry<T>(
@@ -157,9 +138,22 @@ export async function withRetry<T>(
       
       // Check if error is retryable
       if (!isRetryableError(error)) {
+        // Safely extract error details without Symbols
+        const errorDetails: Record<string, string | number> = {
+          operation: operationName,
+          error: lastError.message,
+          errorName: lastError.name,
+        };
+        
+        // Only add code if it's not a Symbol
+        const errorCode = (lastError as Error & { code?: string | number }).code;
+        if (errorCode !== undefined && typeof errorCode !== 'symbol') {
+          errorDetails.errorCode = errorCode;
+        }
+        
         logger.warn(
           `Non-retryable error in operation`,
-          extractErrorDetails(lastError, operationName),
+          errorDetails,
           'PrismaRetry'
         );
         throw error;
@@ -167,9 +161,21 @@ export async function withRetry<T>(
 
       // Don't retry if we've exhausted attempts
       if (attempt === opts.maxRetries) {
+        // Safely extract error details without Symbols
+        const errorDetails: Record<string, string | number> = {
+          operation: operationName,
+          error: lastError.message,
+          errorName: lastError.name,
+        };
+        
+        const errorCode = (lastError as Error & { code?: string | number }).code;
+        if (errorCode !== undefined && typeof errorCode !== 'symbol') {
+          errorDetails.errorCode = errorCode;
+        }
+        
         logger.error(
           `Operation failed after ${opts.maxRetries} retries`,
-          extractErrorDetails(lastError, operationName),
+          errorDetails,
           'PrismaRetry'
         );
         throw error;
@@ -178,14 +184,23 @@ export async function withRetry<T>(
       // Calculate delay and wait
       const delay = calculateDelay(attempt, opts);
       
+      // Safely extract error details without Symbols
+      const retryDetails: Record<string, string | number> = {
+        operation: operationName,
+        attempt: attempt + 1,
+        maxRetries: opts.maxRetries,
+        delayMs: delay,
+        error: lastError.message,
+      };
+      
+      const errorCode = (lastError as Error & { code?: string | number }).code;
+      if (errorCode !== undefined && typeof errorCode !== 'symbol') {
+        retryDetails.errorCode = errorCode;
+      }
+      
       logger.warn(
         `Retrying operation after error`,
-        {
-          ...extractErrorDetails(lastError, operationName),
-          attempt: attempt + 1,
-          maxRetries: opts.maxRetries,
-          delayMs: delay,
-        },
+        retryDetails,
         'PrismaRetry'
       );
 
@@ -208,30 +223,10 @@ export function createRetryProxy<T extends object>(
   prismaClient: T,
   defaultOptions?: RetryOptions
 ): T {
-  // Methods that should NOT be wrapped with retry logic
-  // These are low-level Prisma operations with special serialization requirements
-  const EXCLUDED_METHODS = new Set([
-    '$transaction',     // Has its own retry/rollback logic
-    '$executeRaw',      // Raw SQL operations shouldn't be auto-retried
-    '$queryRaw',        // Raw SQL operations shouldn't be auto-retried
-    '$queryRawUnsafe',  // Raw SQL operations shouldn't be auto-retried
-    '$executeRawUnsafe',// Raw SQL operations shouldn't be auto-retried
-    '$connect',         // Connection management
-    '$disconnect',      // Connection management
-    '$on',              // Event handlers
-    '$use',             // Middleware
-    '$extends',         // Extensions
-  ]);
-
   return new Proxy(prismaClient, {
     get(target, modelName: string | symbol) {
       // Pass through Symbol properties without wrapping
       if (typeof modelName === 'symbol') {
-        return target[modelName as keyof T];
-      }
-      
-      // Pass through excluded methods without wrapping
-      if (EXCLUDED_METHODS.has(String(modelName))) {
         return target[modelName as keyof T];
       }
       
@@ -247,7 +242,8 @@ export function createRetryProxy<T extends object>(
         get(modelTarget, methodName: string | symbol) {
           // Pass through Symbol properties without wrapping
           if (typeof methodName === 'symbol') {
-            return modelTarget[methodName];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return (modelTarget as any)[methodName];
           }
           
           const method = modelTarget[methodName];
@@ -261,7 +257,8 @@ export function createRetryProxy<T extends object>(
           return function (...args: unknown[]) {
             const operationName = `${String(modelName)}.${methodName}`;
             return withRetry(
-              () => (method as (...args: unknown[]) => Promise<unknown>).apply(modelTarget, args),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              () => (method as any).apply(modelTarget, args),
               operationName,
               defaultOptions
             );

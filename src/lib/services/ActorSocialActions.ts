@@ -5,10 +5,9 @@
  * based on interaction history and social relationships.
  */
 
-import { db } from '@/lib/database-service';
-import { logger } from '@/lib/logger';
-import { generateSnowflakeId } from '@/lib/snowflake';
 import { GroupChatInvite } from './group-chat-invite';
+import { logger } from '@/lib/logger';
+import { db } from '@/lib/database-service';
 
 export interface SocialAction {
   type: 'group_chat_invite' | 'dm';
@@ -99,7 +98,7 @@ export class ActorSocialActions {
         const existingDMChat = userId && actor.id ? await db.prisma.chat.findFirst({
           where: {
             isGroup: false,
-            ChatParticipant: {
+            participants: {
               every: {
                 userId: {
                   in: [userId, actor.id],
@@ -108,15 +107,15 @@ export class ActorSocialActions {
             },
           },
           include: {
-            ChatParticipant: true,
+            participants: true,
           },
         }) : null;
 
         // Verify it's actually a DM between these two (2 participants total)
         const hasExistingDM = existingDMChat && 
-          existingDMChat.ChatParticipant.length === 2 &&
-          existingDMChat.ChatParticipant.some((p: { userId: string | null }) => p.userId === userId) &&
-          existingDMChat.ChatParticipant.some((p: { userId: string | null }) => p.userId === actor.id);
+          existingDMChat.participants.length === 2 &&
+          existingDMChat.participants.some((p: { userId: string | null }) => p.userId === userId) &&
+          existingDMChat.participants.some((p: { userId: string | null }) => p.userId === actor.id);
 
         // Calculate probabilities based on interaction quality and count
         const qualityFactor = Math.min(avgQuality / this.MIN_INTERACTION_QUALITY, 1.5);
@@ -219,10 +218,9 @@ export class ActorSocialActions {
       where: { id: chatId },
       update: {},
       create: {
-        id: await generateSnowflakeId(),
+        id: chatId,
         name: null, // DMs don't have names
         isGroup: false,
-        updatedAt: new Date(),
       },
     });
 
@@ -241,7 +239,6 @@ export class ActorSocialActions {
       },
       update: {},
       create: {
-        id: await generateSnowflakeId(),
         chatId,
         userId: actorId,
       },
@@ -256,7 +253,6 @@ export class ActorSocialActions {
       },
       update: {},
       create: {
-        id: await generateSnowflakeId(),
         chatId,
         userId,
       },
@@ -267,7 +263,6 @@ export class ActorSocialActions {
     // Create initial message from actor
     await db.prisma.message.create({
       data: {
-        id: await generateSnowflakeId(),
         chatId,
         senderId: actorId,
         content: messageContent,

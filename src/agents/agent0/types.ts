@@ -4,7 +4,7 @@
  * Type-safe interfaces for Agent0 SDK integration
  */
 
-import type { AgentProfile, AgentCapabilities } from '@/types/a2a'
+import type { AgentProfile, AgentCapabilities } from '@/a2a/types'
 
 /**
  * Agent0 Client Interface
@@ -12,7 +12,6 @@ import type { AgentProfile, AgentCapabilities } from '@/types/a2a'
  */
 export interface IAgent0Client {
   registerAgent(params: Agent0RegistrationParams): Promise<Agent0RegistrationResult>
-  registerBabylonGame(): Promise<Agent0RegistrationResult>
   searchAgents(filters: Agent0SearchFilters): Promise<Agent0SearchResult[]>
   submitFeedback(params: Agent0FeedbackParams): Promise<void>
   getAgentProfile(tokenId: number): Promise<Agent0AgentProfile | null>

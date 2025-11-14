@@ -32,7 +32,7 @@ interface UploadOptions {
   file: Buffer
   filename: string
   contentType: string
-  folder?: 'profiles' | 'covers' | 'posts' | 'user-profiles' | 'user-banners' | 'actors' | 'actor-banners' | 'organizations' | 'org-banners' | 'logos' | 'icons' | 'static'
+  folder?: 'profiles' | 'covers' | 'posts'
   optimize?: boolean
 }
 
@@ -115,41 +115,41 @@ class S3StorageClient {
         key: blob.pathname,
         size: buffer.length,
       }
-    }
-    
-    // Upload to MinIO/S3
-    if (!this.client) {
-      throw new Error('S3 client not initialized')
-    }
+    } else {
+      // Upload to MinIO/S3
+      if (!this.client) {
+        throw new Error('S3 client not initialized')
+      }
 
-    const upload = new Upload({
-      client: this.client,
-      params: {
-        Bucket: this.bucket,
-        Key: pathname,
-        Body: buffer,
-        ContentType: options.contentType,
-        CacheControl: 'public, max-age=31536000, immutable',
-      },
-    })
+      const upload = new Upload({
+        client: this.client,
+        params: {
+          Bucket: this.bucket,
+          Key: pathname,
+          Body: buffer,
+          ContentType: options.contentType,
+          CacheControl: 'public, max-age=31536000, immutable',
+        },
+      })
 
-    await upload.done()
+      await upload.done()
 
-    // Generate public URL
-    const url = this.publicUrl 
-      ? `${this.publicUrl}/${this.bucket}/${pathname}`
-      : `http://localhost:9000/${this.bucket}/${pathname}`
+      // Generate public URL
+      const url = this.publicUrl 
+        ? `${this.publicUrl}/${this.bucket}/${pathname}`
+        : `http://localhost:9000/${this.bucket}/${pathname}`
 
-    logger.info('Image uploaded successfully to MinIO', {
-      key: pathname,
-      size: buffer.length,
-      bucket: this.bucket,
-    })
+      logger.info('Image uploaded successfully to MinIO', {
+        key: pathname,
+        size: buffer.length,
+        bucket: this.bucket,
+      })
 
-    return {
-      url,
-      key: pathname,
-      size: buffer.length,
+      return {
+        url,
+        key: pathname,
+        size: buffer.length,
+      }
     }
   }
 
@@ -167,22 +167,13 @@ class S3StorageClient {
         throw new Error('S3 client not initialized')
       }
 
-      // Extract key from URL if full URL is provided
-      let key = url
-      if (url.startsWith('http')) {
-        // URL format: http://localhost:9000/babylon-uploads/folder/file.jpg
-        // Extract: folder/file.jpg
-        const urlParts = url.split(`/${this.bucket}/`)
-        key = urlParts.length > 1 ? (urlParts[1] || url) : url
-      }
-
       const command = new DeleteObjectCommand({
         Bucket: this.bucket,
-        Key: key,
+        Key: url,
       })
 
       await this.client.send(command)
-      logger.info('Image deleted successfully from MinIO', { key })
+      logger.info('Image deleted successfully from MinIO', { key: url })
     }
   }
 
@@ -251,43 +242,6 @@ class S3StorageClient {
       })
     )
     logger.info(`Set public policy for bucket: ${this.bucket}`)
-  }
-
-  /**
-   * List objects in a folder
-   */
-  async listObjects(prefix: string): Promise<string[]> {
-    if (this.useVercel) {
-      const { list } = await import('@vercel/blob')
-      const { blobs } = await list({ prefix })
-      return blobs.map(blob => blob.pathname)
-    } else {
-      const { ListObjectsV2Command } = await import('@aws-sdk/client-s3')
-      const command = new ListObjectsV2Command({
-        Bucket: this.bucket,
-        Prefix: prefix,
-      })
-      const response = await this.client!.send(command)
-      return (response.Contents || []).map(obj => obj.Key || '')
-    }
-  }
-
-  /**
-   * Check if an object exists
-   */
-  async exists(key: string): Promise<boolean> {
-    if (this.useVercel) {
-      const { head } = await import('@vercel/blob')
-      await head(key)
-      return true
-    } else {
-      const { HeadObjectCommand } = await import('@aws-sdk/client-s3')
-      await this.client!.send(new HeadObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-      }))
-      return true
-    }
   }
 }
 

@@ -1,9 +1,9 @@
 /**
  * API Route: /api/posts/[id]
- * Methods: GET (get single post details), DELETE (soft delete post)
+ * Methods: GET (get single post details)
  */
 
-import { optionalAuth, authenticate } from '@/lib/api/auth-middleware';
+import { optionalAuth } from '@/lib/api/auth-middleware';
 import { asUser, asPublic } from '@/lib/db/context';
 import { BusinessLogicError } from '@/lib/errors';
 import { successResponse, withErrorHandling } from '@/lib/errors/error-handler';
@@ -11,34 +11,6 @@ import { gameService } from '@/lib/game-service';
 import { logger } from '@/lib/logger';
 import { PostIdParamSchema } from '@/lib/validation/schemas';
 import type { NextRequest } from 'next/server';
-
-/**
- * Parse repost content to extract metadata
- * Returns null if not a repost, otherwise returns parsed data
- */
-function parseRepostContent(content: string): {
-  isRepost: true;
-  quoteComment: string | null;
-  originalContent: string;
-  originalAuthorUsername: string;
-} | null {
-  const separatorPattern = /\n\n--- Reposted from @(.+?) ---\n/;
-  const match = content.match(separatorPattern);
-  
-  if (!match) return null;
-  
-  const parts = content.split(separatorPattern);
-  const quoteComment = parts[0]?.trim() || null;
-  const originalContent = parts[2]?.trim() || '';
-  const originalAuthorUsername = match[1] || '';
-  
-  return {
-    isRepost: true,
-    quoteComment,
-    originalContent,
-    originalAuthorUsername,
-  };
-}
 
 /**
  * GET /api/posts/[id]
@@ -51,11 +23,7 @@ export const GET = withErrorHandling(async (
   const { id: postId } = PostIdParamSchema.parse(await context.params);
 
   // Optional authentication (to show liked status for logged-in users)
-  // Errors during auth check are non-critical - treat as unauthenticated
-  const user = await optionalAuth(request).catch((error) => {
-    logger.debug('Optional auth failed for GET post request', { postId, error }, 'GET /api/posts/[id]');
-    return null;
-  });
+  const user = await optionalAuth(request).catch(() => null);
 
   // Get post with RLS - use asPublic for unauthenticated requests
   let post = user
@@ -66,16 +34,16 @@ export const GET = withErrorHandling(async (
       include: {
         _count: {
           select: {
-            Reaction: {
+            reactions: {
               where: {
                 type: 'like',
               },
             },
-            Comment: true,
-            Share: true,
+            comments: true,
+            shares: true,
           },
         },
-        Reaction: user
+        reactions: user
           ? {
               where: {
                 userId: user.userId,
@@ -94,7 +62,7 @@ export const GET = withErrorHandling(async (
                 id: true,
               },
             },
-        Share: user
+        shares: user
           ? {
               where: {
                 userId: user.userId,
@@ -121,17 +89,17 @@ export const GET = withErrorHandling(async (
       include: {
         _count: {
           select: {
-            Reaction: {
+            reactions: {
               where: {
                 type: 'like',
               },
             },
-            Comment: true,
-            Share: true,
+            comments: true,
+            shares: true,
           },
         },
         // Empty arrays for unauthenticated users
-        Reaction: {
+        reactions: {
           where: {
             userId: 'never-match', // Won't match any user
             type: 'like',
@@ -140,7 +108,7 @@ export const GET = withErrorHandling(async (
             id: true,
           },
         },
-        Share: {
+        shares: {
           where: {
             userId: 'never-match', // Won't match any user
           },
@@ -223,115 +191,6 @@ export const GET = withErrorHandling(async (
         const timestampStr = gamePost.timestamp as string;
         const createdAtStr = (gamePost.createdAt || timestampStr) as string;
 
-        // Parse repost metadata if this is a repost
-        const parsedRepostData = gamePost.content ? parseRepostContent(gamePost.content) : null;
-        let repostMetadata = {};
-        
-        const originalPostIdFromGame = 'originalPostId' in gamePost ? (gamePost as Record<string, unknown>).originalPostId as string | undefined : undefined;
-        if (parsedRepostData || originalPostIdFromGame) {
-          // Try to get original author info
-          let originalAuthor = null;
-          const originalPostId = originalPostIdFromGame || null;
-          let effectiveRepostData = parsedRepostData;
-          
-          if (parsedRepostData) {
-            // Parse from content if available (fallback for old posts)
-            originalAuthor = await asPublic(async (db) => {
-              const usr = await db.user.findUnique({
-                where: { username: parsedRepostData.originalAuthorUsername },
-                select: { id: true, username: true, displayName: true, profileImageUrl: true },
-              });
-              
-              if (usr) return usr;
-              
-              const act = await db.actor.findFirst({
-                where: { id: parsedRepostData.originalAuthorUsername },
-                select: { id: true, name: true, profileImageUrl: true },
-              });
-              
-              if (act) return act;
-              
-              const org = await db.organization.findFirst({
-                where: { id: parsedRepostData.originalAuthorUsername },
-                select: { id: true, name: true, imageUrl: true },
-              });
-              
-              return org;
-            });
-          }
-          
-          // If we have originalPostId but no author info yet, fetch from original post
-          if (originalPostId && !originalAuthor) {
-            const originalPost = await asPublic(async (db) => {
-              return await db.post.findUnique({
-                where: { id: originalPostId },
-                select: { authorId: true, content: true },
-              });
-            });
-            
-            if (originalPost) {
-              // Fetch author details
-              originalAuthor = await asPublic(async (db) => {
-                const usr = await db.user.findUnique({
-                  where: { id: originalPost.authorId },
-                  select: { id: true, username: true, displayName: true, profileImageUrl: true },
-                });
-                
-                if (usr) return usr;
-                
-                const act = await db.actor.findUnique({
-                  where: { id: originalPost.authorId },
-                  select: { id: true, name: true, profileImageUrl: true },
-                });
-                
-                if (act) return act;
-                
-                const org = await db.organization.findUnique({
-                  where: { id: originalPost.authorId },
-                  select: { id: true, name: true, imageUrl: true },
-                });
-                
-                return org;
-              });
-              
-              // Create repostData with actual original content if not already set
-              if (!parsedRepostData && originalAuthor) {
-                effectiveRepostData = {
-                  isRepost: true,
-                  quoteComment: null,
-                  originalContent: originalPost.content,
-                  originalAuthorUsername: 'username' in originalAuthor ? originalAuthor.username! : originalPost.authorId,
-                };
-              }
-            }
-          }
-          
-          if (originalAuthor && effectiveRepostData) {
-            repostMetadata = {
-              isRepost: true,
-              quoteComment: effectiveRepostData.quoteComment,
-              originalContent: effectiveRepostData.originalContent,
-              originalPostId: originalPostId,
-              originalAuthorId: originalAuthor.id,
-              originalAuthorName: 'name' in originalAuthor ? originalAuthor.name : originalAuthor.displayName,
-              originalAuthorUsername: 'username' in originalAuthor ? originalAuthor.username : originalAuthor.id,
-              originalAuthorProfileImageUrl: 'profileImageUrl' in originalAuthor ? originalAuthor.profileImageUrl : ('imageUrl' in originalAuthor ? originalAuthor.imageUrl : null),
-            };
-          } else if (effectiveRepostData) {
-            // Fallback if we can't find the original author
-            repostMetadata = {
-              isRepost: true,
-              quoteComment: effectiveRepostData.quoteComment,
-              originalContent: effectiveRepostData.originalContent,
-              originalPostId: originalPostId,
-              originalAuthorId: effectiveRepostData.originalAuthorUsername,
-              originalAuthorName: effectiveRepostData.originalAuthorUsername,
-              originalAuthorUsername: effectiveRepostData.originalAuthorUsername,
-              originalAuthorProfileImageUrl: null,
-            };
-          }
-        }
-
         return successResponse({
           data: {
             id: gamePost.id,
@@ -357,7 +216,6 @@ export const GET = withErrorHandling(async (
             isLiked,
             isShared,
             source: 'game-store',
-            ...repostMetadata, // Add repost metadata if applicable
           },
         });
       }
@@ -419,16 +277,16 @@ export const GET = withErrorHandling(async (
               include: {
                 _count: {
                   select: {
-                    Reaction: {
+                    reactions: {
                       where: {
                         type: 'like',
                       },
                     },
-                    Comment: true,
-                    Share: true,
+                    comments: true,
+                    shares: true,
                   },
                 },
-                Reaction: {
+                reactions: {
                   where: {
                     userId: user.userId,
                     type: 'like',
@@ -437,7 +295,7 @@ export const GET = withErrorHandling(async (
                     id: true,
                   },
                 },
-                Share: {
+                shares: {
                   where: {
                     userId: user.userId,
                   },
@@ -462,16 +320,16 @@ export const GET = withErrorHandling(async (
               include: {
                 _count: {
                   select: {
-                    Reaction: {
+                    reactions: {
                       where: {
                         type: 'like',
                       },
                     },
-                    Comment: true,
-                    Share: true,
+                    comments: true,
+                    shares: true,
                   },
                 },
-                Reaction: {
+                reactions: {
                   where: {
                     userId: 'never-match',
                     type: 'like',
@@ -480,7 +338,7 @@ export const GET = withErrorHandling(async (
                     id: true,
                   },
                 },
-                Share: {
+                shares: {
                   where: {
                     userId: 'never-match',
                   },
@@ -495,11 +353,6 @@ export const GET = withErrorHandling(async (
 
     if (!post) {
       throw new BusinessLogicError('Post not found', 'POST_NOT_FOUND');
-    }
-
-    // Check if post is deleted
-    if (post.deletedAt) {
-      throw new BusinessLogicError('This post has been deleted', 'POST_DELETED');
     }
 
     // Get author info - public data, doesn't require user authentication
@@ -543,95 +396,8 @@ export const GET = withErrorHandling(async (
 
     // Return database post
     // Safely check reactions and shares - Prisma may return undefined even when included
-    const reactionsArray = post.Reaction && Array.isArray(post.Reaction) ? post.Reaction : [];
-    const sharesArray = post.Share && Array.isArray(post.Share) ? post.Share : [];
-
-    // Parse repost metadata if this is a repost
-    const repostData = post.content ? parseRepostContent(post.content) : null;
-    let repostMetadata = {};
-    
-    if (repostData) {
-      // Look up original author by username (could be User, Actor, or Organization)
-      const originalAuthor = await asPublic(async (db) => {
-        const usr = await db.user.findUnique({
-          where: { username: repostData.originalAuthorUsername },
-          select: { id: true, username: true, displayName: true, profileImageUrl: true },
-        });
-        
-        if (usr) return usr;
-        
-        const act = await db.actor.findFirst({
-          where: { id: repostData.originalAuthorUsername },
-          select: { id: true, name: true, profileImageUrl: true },
-        });
-        
-        if (act) return act;
-        
-        const org = await db.organization.findFirst({
-          where: { id: repostData.originalAuthorUsername },
-          select: { id: true, name: true, imageUrl: true },
-        });
-        
-        return org;
-      });
-      
-      if (originalAuthor) {
-        // Find the Share record for this repost to get the original post ID
-        const shareRecord = await asPublic(async (db) => {
-          return await db.share.findFirst({
-            where: { 
-              userId: post.authorId || '',
-              Post: {
-                authorId: originalAuthor.id
-              }
-            },
-            orderBy: { createdAt: 'desc' },
-            select: { postId: true },
-          });
-        });
-        
-        let originalPostId = shareRecord?.postId || null;
-        
-        // If Share lookup failed, try to find the original post by content and author
-        if (!originalPostId && repostData.originalContent) {
-          const originalPost = await asPublic(async (db) => {
-            return await db.post.findFirst({
-              where: {
-                authorId: originalAuthor.id,
-                content: repostData.originalContent,
-                deletedAt: null,
-              },
-              orderBy: { timestamp: 'desc' },
-              select: { id: true },
-            });
-          });
-          originalPostId = originalPost?.id || null;
-        }
-        
-        repostMetadata = {
-          isRepost: true,
-          quoteComment: repostData.quoteComment,
-          originalContent: repostData.originalContent,
-          originalPostId: originalPostId,
-          originalAuthorId: originalAuthor.id,
-          originalAuthorName: 'name' in originalAuthor ? originalAuthor.name : originalAuthor.displayName,
-          originalAuthorUsername: 'username' in originalAuthor ? originalAuthor.username : originalAuthor.id,
-          originalAuthorProfileImageUrl: 'profileImageUrl' in originalAuthor ? originalAuthor.profileImageUrl : ('imageUrl' in originalAuthor ? originalAuthor.imageUrl : null),
-        };
-      } else {
-        // Even if we can't find the original author, still mark as repost
-        repostMetadata = {
-          isRepost: true,
-          quoteComment: repostData.quoteComment,
-          originalContent: repostData.originalContent,
-          originalPostId: null,
-          originalAuthorId: repostData.originalAuthorUsername,
-          originalAuthorName: repostData.originalAuthorUsername,
-          originalAuthorUsername: repostData.originalAuthorUsername,
-          originalAuthorProfileImageUrl: null,
-        };
-      }
-    }
+    const reactionsArray = post.reactions && Array.isArray(post.reactions) ? post.reactions : [];
+    const sharesArray = post.shares && Array.isArray(post.shares) ? post.shares : [];
 
     logger.info('Post fetched successfully', { postId, source: 'database' }, 'GET /api/posts/[id]');
 
@@ -655,66 +421,13 @@ export const GET = withErrorHandling(async (
         isActorPost: true, // Posts are from game actors
         timestamp: post.timestamp ? post.timestamp.toISOString() : post.createdAt.toISOString(),
         createdAt: post.createdAt.toISOString(),
-        likeCount: post._count?.Reaction ?? 0,
-        commentCount: post._count?.Comment ?? 0,
-        shareCount: post._count?.Share ?? 0,
+        likeCount: post._count?.reactions ?? 0,
+        commentCount: post._count?.comments ?? 0,
+        shareCount: post._count?.shares ?? 0,
         isLiked: reactionsArray.length > 0,
         isShared: sharesArray.length > 0,
         source: 'database',
-        ...repostMetadata, // Add repost metadata if applicable
       },
     });
 });
-
-/**
- * DELETE /api/posts/[id]
- * Soft delete a post (mark as deleted)
- */
-export const DELETE = withErrorHandling(async (
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) => {
-  const { id: postId } = PostIdParamSchema.parse(await context.params);
-  
-  // Require authentication (throws error if not authenticated)
-  const user = await authenticate(request);
-  
-  // Get the post to check ownership
-  const post = await asUser(user, async (db) => {
-    return await db.post.findUnique({
-      where: { id: postId },
-      select: { id: true, authorId: true, deletedAt: true },
-    });
-  });
-  
-  if (!post) {
-    throw new BusinessLogicError('Post not found', 'POST_NOT_FOUND');
-  }
-  
-  // Check if post is already deleted
-  if (post.deletedAt) {
-    throw new BusinessLogicError('Post already deleted', 'POST_ALREADY_DELETED');
-  }
-  
-  // Check if user is the author of the post
-  if (post.authorId !== user.userId) {
-    throw new BusinessLogicError('Unauthorized to delete this post', 'UNAUTHORIZED');
-  }
-  
-  // Soft delete the post by setting deletedAt timestamp
-  await asUser(user, async (db) => {
-    await db.post.update({
-      where: { id: postId },
-      data: { deletedAt: new Date() },
-    });
-  });
-  
-  logger.info('Post soft deleted', { postId, userId: user.userId }, 'DELETE /api/posts/[id]');
-  
-  return successResponse({
-    message: 'Post deleted successfully',
-    data: { id: postId, deletedAt: new Date().toISOString() },
-  });
-});
-
 

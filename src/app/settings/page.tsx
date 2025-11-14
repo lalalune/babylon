@@ -8,15 +8,17 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Bell, Palette, Save, Shield, User } from 'lucide-react';
 
 import { LoginButton } from '@/components/auth/LoginButton';
-import { Skeleton } from '@/components/shared/Skeleton';
+import { BouncingLogo } from '@/components/shared/BouncingLogo';
 import { PageContainer } from '@/components/shared/PageContainer';
+import { Skeleton } from '@/components/shared/Skeleton';
 import { PrivacyTab } from '@/components/settings/PrivacyTab';
-import { SecurityTab } from '@/components/settings/SecurityTab';
 
 import { logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
+import { WALLET_ERROR_MESSAGES } from '@/lib/wallet-utils';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useUpdateAgentProfileTx } from '@/hooks/useUpdateAgentProfileTx';
 
 import { useAuthStore } from '@/stores/authStore';
 import { useSearchParams } from 'next/navigation';
@@ -27,8 +29,9 @@ export default function SettingsPage() {
   const {
     ready,
     authenticated,
+    smartWalletAddress,
+    smartWalletReady,
     refresh,
-    getAccessToken,
   } = useAuth();
   const { user, setUser } = useAuthStore();
   const [activeTab, setActiveTab] = useState(() => {
@@ -50,6 +53,7 @@ export default function SettingsPage() {
   const [pushNotifications, setPushNotifications] = useState(true);
   const [postNotifications, setPostNotifications] = useState(true);
   const [marketNotifications, setMarketNotifications] = useState(true);
+  const { updateAgentProfile } = useUpdateAgentProfileTx();
 
   // Theme settings - connected to next-themes
   const { theme, setTheme } = useTheme();
@@ -107,66 +111,93 @@ export default function SettingsPage() {
     setSaved(false);
     setErrorMessage(null);
 
-    const trimmedDisplayName = (displayName ?? '').trim();
-    const trimmedUsername = (username ?? '').trim();
-    const trimmedBio = (bio ?? '').trim();
-
-    // Backend now handles ALL signing automatically - no user popups!
-    // This includes username changes, bio updates, display name changes.
-    // The server signs the transaction on-chain for a seamless UX.
-    
-    const token = await getAccessToken();
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(
-      `/api/users/${encodeURIComponent(user.id)}/update-profile`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          displayName: trimmedDisplayName,
-          username: trimmedUsername,
-          bio: trimmedBio,
-        }),
+    try {
+      if (!smartWalletReady || !smartWalletAddress) {
+        throw new Error(WALLET_ERROR_MESSAGES.NO_EMBEDDED_WALLET);
       }
-    ).catch((error: Error) => {
-      const message = error.message;
-      setErrorMessage(message);
-      logger.error('Failed to save profile settings', { error }, 'SettingsPage');
-      setSaving(false);
-      throw error;
-    });
 
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const message = payload?.error || 'Unable to save your changes.';
-      setErrorMessage(message);
-      setSaving(false);
-      throw new Error(message);
-    }
+      const trimmedDisplayName = (displayName ?? '').trim();
+      const trimmedUsername = (username ?? '').trim();
+      const trimmedBio = (bio ?? '').trim();
 
-    if (payload.user) {
-      setUser({
-        ...user,
-        username: payload.user.username,
-        displayName: payload.user.displayName,
-        bio: payload.user.bio,
-        usernameChangedAt: payload.user.usernameChangedAt,
-        referralCode: payload.user.referralCode,
-        onChainRegistered:
-          payload.user.onChainRegistered ?? user.onChainRegistered,
+      const endpoint = `https://babylon.game/agent/${smartWalletAddress.toLowerCase()}`;
+      const metadata = {
+        name:
+          trimmedDisplayName ||
+          trimmedUsername ||
+          user.displayName ||
+          user.username ||
+          'Babylon User',
+        username: trimmedUsername || null,
+        bio: trimmedBio || null,
+        profileImageUrl: user.profileImageUrl ?? null,
+        coverImageUrl: user.coverImageUrl ?? null,
+      };
+
+      const txHash = await updateAgentProfile({
+        endpoint,
+        metadata,
       });
-    }
 
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
-    await refresh().catch(() => undefined);
-    setSaving(false);
+      const token =
+        typeof window !== 'undefined' ? window.__privyAccessToken : null;
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(
+        `/api/users/${encodeURIComponent(user.id)}/update-profile`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            displayName: trimmedDisplayName,
+            username: trimmedUsername,
+            bio: trimmedBio,
+            onchainTxHash: txHash,
+          }),
+        }
+      );
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = payload?.error || 'Unable to save your changes.';
+        throw new Error(message);
+      }
+
+      if (payload.user) {
+        setUser({
+          ...user,
+          username: payload.user.username,
+          displayName: payload.user.displayName,
+          bio: payload.user.bio,
+          usernameChangedAt: payload.user.usernameChangedAt,
+          referralCode: payload.user.referralCode,
+          onChainRegistered:
+            payload.user.onChainRegistered ?? user.onChainRegistered,
+        });
+      }
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      await refresh().catch(() => undefined);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'An error occurred while updating the profile.';
+      setErrorMessage(message);
+      logger.error(
+        'Failed to save profile settings',
+        { error },
+        'SettingsPage'
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!ready) {
@@ -180,7 +211,7 @@ export default function SettingsPage() {
           {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="bg-card/50 backdrop-blur rounded-lg px-4 py-3 sm:px-6 sm:py-4 border border-border space-y-4"
+              className="bg-card/50 backdrop-blur rounded-lg p-4 sm:p-6 border border-border space-y-4"
             >
               <Skeleton className="h-6 w-40 max-w-full mb-4" />
               {Array.from({ length: 2 }).map((_, j) => (
@@ -192,7 +223,7 @@ export default function SettingsPage() {
                     <Skeleton className="h-4 w-32 max-w-full" />
                     <Skeleton className="h-3 w-48 max-w-full" />
                   </div>
-                  <Skeleton className="h-8 w-16 shrink-0 rounded-full" />
+                  <Skeleton className="h-8 w-16 flex-shrink-0 rounded-full" />
                 </div>
               ))}
             </div>
@@ -226,12 +257,12 @@ export default function SettingsPage() {
 
   return (
     <PageContainer>
-      <div className="max-w-4xl mx-auto pb-24">
+      <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <button
             onClick={() => router.back()}
-            className="flex items-center gap-3 text-muted-foreground hover:text-foreground transition-colors mb-4"
+            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-4"
           >
             <ArrowLeft className="w-5 h-5" />
             <span>Back</span>
@@ -240,7 +271,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-1 mb-8 border-b border-border overflow-x-auto">
+        <div className="flex gap-1 mb-8 border-b border-border">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -248,7 +279,7 @@ export default function SettingsPage() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  'flex items-center gap-2 px-4 py-3 border-b-2 transition-all whitespace-nowrap',
+                  'flex items-center gap-2 px-4 py-3 border-b-2 transition-all',
                   activeTab === tab.id
                     ? 'border-[#0066FF] text-[#0066FF]'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -262,7 +293,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Tab Content */}
-        <div className="space-y-6 pb-8">
+        <div className="space-y-6">
           {activeTab === 'profile' && (
             <div className="space-y-6">
               <div>
@@ -412,7 +443,7 @@ export default function SettingsPage() {
                 <h3 className="font-medium mb-4">Theme Preference</h3>
                 {!mounted ? (
                   <div className="flex items-center justify-center py-8">
-                    <Skeleton className="h-32 w-full" />
+                    <BouncingLogo size={24} />
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -450,8 +481,40 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Security Tab */}
-          {activeTab === 'security' && <SecurityTab />}
+          {activeTab === 'security' && (
+            <div className="space-y-6">
+              <div className="p-4 bg-muted rounded-lg">
+                <h3 className="font-medium mb-2">Account Security</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Your account is secured with Privy authentication.
+                </p>
+                <button className="text-[#0066FF] hover:text-[#2952d9] text-sm font-medium">
+                  View Security Details →
+                </button>
+              </div>
+
+              <div className="p-4 bg-muted rounded-lg">
+                <h3 className="font-medium mb-2">Connected Wallets</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Manage your connected blockchain wallets.
+                </p>
+                <button className="text-[#0066FF] hover:text-[#2952d9] text-sm font-medium">
+                  Manage Wallets →
+                </button>
+              </div>
+
+              <div className="p-4 border border-red-500/20 bg-red-500/5 rounded-lg">
+                <h3 className="font-medium text-red-500 mb-2">Danger Zone</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Delete your account and all associated data. This action
+                  cannot be undone.
+                </p>
+                <button className="text-red-500 hover:text-red-600 text-sm font-medium">
+                  Delete Account →
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Privacy Tab */}
           {activeTab === 'privacy' && <PrivacyTab />}
@@ -473,7 +536,7 @@ export default function SettingsPage() {
                 disabled={saving || user?.onChainRegistered !== true}
                 className={cn(
                   'flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all',
-                  'bg-[#0066FF] text-primary-foreground hover:bg-[#2952d9]',
+                  'bg-[#0066FF] text-white hover:bg-[#2952d9]',
                   'disabled:opacity-50 disabled:cursor-not-allowed'
                 )}
               >

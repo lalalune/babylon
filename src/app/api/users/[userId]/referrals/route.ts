@@ -27,12 +27,6 @@ export const GET = withErrorHandling(async (
   const authUser = await authenticate(request);
   const params = await context.params;
   const { userId } = UserIdParamSchema.parse(params);
-  
-  // Check if the authenticated user has a database record
-  if (!authUser.dbUserId) {
-    throw new NotFoundError('User', userId, 'User profile not found. Please complete onboarding first.');
-  }
-  
   const targetUser = await requireUserByIdentifier(userId, { id: true });
   const canonicalUserId = targetUser.id;
   
@@ -45,7 +39,7 @@ export const GET = withErrorHandling(async (
   ReferralQuerySchema.parse(queryParams);
 
   // Verify user is accessing their own referrals
-  if (authUser.dbUserId !== canonicalUserId) {
+  if (authUser.userId !== canonicalUserId) {
     throw new AuthorizationError('You can only access your own referrals', 'referrals', 'read');
   }
 
@@ -83,7 +77,7 @@ export const GET = withErrorHandling(async (
       status: 'completed',
     },
     include: {
-      User_Referral_referredUserIdToUser: {
+      referredUser: {
         select: {
           id: true,
           username: true,
@@ -130,22 +124,22 @@ export const GET = withErrorHandling(async (
 
   // Format referred users with follow status
   const referredUsers = referrals
-    .filter(r => r.User_Referral_referredUserIdToUser)
+    .filter(r => r.referredUser)
     .map(r => ({
-      id: r.User_Referral_referredUserIdToUser!.id,
-      username: r.User_Referral_referredUserIdToUser!.username,
-      displayName: r.User_Referral_referredUserIdToUser!.displayName,
-      profileImageUrl: r.User_Referral_referredUserIdToUser!.profileImageUrl,
-      createdAt: r.User_Referral_referredUserIdToUser!.createdAt,
-      reputationPoints: r.User_Referral_referredUserIdToUser!.reputationPoints,
-      isFollowing: followingUserIds.has(r.User_Referral_referredUserIdToUser!.id),
+      id: r.referredUser!.id,
+      username: r.referredUser!.username,
+      displayName: r.referredUser!.displayName,
+      profileImageUrl: r.referredUser!.profileImageUrl,
+      createdAt: r.referredUser!.createdAt,
+      reputationPoints: r.referredUser!.reputationPoints,
+      isFollowing: followingUserIds.has(r.referredUser!.id),
       joinedAt: r.completedAt,
     }));
 
   // Use username as referral code (without @)
   const referralCode = user.username || null;
   const referralUrl = referralCode
-    ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://babylon.market'}?ref=${referralCode}`
+    ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://babylon.game'}?ref=${referralCode}`
     : null;
 
   logger.info('Referrals fetched successfully', { userId: canonicalUserId, totalReferrals: referrals.length }, 'GET /api/users/[userId]/referrals');

@@ -1,18 +1,18 @@
 /**
  * Private Cached Server-Side Data Fetchers for User-Specific Data
- *
+ * 
  * These functions use 'use cache: private' for personalized content
  * that depends on cookies, headers, or user context.
  */
-import { prisma } from '@/lib/database-service';
-import { logger } from '@/lib/logger';
-import { getReadyPerpsEngine } from '@/lib/perps-service';
-import { ParticipationService } from '@/lib/services/participation-service';
-import { ReputationService } from '@/lib/services/reputation-service';
-import { WalletService } from '@/lib/services/wallet-service';
 
-import { cacheMonitoring } from './cache-monitoring';
-import { cacheLife, cacheTag } from './cache-polyfill';
+import { prisma } from '@/lib/database-service'
+import { getPerpsEngine } from '@/lib/perps-service'
+import { logger } from '@/lib/logger'
+import { WalletService } from '@/lib/services/wallet-service'
+import { cacheTag, cacheLife } from './cache-polyfill'
+import { cacheMonitoring } from './cache-monitoring'
+import { ReputationService } from '@/lib/services/reputation-service'
+import { ParticipationService } from '@/lib/services/participation-service'
 
 /**
  * Get user positions (perpetuals and predictions)
@@ -21,27 +21,27 @@ import { cacheLife, cacheTag } from './cache-polyfill';
  * Cache life: 30 seconds - positions change frequently during trading
  */
 export async function getCachedUserPositions(userId: string) {
-  'use cache: private';
-
-  const cacheKey = `positions:${userId}`;
-  const startTime = Date.now();
-
-  cacheTag('positions', `positions:${userId}`);
+  'use cache: private'
+  
+  const cacheKey = `positions:${userId}`
+  const startTime = Date.now()
+  
+  cacheTag('positions', `positions:${userId}`)
   // Cache life: 30 seconds - positions change frequently during trading
-  cacheLife({ expire: 30 });
-
+  cacheLife({ expire: 30 })
+  
   try {
     // Get perpetual positions
-    const perpsEngine = await getReadyPerpsEngine();
-    const perpPositions = perpsEngine.getUserPositions(userId);
-
+    const perpsEngine = getPerpsEngine()
+    const perpPositions = perpsEngine.getUserPositions(userId)
+    
     // Get prediction market positions
     const predictionPositions = await prisma.position.findMany({
       where: {
         userId,
       },
       include: {
-        Market: {
+        market: {
           select: {
             id: true,
             question: true,
@@ -53,21 +53,21 @@ export async function getCachedUserPositions(userId: string) {
           },
         },
       },
-    });
-
+    })
+    
     const perpStats = {
       totalPositions: perpPositions.length,
       totalPnL: perpPositions.reduce((sum, p) => sum + p.unrealizedPnL, 0),
       totalFunding: perpPositions.reduce((sum, p) => sum + p.fundingPaid, 0),
-    };
-
-    const responseTime = Date.now() - startTime;
-    cacheMonitoring.recordHit(cacheKey, responseTime);
-
+    }
+    
+    const responseTime = Date.now() - startTime
+    cacheMonitoring.recordHit(cacheKey, responseTime)
+    
     return {
       success: true,
       perpetuals: {
-        positions: perpPositions.map((p: typeof perpPositions[number]) => ({
+        positions: perpPositions.map((p) => ({
           id: p.id,
           ticker: p.ticker,
           side: p.side,
@@ -84,45 +84,38 @@ export async function getCachedUserPositions(userId: string) {
         stats: perpStats,
       },
       predictions: {
-        positions: predictionPositions.map((p: typeof predictionPositions[number]) => ({
+        positions: predictionPositions.map((p) => ({
           id: p.id,
           marketId: p.marketId,
-          question: p.Market.question,
+          question: p.market.question,
           side: p.side ? 'YES' : 'NO',
           shares: Number(p.shares),
           avgPrice: Number(p.avgPrice),
           currentPrice: p.side
-            ? Number(p.Market.yesShares) /
-              (Number(p.Market.yesShares) + Number(p.Market.noShares))
-            : Number(p.Market.noShares) /
-              (Number(p.Market.yesShares) + Number(p.Market.noShares)),
-          resolved: p.Market.resolved,
-          resolution: p.Market.resolution,
+            ? Number(p.market.yesShares) /
+              (Number(p.market.yesShares) + Number(p.market.noShares))
+            : Number(p.market.noShares) /
+              (Number(p.market.yesShares) + Number(p.market.noShares)),
+          resolved: p.market.resolved,
+          resolution: p.market.resolution,
         })),
         stats: {
           totalPositions: predictionPositions.length,
         },
       },
       timestamp: new Date().toISOString(),
-    };
+    }
   } catch (error) {
-    const responseTime = Date.now() - startTime;
-    cacheMonitoring.recordMiss(cacheKey, responseTime);
-
-    logger.error(
-      'Error fetching cached user positions:',
-      error,
-      'getCachedUserPositions'
-    );
+    const responseTime = Date.now() - startTime
+    cacheMonitoring.recordMiss(cacheKey, responseTime)
+    
+    logger.error('Error fetching cached user positions:', error, 'getCachedUserPositions')
     return {
       success: false,
-      perpetuals: {
-        positions: [],
-        stats: { totalPositions: 0, totalPnL: 0, totalFunding: 0 },
-      },
+      perpetuals: { positions: [], stats: { totalPositions: 0, totalPnL: 0, totalFunding: 0 } },
       predictions: { positions: [], stats: { totalPositions: 0 } },
       timestamp: new Date().toISOString(),
-    };
+    }
   }
 }
 
@@ -132,20 +125,16 @@ export async function getCachedUserPositions(userId: string) {
  * Cache tag: 'posts:following' for granular invalidation
  * Cache life: 30 seconds - following feed updates frequently
  */
-export async function getCachedFollowingFeed(
-  userId: string,
-  limit: number = 100,
-  offset: number = 0
-) {
-  'use cache: private';
-
-  const cacheKey = `posts:following:${userId}:${limit}:${offset}`;
-  const startTime = Date.now();
-
-  cacheTag('posts:following', `posts:following:${userId}`);
+export async function getCachedFollowingFeed(userId: string, limit: number = 100, offset: number = 0) {
+  'use cache: private'
+  
+  const cacheKey = `posts:following:${userId}:${limit}:${offset}`
+  const startTime = Date.now()
+  
+  cacheTag('posts:following', `posts:following:${userId}`)
   // Cache life: 30 seconds - following feed updates frequently
-  cacheLife({ expire: 30 });
-
+  cacheLife({ expire: 30 })
+  
   try {
     // Get list of followed users
     const userFollows = await prisma.follow.findMany({
@@ -155,8 +144,8 @@ export async function getCachedFollowingFeed(
       select: {
         followingId: true,
       },
-    });
-
+    })
+    
     // Get list of followed actors
     const actorFollows = await prisma.followStatus.findMany({
       where: {
@@ -166,12 +155,12 @@ export async function getCachedFollowingFeed(
       select: {
         npcId: true,
       },
-    });
-
-    const followedUserIds = userFollows.map((f: typeof userFollows[number]) => f.followingId);
-    const followedActorIds = actorFollows.map((f: typeof actorFollows[number]) => f.npcId);
-    const allFollowedIds = [...followedUserIds, ...followedActorIds];
-
+    })
+    
+    const followedUserIds = userFollows.map((f) => f.followingId)
+    const followedActorIds = actorFollows.map((f) => f.npcId)
+    const allFollowedIds = [...followedUserIds, ...followedActorIds]
+    
     if (allFollowedIds.length === 0) {
       return {
         success: true,
@@ -180,9 +169,9 @@ export async function getCachedFollowingFeed(
         limit,
         offset,
         source: 'following',
-      };
+      }
     }
-
+    
     // Get posts from followed users/actors
     const posts = await prisma.post.findMany({
       where: {
@@ -200,10 +189,10 @@ export async function getCachedFollowingFeed(
         timestamp: true,
         createdAt: true,
       },
-    });
-
+    })
+    
     // Fetch user details separately since Post doesn't have author relation
-    const authorIds = [...new Set(posts.map((p: typeof posts[number]) => p.authorId))];
+    const authorIds = [...new Set(posts.map(p => p.authorId))];
     const authors = await prisma.user.findMany({
       where: { id: { in: authorIds } },
       select: {
@@ -213,48 +202,41 @@ export async function getCachedFollowingFeed(
         profileImageUrl: true,
       },
     });
-    const authorMap = new Map(authors.map((a: typeof authors[number]) => [a.id, a]));
-
-    type AuthorType = typeof authors[number];
+    const authorMap = new Map(authors.map(a => [a.id, a]));
+    
     const result = {
       success: true,
-      posts: posts.map((post: typeof posts[number]) => {
-        const author = authorMap.get(post.authorId) as AuthorType | undefined;
+      posts: posts.map((post) => {
+        const author = authorMap.get(post.authorId);
         return {
           id: post.id,
           content: post.content,
           author: post.authorId,
           authorId: post.authorId,
-          authorDetails: author
-            ? {
-                displayName: author.displayName,
-                username: author.username,
-                profileImageUrl: author.profileImageUrl,
-              }
-            : null,
+          authorDetails: author ? {
+            displayName: author.displayName,
+            username: author.username,
+            profileImageUrl: author.profileImageUrl,
+          } : null,
           timestamp: post.timestamp.toISOString(),
           createdAt: post.createdAt.toISOString(),
-        };
+        }
       }),
       total: posts.length,
       limit,
       offset,
       source: 'following',
-    };
-
-    const responseTime = Date.now() - startTime;
-    cacheMonitoring.recordHit(cacheKey, responseTime);
-
-    return result;
+    }
+    
+    const responseTime = Date.now() - startTime
+    cacheMonitoring.recordHit(cacheKey, responseTime)
+    
+    return result
   } catch (error) {
-    const responseTime = Date.now() - startTime;
-    cacheMonitoring.recordMiss(cacheKey, responseTime);
-
-    logger.error(
-      'Error fetching cached following feed:',
-      error,
-      'getCachedFollowingFeed'
-    );
+    const responseTime = Date.now() - startTime
+    cacheMonitoring.recordMiss(cacheKey, responseTime)
+    
+    logger.error('Error fetching cached following feed:', error, 'getCachedFollowingFeed')
     return {
       success: false,
       posts: [],
@@ -262,7 +244,7 @@ export async function getCachedFollowingFeed(
       limit,
       offset,
       source: 'following',
-    };
+    }
   }
 }
 
@@ -273,46 +255,42 @@ export async function getCachedFollowingFeed(
  * Cache life: 15 seconds - balance changes after trades
  */
 export async function getCachedUserBalance(userId: string) {
-  'use cache: private';
-
-  const cacheKey = `balance:${userId}`;
-  const startTime = Date.now();
-
-  cacheTag('balance', `balance:${userId}`);
+  'use cache: private'
+  
+  const cacheKey = `balance:${userId}`
+  const startTime = Date.now()
+  
+  cacheTag('balance', `balance:${userId}`)
   // Cache life: 15 seconds - balance changes after trades
-  cacheLife({ expire: 15 });
-
+  cacheLife({ expire: 15 })
+  
   try {
-    const balanceInfo = await WalletService.getBalance(userId);
-
+    const balanceInfo = await WalletService.getBalance(userId)
+    
     const result = {
       success: true,
       balance: balanceInfo.balance,
       totalDeposited: balanceInfo.totalDeposited,
       totalWithdrawn: balanceInfo.totalWithdrawn,
       lifetimePnL: balanceInfo.lifetimePnL,
-    };
-
-    const responseTime = Date.now() - startTime;
-    cacheMonitoring.recordHit(cacheKey, responseTime);
-
-    return result;
+    }
+    
+    const responseTime = Date.now() - startTime
+    cacheMonitoring.recordHit(cacheKey, responseTime)
+    
+    return result
   } catch (error) {
-    const responseTime = Date.now() - startTime;
-    cacheMonitoring.recordMiss(cacheKey, responseTime);
-
-    logger.error(
-      'Error fetching cached user balance:',
-      error,
-      'getCachedUserBalance'
-    );
+    const responseTime = Date.now() - startTime
+    cacheMonitoring.recordMiss(cacheKey, responseTime)
+    
+    logger.error('Error fetching cached user balance:', error, 'getCachedUserBalance')
     return {
       success: false,
       balance: 0,
       totalDeposited: 0,
       totalWithdrawn: 0,
       lifetimePnL: 0,
-    };
+    }
   }
 }
 
@@ -323,15 +301,15 @@ export async function getCachedUserBalance(userId: string) {
  * Cache life: 5 minutes (300 seconds) - profiles change infrequently
  */
 export async function getCachedUserProfile(userId: string) {
-  'use cache: remote';
-
-  const cacheKey = `profile:${userId}`;
-  const startTime = Date.now();
-
-  cacheTag('profile', `profile:${userId}`);
+  'use cache: remote'
+  
+  const cacheKey = `profile:${userId}`
+  const startTime = Date.now()
+  
+  cacheTag('profile', `profile:${userId}`)
   // Cache life: 5 minutes - profiles change infrequently
-  cacheLife({ expire: 300 });
-
+  cacheLife({ expire: 300 })
+  
   try {
     const dbUser = await prisma.user.findUnique({
       where: { id: userId },
@@ -354,26 +332,26 @@ export async function getCachedUserProfile(userId: string) {
         createdAt: true,
         _count: {
           select: {
-            Position: true,
-            Comment: true,
-            Reaction: true,
-            Follow_Follow_followerIdToUser: true,
-            Follow_Follow_followingIdToUser: true,
+            positions: true,
+            comments: true,
+            reactions: true,
+            followedBy: true,
+            following: true,
           },
         },
       },
-    });
-
+    })
+    
     if (!dbUser) {
-      const responseTime = Date.now() - startTime;
-      cacheMonitoring.recordMiss(cacheKey, responseTime);
-
+      const responseTime = Date.now() - startTime
+      cacheMonitoring.recordMiss(cacheKey, responseTime)
+      
       return {
         success: false,
         user: null,
-      };
+      }
     }
-
+    
     const result = {
       success: true,
       user: {
@@ -394,32 +372,28 @@ export async function getCachedUserProfile(userId: string) {
         lifetimePnL: Number(dbUser.lifetimePnL),
         createdAt: dbUser.createdAt.toISOString(),
         stats: {
-          positions: dbUser._count.Position,
-          comments: dbUser._count.Comment,
-          reactions: dbUser._count.Reaction,
-          followers: dbUser._count.Follow_Follow_followerIdToUser,
-          following: dbUser._count.Follow_Follow_followingIdToUser,
+          positions: dbUser._count.positions,
+          comments: dbUser._count.comments,
+          reactions: dbUser._count.reactions,
+          followers: dbUser._count.followedBy,
+          following: dbUser._count.following,
         },
       },
-    };
-
-    const responseTime = Date.now() - startTime;
-    cacheMonitoring.recordHit(cacheKey, responseTime);
-
-    return result;
+    }
+    
+    const responseTime = Date.now() - startTime
+    cacheMonitoring.recordHit(cacheKey, responseTime)
+    
+    return result
   } catch (error) {
-    const responseTime = Date.now() - startTime;
-    cacheMonitoring.recordMiss(cacheKey, responseTime);
-
-    logger.error(
-      'Error fetching cached user profile:',
-      error,
-      'getCachedUserProfile'
-    );
+    const responseTime = Date.now() - startTime
+    cacheMonitoring.recordMiss(cacheKey, responseTime)
+    
+    logger.error('Error fetching cached user profile:', error, 'getCachedUserProfile')
     return {
       success: false,
       user: null,
-    };
+    }
   }
 }
 
@@ -430,15 +404,15 @@ export async function getCachedUserProfile(userId: string) {
  * Cache life: 30 seconds - chat lists update frequently
  */
 export async function getCachedUserChats(userId: string) {
-  'use cache: private';
-
-  const cacheKey = `chats:user:${userId}`;
-  const startTime = Date.now();
-
-  cacheTag('chats:user', `chats:user:${userId}`);
+  'use cache: private'
+  
+  const cacheKey = `chats:user:${userId}`
+  const startTime = Date.now()
+  
+  cacheTag('chats:user', `chats:user:${userId}`)
   // Cache life: 30 seconds - chat lists update frequently
-  cacheLife({ expire: 30 });
-
+  cacheLife({ expire: 30 })
+  
   try {
     // Get user's group chat memberships
     const memberships = await prisma.groupChatMembership.findMany({
@@ -449,111 +423,96 @@ export async function getCachedUserChats(userId: string) {
       orderBy: {
         lastMessageAt: 'desc',
       },
-    });
-
+    })
+    
     // Get chat details for group chats
-    const groupChatIds = memberships.map((m: typeof memberships[number]) => m.chatId);
+    const groupChatIds = memberships.map((m) => m.chatId)
     const groupChatDetails = await prisma.chat.findMany({
       where: {
         id: { in: groupChatIds },
       },
       include: {
-        Message: {
+        messages: {
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
       },
-    });
-
-    const chatDetailsMap = new Map(groupChatDetails.map((c: typeof groupChatDetails[number]) => [c.id, c]));
-
+    })
+    
+    const chatDetailsMap = new Map(groupChatDetails.map((c) => [c.id, c]))
+    
     // Get DM chats the user participates in
     const dmParticipants = await prisma.chatParticipant.findMany({
       where: {
         userId: userId,
       },
-    });
-
-    const dmChatIds = dmParticipants.map((p: typeof dmParticipants[number]) => p.chatId);
+    })
+    
+    const dmChatIds = dmParticipants.map((p) => p.chatId)
     const dmChatsDetails = await prisma.chat.findMany({
       where: {
         id: { in: dmChatIds },
         isGroup: false,
       },
       include: {
-        ChatParticipant: true,
-        Message: {
+        participants: true,
+        messages: {
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
       },
-    });
-
+    })
+    
     // Format group chats
-    type ChatDetailsType = typeof groupChatDetails[number];
-    type GroupChatType = {
-      id: string;
-      name: string;
-      isGroup: boolean;
-      lastMessage: typeof groupChatDetails[number]['Message'][number] | null;
-      messageCount: number;
-      qualityScore: number | null;
-      lastMessageAt: Date | null;
-      updatedAt: Date;
-    };
     const groupChats = memberships
-      .map((membership: typeof memberships[number]): GroupChatType | null => {
-        const chat = chatDetailsMap.get(membership.chatId) as ChatDetailsType | undefined;
-        if (!chat) return null;
+      .map((membership) => {
+        const chat = chatDetailsMap.get(membership.chatId)
+        if (!chat) return null
         return {
           id: membership.chatId,
           name: chat.name || 'Unnamed Group',
           isGroup: true,
-          lastMessage: chat.Message[0] || null,
+          lastMessage: chat.messages[0] || null,
           messageCount: membership.messageCount,
           qualityScore: membership.qualityScore,
           lastMessageAt: membership.lastMessageAt,
           updatedAt: chat.updatedAt,
-        };
+        }
       })
-      .filter((c: GroupChatType | null): c is GroupChatType => c !== null);
-
+      .filter((c) => c !== null)
+    
     // Format DM chats
-    const directChats = dmChatsDetails.map((chat: typeof dmChatsDetails[number]) => ({
+    const directChats = dmChatsDetails.map((chat) => ({
       id: chat.id,
       name: chat.name || 'Direct Message',
       isGroup: false,
-      lastMessage: chat.Message[0] || null,
-      participants: chat.ChatParticipant.length,
+      lastMessage: chat.messages[0] || null,
+      participants: chat.participants.length,
       updatedAt: chat.updatedAt,
-    }));
-
+    }))
+    
     const result = {
       success: true,
       groupChats,
       directChats,
       total: groupChats.length + directChats.length,
-    };
-
-    const responseTime = Date.now() - startTime;
-    cacheMonitoring.recordHit(cacheKey, responseTime);
-
-    return result;
+    }
+    
+    const responseTime = Date.now() - startTime
+    cacheMonitoring.recordHit(cacheKey, responseTime)
+    
+    return result
   } catch (error) {
-    const responseTime = Date.now() - startTime;
-    cacheMonitoring.recordMiss(cacheKey, responseTime);
-
-    logger.error(
-      'Error fetching cached user chats:',
-      error,
-      'getCachedUserChats'
-    );
+    const responseTime = Date.now() - startTime
+    cacheMonitoring.recordMiss(cacheKey, responseTime)
+    
+    logger.error('Error fetching cached user chats:', error, 'getCachedUserChats')
     return {
       success: false,
       groupChats: [],
       directChats: [],
       total: 0,
-    };
+    }
   }
 }
 
@@ -564,38 +523,34 @@ export async function getCachedUserChats(userId: string) {
  * Cache life: 2 minutes (120 seconds) - reputation changes less frequently
  */
 export async function getCachedUserReputation(userId: string) {
-  'use cache: private';
-
-  const cacheKey = `reputation:${userId}`;
-  const startTime = Date.now();
-
-  cacheTag('reputation', `reputation:${userId}`);
+  'use cache: private'
+  
+  const cacheKey = `reputation:${userId}`
+  const startTime = Date.now()
+  
+  cacheTag('reputation', `reputation:${userId}`)
   // Cache life: 2 minutes - reputation changes less frequently
-  cacheLife({ expire: 120 });
-
+  cacheLife({ expire: 120 })
+  
   try {
     // Get on-chain reputation
-    const onChainReputation =
-      await ReputationService.getOnChainReputation(userId);
-
+    const onChainReputation = await ReputationService.getOnChainReputation(userId)
+    
     // Get off-chain participation stats
-    const participationStats = await ParticipationService.getStats(userId);
-
+    const participationStats = await ParticipationService.getStats(userId)
+    
     // Calculate enhanced reputation score
-    let participationBonus = 0;
-    let participationScore = 0;
-
+    let participationBonus = 0
+    let participationScore = 0
+    
     if (participationStats) {
-      participationScore = participationStats.totalActivity;
-      participationBonus = Math.min(20, Math.floor(participationScore / 100));
+      participationScore = participationStats.totalActivity
+      participationBonus = Math.min(20, Math.floor(participationScore / 100))
     }
-
-    const baseReputation = onChainReputation ?? 70;
-    const enhancedReputation = Math.min(
-      100,
-      baseReputation + participationBonus
-    );
-
+    
+    const baseReputation = onChainReputation ?? 70
+    const enhancedReputation = Math.min(100, baseReputation + participationBonus)
+    
     // Get recent activity
     const recentActivity = await prisma.balanceTransaction.findMany({
       where: {
@@ -614,13 +569,13 @@ export async function getCachedUserReputation(userId: string) {
         amount: true,
         createdAt: true,
       },
-    });
-
+    })
+    
     // Count wins and losses
     const userPositions = await prisma.position.findMany({
       where: { userId },
       include: {
-        Market: {
+        market: {
           select: {
             id: true,
             question: true,
@@ -629,18 +584,15 @@ export async function getCachedUserReputation(userId: string) {
           },
         },
       },
-    });
-
-    const resolvedPositions = userPositions.filter((p: typeof userPositions[number]) => p.Market.resolved);
+    })
+    
+    const resolvedPositions = userPositions.filter((p) => p.market.resolved)
     const wins = resolvedPositions.filter(
-      (p: typeof resolvedPositions[number]) => p.Market.resolution === p.side
-    ).length;
-    const losses = resolvedPositions.length - wins;
-    const winRate =
-      resolvedPositions.length > 0
-        ? (wins / resolvedPositions.length) * 100
-        : 0;
-
+      (p) => p.market.resolution === p.side
+    ).length
+    const losses = resolvedPositions.length - wins
+    const winRate = resolvedPositions.length > 0 ? (wins / resolvedPositions.length) * 100 : 0
+    
     const result = {
       success: true,
       reputation: {
@@ -668,27 +620,23 @@ export async function getCachedUserReputation(userId: string) {
           }
         : null,
       hasNft: onChainReputation !== null,
-      recentActivity: recentActivity.map((activity: typeof recentActivity[number]) => ({
+      recentActivity: recentActivity.map((activity) => ({
         id: activity.id,
         description: activity.description,
         amount: Number(activity.amount),
         timestamp: activity.createdAt.toISOString(),
       })),
-    };
-
-    const responseTime = Date.now() - startTime;
-    cacheMonitoring.recordHit(cacheKey, responseTime);
-
-    return result;
+    }
+    
+    const responseTime = Date.now() - startTime
+    cacheMonitoring.recordHit(cacheKey, responseTime)
+    
+    return result
   } catch (error) {
-    const responseTime = Date.now() - startTime;
-    cacheMonitoring.recordMiss(cacheKey, responseTime);
-
-    logger.error(
-      'Error fetching cached user reputation:',
-      error,
-      'getCachedUserReputation'
-    );
+    const responseTime = Date.now() - startTime
+    cacheMonitoring.recordMiss(cacheKey, responseTime)
+    
+    logger.error('Error fetching cached user reputation:', error, 'getCachedUserReputation')
     return {
       success: false,
       reputation: null,
@@ -696,6 +644,7 @@ export async function getCachedUserReputation(userId: string) {
       participation: null,
       hasNft: false,
       recentActivity: [],
-    };
+    }
   }
 }
+

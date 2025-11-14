@@ -9,7 +9,7 @@
  * 5. Real-time updates
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { prisma } from '@/lib/database-service'
 
 // Test user credentials (created in beforeAll)
@@ -146,17 +146,17 @@ test.describe('API Integration Tests', () => {
     const chat = await prisma.chat.findUnique({
       where: { id: dmChatId },
       include: {
-        Message: true,
-        ChatParticipant: true,
+        messages: true,
+        participants: true,
       },
     })
 
     if (chat) {
       expect(chat.isGroup).toBe(false)
-      expect(chat.ChatParticipant.length).toBe(2)
-      expect(chat.Message.length).toBeGreaterThanOrEqual(0)
+      expect(chat.participants.length).toBe(2)
+      expect(chat.messages.length).toBeGreaterThanOrEqual(0)
       
-      console.log(`✅ API Test: DM chat has ${chat.Message.length} messages, ${chat.ChatParticipant.length} participants`)
+      console.log(`✅ API Test: DM chat has ${chat.messages.length} messages, ${chat.participants.length} participants`)
     } else {
       console.log('ℹ️  DM chat not created yet (will be created on first message)')
     }
@@ -171,18 +171,17 @@ test.describe('API Integration Tests', () => {
         },
       },
       include: {
-        ChatParticipant: true,
-        Message: true,
+        participants: true,
+        messages: true,
       },
     })
 
     if (groupChats.length > 0) {
       const testGroup = groupChats[0]
-      expect(testGroup).toBeDefined()
-      expect(testGroup?.isGroup).toBe(true)
-      expect(testGroup?.ChatParticipant.length).toBeGreaterThanOrEqual(1)
+      expect(testGroup.isGroup).toBe(true)
+      expect(testGroup.participants.length).toBeGreaterThanOrEqual(1)
       
-      console.log(`✅ API Test: Test group has ${testGroup?.ChatParticipant.length} participants, ${testGroup?.Message.length} messages`)
+      console.log(`✅ API Test: Test group has ${testGroup.participants.length} participants, ${testGroup.messages.length} messages`)
     }
   })
 })

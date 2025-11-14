@@ -26,7 +26,6 @@ library LibMarket {
     struct Position {
         mapping(uint8 => uint256) shares; // outcome => shares owned
         uint256 totalInvested;
-        bool claimed; // Prevent double-claiming winnings
     }
 
     struct MarketStorage {

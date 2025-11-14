@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @title UMAOracleMock
 /// @notice Mock UMA Optimistic Oracle V2 (MOOV2) for dispute resolution
@@ -158,17 +158,14 @@ contract UMAOracleMock is Ownable {
         // Convert bytes32 outcome to uint8 for market resolution
         uint8 outcome = uint8(uint256(_outcome));
 
-        // Try callback - intentionally ignore success for testing flexibility
-        // This allows tests to work without requiring callback implementation
-        (bool success, ) = _requester.call(
+        // Try callback - don't revert if it fails (allows testing without callback implementation)
+        _requester.call(
             abi.encodeWithSignature(
                 "umaOracleCallback(bytes32,uint8)",
                 _marketId,
                 outcome
             )
         );
-        // Explicitly ignore success - mock oracle shouldn't revert on callback failures
-        success;
     }
 
     /// @notice Withdraw accumulated bonds from invalid disputes (owner only)

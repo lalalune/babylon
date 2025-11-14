@@ -43,8 +43,3 @@ export default function LeaderboardLoading() {
 
 
 
-
-
-
-
-

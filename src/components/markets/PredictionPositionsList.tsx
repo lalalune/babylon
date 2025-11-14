@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { CheckCircle, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { TradeConfirmationDialog, type SellPredictionDetails } from './TradeConfirmationDialog'
 
 interface PredictionPosition {
   id: string
@@ -25,30 +24,9 @@ interface PredictionPositionsListProps {
 
 export function PredictionPositionsList({ positions, onPositionSold }: PredictionPositionsListProps) {
   const [sellingId, setSellingId] = useState<string | null>(null)
-  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
-  const [pendingSell, setPendingSell] = useState<{
-    position: PredictionPosition;
-    expectedValue: number;
-    unrealizedPnL: number;
-    unrealizedPnLPercent: number;
-  } | null>(null)
 
-  const handleSellClick = (
-    position: PredictionPosition,
-    expectedValue: number,
-    unrealizedPnL: number,
-    unrealizedPnLPercent: number
-  ) => {
-    setPendingSell({ position, expectedValue, unrealizedPnL, unrealizedPnLPercent })
-    setConfirmDialogOpen(true)
-  }
-
-  const handleConfirmSell = async () => {
-    if (!pendingSell) return
-
-    const position = pendingSell.position
+  const handleSell = async (position: PredictionPosition) => {
     setSellingId(position.id)
-    setConfirmDialogOpen(false)
 
     const response = await fetch(`/api/markets/predictions/${position.marketId}/sell`, {
       method: 'POST',
@@ -64,13 +42,8 @@ export function PredictionPositionsList({ positions, onPositionSold }: Predictio
     const data = await response.json()
 
     if (!response.ok) {
-      // Handle error response - extract message from error object
-      const errorMessage = typeof data.error === 'object' 
-        ? data.error.message || 'Failed to sell shares'
-        : data.error || data.message || 'Failed to sell shares'
+      toast.error(data.error || 'Failed to sell shares')
       setSellingId(null)
-      setPendingSell(null)
-      toast.error(errorMessage)
       return
     }
 
@@ -81,7 +54,6 @@ export function PredictionPositionsList({ positions, onPositionSold }: Predictio
 
     if (onPositionSold) onPositionSold()
     setSellingId(null)
-    setPendingSell(null)
   }
 
   const formatPrice = (price: number) => `$${price.toFixed(3)}`
@@ -156,7 +128,7 @@ export function PredictionPositionsList({ positions, onPositionSold }: Predictio
 
             {!position.resolved ? (
               <button
-                onClick={() => handleSellClick(position, currentValue, unrealizedPnL, pnlPercent)}
+                onClick={() => handleSell(position)}
                 disabled={isSelling}
                 className="w-full py-2 bg-muted hover:bg-muted text-foreground rounded font-medium transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -173,29 +145,6 @@ export function PredictionPositionsList({ positions, onPositionSold }: Predictio
           </div>
         )
       })}
-
-      {/* Confirmation Dialog */}
-      <TradeConfirmationDialog
-        open={confirmDialogOpen}
-        onOpenChange={setConfirmDialogOpen}
-        onConfirm={handleConfirmSell}
-        isSubmitting={sellingId !== null}
-        tradeDetails={
-          pendingSell
-            ? ({
-                type: 'sell-prediction',
-                question: pendingSell.position.question,
-                side: pendingSell.position.side,
-                shares: pendingSell.position.shares,
-                avgPrice: pendingSell.position.avgPrice,
-                currentPrice: pendingSell.position.currentPrice,
-                expectedValue: pendingSell.expectedValue,
-                unrealizedPnL: pendingSell.unrealizedPnL,
-                unrealizedPnLPercent: pendingSell.unrealizedPnLPercent,
-              } as SellPredictionDetails)
-            : null
-        }
-      />
     </div>
   )
 }

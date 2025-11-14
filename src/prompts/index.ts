@@ -66,7 +66,7 @@ export { organizationLogo, organizationBanner } from './image/organization-logo'
 export { userProfilePicture } from './image/user-profile-picture';
 
 // System prompts
-export { xmlAssistant } from './system/json-assistant';
+export { jsonAssistant } from './system/json-assistant';
 
 // World prompts
 export { rumor } from './world/rumor';

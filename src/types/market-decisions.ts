@@ -20,7 +20,7 @@ export interface TradingDecision {
   action: MarketAction;
   marketType: MarketType | null;
   ticker?: string;
-  marketId?: string; // Market ID is a Snowflake string
+  marketId?: number;
   positionId?: string;
   amount: number;
   confidence: number;
@@ -34,7 +34,7 @@ export interface ExecutedTrade {
   poolId: string;
   marketType: MarketType;
   ticker?: string;
-  marketId?: string; // Market ID is a Snowflake string
+  marketId?: number;
   action: MarketAction;
   side: string;
   amount: number;
@@ -64,7 +64,7 @@ export interface ExecutionResult {
 
 export interface TradeImpact {
   ticker?: string;
-  marketId?: string; // Market ID is a Snowflake string
+  marketId?: number;
   longVolume: number;
   shortVolume: number;
   yesVolume: number;

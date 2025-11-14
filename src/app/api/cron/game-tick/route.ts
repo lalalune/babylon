@@ -20,9 +20,6 @@ import { AuthorizationError } from '@/lib/errors'
 import { logger } from '@/lib/logger'
 import { executeGameTick } from '@/lib/serverless-game-tick'
 
-// Vercel function configuration
-export const maxDuration = 300; // 5 minutes max for game tick
-
 // Verify this is a legitimate Vercel Cron request
 function verifyVercelCronRequest(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization');

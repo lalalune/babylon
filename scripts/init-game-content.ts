@@ -13,8 +13,6 @@
 
 import { prisma } from '../src/lib/prisma';
 import { logger } from '../src/lib/logger';
-import { generateSnowflakeId } from '../src/lib/snowflake';
-import { nanoid } from 'nanoid';
 
 async function main() {
   logger.info('🎬 Initializing game content...', undefined, 'Init');
@@ -23,34 +21,22 @@ async function main() {
   let game = await prisma.game.findFirst({ where: { isContinuous: true } });
 
   if (!game) {
-    const now = new Date();
     logger.info('Creating game state...', undefined, 'Init');
     game = await prisma.game.create({
       data: {
-        id: 'continuous',
         isContinuous: true,
-        isRunning: true, // Start running by default
-        currentDate: now,
+        isRunning: true,
+        currentDate: new Date(),
         currentDay: 1,
         speed: 60000,
-        startedAt: now, // Set startedAt timestamp
-        updatedAt: now,
       },
     });
-    logger.info('✅ Game created and started', undefined, 'Init');
   } else if (!game.isRunning) {
-    logger.info('Game is paused. Starting it...', undefined, 'Init');
+    logger.info('Setting game to running...', undefined, 'Init');
     await prisma.game.update({
       where: { id: game.id },
-      data: { 
-        isRunning: true,
-        startedAt: game.startedAt || new Date(),
-        pausedAt: null,
-      },
+      data: { isRunning: true },
     });
-    logger.info('✅ Game started', undefined, 'Init');
-  } else {
-    logger.info('✅ Game already running', undefined, 'Init');
   }
 
   logger.info('✅ Game state ready', undefined, 'Init');
@@ -97,23 +83,15 @@ async function main() {
     ];
 
     for (const q of questions) {
-      await prisma.question.create({ 
-        data: {
-          id: nanoid(),
-          ...q,
-          updatedAt: new Date(),
-        }
-      });
+      await prisma.question.create({ data: q });
 
       // Also create a Market for trading
       await prisma.market.create({
         data: {
-          id: nanoid(),
           question: q.text,
           liquidity: 1000,
           endDate: q.resolutionDate,
           gameId: 'continuous',
-          updatedAt: new Date(),
         },
       });
     }
@@ -130,6 +108,7 @@ async function main() {
     logger.info('Creating initial posts...', undefined, 'Init');
 
     const actors = await prisma.actor.findMany({ take: 5 });
+    const questions = await prisma.question.findMany({ take: 3 });
 
     const samplePosts = [
       "Just saw the latest AI developments. Market is about to get wild 🚀",
@@ -142,7 +121,6 @@ async function main() {
     for (let i = 0; i < 5 && i < actors.length; i++) {
       await prisma.post.create({
         data: {
-          id: await generateSnowflakeId(),
           content: samplePosts[i]!,
           authorId: actors[i]!.id,
           gameId: 'continuous',

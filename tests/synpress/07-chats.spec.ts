@@ -11,7 +11,7 @@
 
 import { test, expect } from '@playwright/test'
 import { loginWithPrivyEmail, getPrivyTestAccount } from './helpers/privy-auth'
-import { navigateTo, waitForPageLoad } from './helpers/page-helpers'
+import { navigateTo, waitForPageLoad, isVisible } from './helpers/page-helpers'
 import { ROUTES } from './helpers/test-data'
 
 test.describe('Chats Page - Updated Design', () => {

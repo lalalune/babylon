@@ -5,19 +5,11 @@
  * to provide comprehensive agent search.
  */
 
-import type { AgentProfile } from '@/types/a2a'
+import type { AgentProfile } from '@/a2a/types'
 import { AgentRegistry } from '../AgentRegistry'
 import { ReputationBridge } from './ReputationBridge'
 import { SubgraphClient, type SubgraphAgent } from './SubgraphClient'
 import type { DiscoveryFilters, IReputationBridge, IUnifiedDiscoveryService } from './types'
-import { z } from 'zod'
-
-const CapabilitiesSchema = z.object({
-  strategies: z.array(z.string()).optional(),
-  markets: z.array(z.string()).optional(),
-  actions: z.array(z.string()).optional(),
-  version: z.string().optional(),
-});
 
 export class UnifiedDiscoveryService implements IUnifiedDiscoveryService {
   private localRegistry: AgentRegistry
@@ -45,7 +37,7 @@ export class UnifiedDiscoveryService implements IUnifiedDiscoveryService {
       minReputation: filters.minReputation
     })
     
-    results.push(...localAgents.map((r: { profile: AgentProfile }) => r.profile))
+    results.push(...localAgents.map(r => r.profile))
     
     if (filters.includeExternal && process.env.AGENT0_ENABLED === 'true') {
       const externalAgents = await this.subgraphClient.searchAgents({
@@ -56,7 +48,9 @@ export class UnifiedDiscoveryService implements IUnifiedDiscoveryService {
       
       for (const agent0Data of externalAgents) {
         const profile = await this.transformAgent0Profile(agent0Data, this.reputationBridge)
-        results.push(profile)
+        if (profile) {
+          results.push(profile)
+        }
       }
     }
     
@@ -69,14 +63,22 @@ export class UnifiedDiscoveryService implements IUnifiedDiscoveryService {
   private async transformAgent0Profile(
     agent0Data: SubgraphAgent,
     reputationBridge?: IReputationBridge | null
-  ): Promise<AgentProfile> {
-    const parsed = JSON.parse(agent0Data.capabilities!)
-    const validation = CapabilitiesSchema.parse(parsed)
-    const capabilities = {
-      strategies: validation.strategies ?? [],
-      markets: validation.markets ?? [],
-      actions: validation.actions ?? [],
-      version: validation.version ?? '1.0.0',
+  ): Promise<AgentProfile | null> {
+    let capabilities = {
+      strategies: [] as string[],
+      markets: [] as string[],
+      actions: [] as string[],
+      version: '1.0.0'
+    }
+    
+    if (agent0Data.capabilities) {
+      const parsed = JSON.parse(agent0Data.capabilities)
+      capabilities = {
+        strategies: parsed.strategies || [],
+        markets: parsed.markets || [],
+        actions: parsed.actions || [],
+        version: parsed.version || '1.0.0'
+      }
     }
     
     let reputation
@@ -92,11 +94,19 @@ export class UnifiedDiscoveryService implements IUnifiedDiscoveryService {
         isBanned: aggregated.isBanned
       }
     } else {
-      reputation = {
-        totalBets: agent0Data.reputation!.totalBets,
-        winningBets: agent0Data.reputation!.winningBets,
-        accuracyScore: agent0Data.reputation!.accuracyScore / 100,
-        trustScore: agent0Data.reputation!.trustScore / 100,
+      reputation = agent0Data.reputation ? {
+        totalBets: agent0Data.reputation.totalBets || 0,
+        winningBets: agent0Data.reputation.winningBets || 0,
+        accuracyScore: (agent0Data.reputation.accuracyScore || 0) / 100,
+        trustScore: (agent0Data.reputation.trustScore || 0) / 100,
+        totalVolume: '0',
+        profitLoss: 0,
+        isBanned: false
+      } : {
+        totalBets: 0,
+        winningBets: 0,
+        accuracyScore: 0,
+        trustScore: 0,
         totalVolume: '0',
         profitLoss: 0,
         isBanned: false
@@ -108,7 +118,7 @@ export class UnifiedDiscoveryService implements IUnifiedDiscoveryService {
       tokenId: agent0Data.tokenId,
       address: agent0Data.walletAddress,
       name: agent0Data.name,
-      endpoint: agent0Data.a2aEndpoint!,
+      endpoint: agent0Data.a2aEndpoint || '',
       capabilities,
       reputation,
       isActive: true
@@ -126,7 +136,8 @@ export class UnifiedDiscoveryService implements IUnifiedDiscoveryService {
       const address = agent.address.toLowerCase()
       const existing = seen.get(address)
       
-      if (!existing || (agent.agentId && !agent.agentId.startsWith('agent0-'))) {
+      // Prefer local agents over external ones
+      if (!existing || agent.agentId && !agent.agentId.startsWith('agent0-')) {
         seen.set(address, agent)
       }
     }
@@ -140,15 +151,25 @@ export class UnifiedDiscoveryService implements IUnifiedDiscoveryService {
   /**
    * Get agent by ID (searches both local and external)
    */
-  async getAgent(agentId: string): Promise<AgentProfile> {
+  async getAgent(agentId: string): Promise<AgentProfile | null> {
+    // Check if it's an external agent ID
     if (agentId.startsWith('agent0-')) {
       const tokenId = parseInt(agentId.replace('agent0-', ''), 10)
+      if (isNaN(tokenId)) {
+        return null
+      }
+      
       const agent0Data = await this.subgraphClient.getAgent(tokenId)
+      if (!agent0Data) {
+        return null
+      }
+      
       return this.transformAgent0Profile(agent0Data, this.reputationBridge)
     }
     
+    // Check local registry
     const localAgent = this.localRegistry.getAgent(agentId)
-    return localAgent!.profile
+    return localAgent?.profile || null
   }
 }
 
@@ -164,7 +185,7 @@ export function getUnifiedDiscoveryService(): UnifiedDiscoveryService {
     
     let reputationBridge: ReputationBridge | null = null
     if (process.env.AGENT0_ENABLED === 'true') {
-      reputationBridge = new ReputationBridge(undefined)
+      reputationBridge = new ReputationBridge(null)
     }
     
     unifiedDiscoveryInstance = new UnifiedDiscoveryService(

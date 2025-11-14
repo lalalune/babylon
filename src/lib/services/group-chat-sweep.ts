@@ -24,19 +24,16 @@ export interface SweepDecision {
 }
 
 export class GroupChatSweep {
-  // Base probability of being kicked per tick for ideal users
-  // At 1440 ticks/day, 0.00007 = ~10 day average retention
-  private static readonly BASE_KICK_PROBABILITY = 0.00007; // ~10 day retention
+  // Base probability of being kicked per day, even with ideal activity
+  private static readonly BASE_KICK_PROBABILITY = 0.01; // 1%
 
-  // Inactivity thresholds (in ticks, not hours)
-  // 1 tick = 60 seconds, 1440 ticks = 1 day
-  private static readonly INACTIVITY_GRACE_PERIOD_TICKS = 1440; // 1 day
-  private static readonly INACTIVITY_MAX_TICKS = 7200; // 5 days
+  // Inactivity thresholds (in hours)
+  private static readonly INACTIVITY_GRACE_PERIOD_HOURS = 24;
+  private static readonly INACTIVITY_MAX_HOURS = 72; // At this point, kick is certain
 
-  // Activity thresholds (messages per day)
-  private static readonly ACTIVITY_SWEET_SPOT_MIN = 1; // At least 1 message per day
-  private static readonly ACTIVITY_SWEET_SPOT_MAX = 3; // Up to 3 messages per day is ideal
-  private static readonly ACTIVITY_HARD_CAP = 10; // More than 10/day = spamming
+  // Activity thresholds (messages per 24 hours)
+  private static readonly ACTIVITY_SWEET_SPOT_MAX = 4; // Up to this many messages is ideal
+  private static readonly ACTIVITY_HARD_CAP = 15; // At this point, kick is certain
 
   /**
    * Calculate the probability that a user should be removed from a group chat.
@@ -81,72 +78,62 @@ export class GroupChatSweep {
     });
 
     const totalMessages = allMessages.length;
-    const ticksSinceJoin =
-      (Date.now() - membership.joinedAt.getTime()) / (1000 * 60); // Convert to ticks (60 sec each)
+    const hoursSinceJoin =
+      (Date.now() - membership.joinedAt.getTime()) / (1000 * 60 * 60);
 
     // If no messages yet, give them a grace period
     if (totalMessages === 0) {
-      if (ticksSinceJoin > this.INACTIVITY_GRACE_PERIOD_TICKS) {
+      if (hoursSinceJoin > this.INACTIVITY_GRACE_PERIOD_HOURS) {
         return {
-          kickChance: this.BASE_KICK_PROBABILITY * 100, // 100× multiplier for never posted
-          reason: `Never posted after joining (${Math.floor(ticksSinceJoin / 60)} hours ago)`,
-          stats: { ...baseStats, hoursSinceLastMessage: ticksSinceJoin / 60 },
+          kickChance: 0.75, // High chance of being kicked if no posts after grace period
+          reason: `Never posted after joining (${Math.floor(hoursSinceJoin)} hours ago)`,
+          stats: { ...baseStats, hoursSinceLastMessage: hoursSinceJoin },
         };
       }
       // Safe for now if they just joined
       return {
         kickChance: 0,
-        stats: { ...baseStats, hoursSinceLastMessage: ticksSinceJoin / 60 },
+        stats: { ...baseStats, hoursSinceLastMessage: hoursSinceJoin },
       };
     }
 
-    // --- Calculate inactivity multiplier ---
-    let inactivityMultiplier = 1;
+    // --- Calculate inactivity penalty ---
+    let inactivityPenalty = 0;
     let reason = '';
     const lastMessage = allMessages[0]!;
-    const ticksSinceLastMessage =
-      (Date.now() - lastMessage.createdAt.getTime()) / (1000 * 60); // Convert to ticks
+    const hoursSinceLastMessage =
+      (Date.now() - lastMessage.createdAt.getTime()) / (1000 * 60 * 60);
 
-    if (ticksSinceLastMessage > this.INACTIVITY_GRACE_PERIOD_TICKS) {
-      const excessTicks = ticksSinceLastMessage - this.INACTIVITY_GRACE_PERIOD_TICKS;
-      const range = this.INACTIVITY_MAX_TICKS - this.INACTIVITY_GRACE_PERIOD_TICKS;
-      // Scale from 1× to 10× as inactivity increases
-      inactivityMultiplier = 1 + (Math.min(excessTicks / range, 1) * 9);
-      reason = `Inactive for ${Math.floor(ticksSinceLastMessage / 60)} hours`;
+    if (hoursSinceLastMessage > this.INACTIVITY_GRACE_PERIOD_HOURS) {
+      const excessHours = hoursSinceLastMessage - this.INACTIVITY_GRACE_PERIOD_HOURS;
+      const range = this.INACTIVITY_MAX_HOURS - this.INACTIVITY_GRACE_PERIOD_HOURS;
+      inactivityPenalty = Math.pow(Math.min(excessHours / range, 1), 2);
+      reason = `Inactive for ${Math.floor(hoursSinceLastMessage)} hours`;
     }
 
-    // --- Calculate over-activity multiplier ---
-    let overactivityMultiplier = 1;
+    // --- Calculate over-activity penalty ---
+    let overactivityPenalty = 0;
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const messagesLast24h = allMessages.filter(
       (m) => m.createdAt >= oneDayAgo
     ).length;
 
-    if (messagesLast24h > this.ACTIVITY_HARD_CAP) {
-      // Spam: 20× multiplier
-      overactivityMultiplier = 20;
-      reason = `Spamming: ${messagesLast24h} messages in 24h`;
-    } else if (messagesLast24h > this.ACTIVITY_SWEET_SPOT_MAX) {
-      // Over-active but not spam: 2-5× multiplier
-      const excess = messagesLast24h - this.ACTIVITY_SWEET_SPOT_MAX;
+    if (messagesLast24h > this.ACTIVITY_SWEET_SPOT_MAX) {
+      const excessMessages = messagesLast24h - this.ACTIVITY_SWEET_SPOT_MAX;
       const range = this.ACTIVITY_HARD_CAP - this.ACTIVITY_SWEET_SPOT_MAX;
-      overactivityMultiplier = 2 + (excess / range) * 3; // Scale 2× to 5×
-      reason = `Over-active: ${messagesLast24h} messages in 24h`;
-    } else if (messagesLast24h < this.ACTIVITY_SWEET_SPOT_MIN) {
-      // Under-active: 3× multiplier
-      overactivityMultiplier = 3;
-      reason = `Low participation: ${messagesLast24h} messages in 24h`;
+      overactivityPenalty = Math.pow(Math.min(excessMessages / range, 1), 2);
+      reason = `Over-posting: ${messagesLast24h} messages in 24h`;
     }
     
-    // --- Combine multipliers ---
-    const finalMultiplier = Math.max(inactivityMultiplier, overactivityMultiplier);
-    const kickChance = Math.min(1, this.BASE_KICK_PROBABILITY * finalMultiplier);
+    // --- Combine penalties ---
+    const penalty = Math.max(inactivityPenalty, overactivityPenalty);
+    const kickChance = Math.min(1, this.BASE_KICK_PROBABILITY + penalty);
 
     return {
       kickChance,
-      reason: kickChance > this.BASE_KICK_PROBABILITY ? reason : undefined,
+      reason: kickChance > this.BASE_KICK_PROBABILITY ? reason : 'Random sweep',
       stats: {
-        hoursSinceLastMessage: ticksSinceLastMessage / 60, // Convert back to hours for display
+        hoursSinceLastMessage,
         messagesLast24h,
         averageQuality: membership.qualityScore,
         totalMessages,

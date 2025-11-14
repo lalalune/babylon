@@ -7,6 +7,7 @@ import type { NextRequest } from 'next/server'
 import { withErrorHandling, successResponse } from '@/lib/errors/error-handler'
 import { WaitlistService } from '@/lib/services/waitlist-service'
 import { logger } from '@/lib/logger'
+import { NotFoundError } from '@/lib/errors'
 
 export const GET = withErrorHandling(async (request: NextRequest) => {
   const { searchParams } = new URL(request.url)
@@ -20,13 +21,8 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
   const position = await WaitlistService.getWaitlistPosition(userId)
 
-  // If user doesn't exist or isn't on waitlist, return null gracefully
-  // This handles new Privy users who haven't completed signup yet
   if (!position) {
-    logger.info('Waitlist position not found - user not on waitlist or doesn\'t exist yet', { userId }, 'GET /api/waitlist/position')
-    return successResponse({
-      position: null,
-    })
+    throw new NotFoundError('Waitlist position', userId)
   }
 
   return successResponse({

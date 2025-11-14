@@ -12,10 +12,10 @@ export const swaggerDefinition = {
   info: {
     title: 'Babylon API',
     version: '1.0.0',
-    description: 'API documentation for Babylon social conspiracy game',
+    description: 'API documentation for Babylon social prediction market platform',
     contact: {
       name: 'API Support',
-      url: 'https://github.com/elizaos/babylon',
+      url: 'https://github.com/your-org/babylon',
     },
   },
   servers: [
@@ -31,11 +31,6 @@ export const swaggerDefinition = {
         scheme: 'bearer',
         bearerFormat: 'JWT',
         description: 'Privy authentication token',
-      },
-      CronSecret: {
-        type: 'http',
-        scheme: 'bearer',
-        description: 'Cron secret for scheduled jobs (CRON_SECRET environment variable)',
       },
     },
   },

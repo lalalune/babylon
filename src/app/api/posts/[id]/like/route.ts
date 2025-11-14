@@ -3,21 +3,17 @@
  * Methods: POST (like), DELETE (unlike)
  */
 
-import { authenticate } from '@/lib/api/auth-middleware';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/database-service';
+import { authenticate } from '@/lib/api/auth-middleware';
+import { withErrorHandling, successResponse } from '@/lib/errors/error-handler';
 import { BusinessLogicError, NotFoundError } from '@/lib/errors';
-import { successResponse, withErrorHandling } from '@/lib/errors/error-handler';
+import { PostIdParamSchema } from '@/lib/validation/schemas';
+import { notifyReactionOnPost } from '@/lib/services/notification-service';
 import { logger } from '@/lib/logger';
 import { parsePostId } from '@/lib/post-id-parser';
-import { trackServerEvent } from '@/lib/posthog/server';
-import { notifyReactionOnPost } from '@/lib/services/notification-service';
-import { NPCInteractionTracker } from '@/lib/services/npc-interaction-tracker';
-import { generateSnowflakeId } from '@/lib/snowflake';
 import { ensureUserForAuth } from '@/lib/users/ensure-user';
-import { PostIdParamSchema } from '@/lib/validation/schemas';
-import type { NextRequest } from 'next/server';
-import { invalidateCache, CACHE_KEYS } from '@/lib/cache-service';
-import { checkRateLimitAndDuplicates, RATE_LIMIT_CONFIGS } from '@/lib/rate-limiting';
+import { trackServerEvent } from '@/lib/posthog/server';
 
 /**
  * POST /api/posts/[id]/like
@@ -31,16 +27,6 @@ export const POST = withErrorHandling(async (
   const user = await authenticate(request);
   const { id: postId } = PostIdParamSchema.parse(await context.params);
 
-  // Apply rate limiting (no duplicate detection needed - DB prevents duplicate likes)
-  const rateLimitError = checkRateLimitAndDuplicates(
-    user.userId,
-    null,
-    RATE_LIMIT_CONFIGS.LIKE_POST
-  );
-  if (rateLimitError) {
-    return rateLimitError;
-  }
-
     const displayName = user.walletAddress
       ? `${user.walletAddress.slice(0, 6)}...${user.walletAddress.slice(-4)}`
       : 'Anonymous';
@@ -51,6 +37,7 @@ export const POST = withErrorHandling(async (
     // Check if post exists first
     let post = await prisma.post.findUnique({
       where: { id: postId },
+      select: { id: true, authorId: true },
     });
 
     if (!post) {
@@ -66,26 +53,6 @@ export const POST = withErrorHandling(async (
           timestamp,
         },
       });
-    }
-
-    // Check if post is deleted - allow likes to be removed but not added
-    if (post.deletedAt) {
-      // Allow unlike but not like
-      const existingReaction = await prisma.reaction.findUnique({
-        where: {
-          postId_userId_type: {
-            postId,
-            userId: canonicalUserId,
-            type: 'like',
-          },
-        },
-      });
-      
-      if (!existingReaction) {
-        // Trying to add a new like to deleted post - reject
-        throw new BusinessLogicError('Cannot like deleted post', 'POST_DELETED');
-      }
-      // If reaction exists, allow the unlike action to proceed
     }
 
     // Check if already liked
@@ -106,7 +73,6 @@ export const POST = withErrorHandling(async (
     // Create like reaction
     await prisma.reaction.create({
       data: {
-        id: await generateSnowflakeId(),
         postId,
         userId: canonicalUserId,
         type: 'like',
@@ -123,11 +89,6 @@ export const POST = withErrorHandling(async (
       );
     }
 
-    // Track interaction with NPC (if post author is NPC)
-    await NPCInteractionTracker.trackLike(canonicalUserId, postId).catch((error) => {
-      logger.warn('Failed to track NPC interaction', { error });
-    });
-
     // Get updated like count
     const likeCount = await prisma.reaction.count({
       where: {
@@ -135,9 +96,6 @@ export const POST = withErrorHandling(async (
         type: 'like',
       },
     });
-
-  // Invalidate interaction cache for this post
-  await invalidateCache(`post:${postId}:interactions:*`, { namespace: CACHE_KEYS.POST });
 
   logger.info('Post liked successfully', { postId, userId: canonicalUserId, likeCount }, 'POST /api/posts/[id]/like');
 
@@ -212,9 +170,6 @@ export const DELETE = withErrorHandling(async (
         type: 'like',
       },
     });
-
-  // Invalidate interaction cache for this post
-  await invalidateCache(`post:${postId}:interactions:*`, { namespace: CACHE_KEYS.POST });
 
   logger.info('Post unliked successfully', { postId, userId: canonicalUserId, likeCount }, 'DELETE /api/posts/[id]/like');
 

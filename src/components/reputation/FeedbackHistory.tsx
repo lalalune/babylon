@@ -53,20 +53,25 @@ export function FeedbackHistory({
   useEffect(() => {
     const fetchFeedbackHistory = async () => {
       setLoading(true)
-      const params = new URLSearchParams({
-        limit: limit.toString(),
-        includeAuto: showAutoFeedback.toString(),
-      })
-      const response = await fetch(
-        `/api/feedback/received/${encodeURIComponent(userId)}?${params}`
-      )
-      const data = await response.json()
+      try {
+        const params = new URLSearchParams({
+          limit: limit.toString(),
+          includeAuto: showAutoFeedback.toString(),
+        })
+        const response = await fetch(
+          `/api/feedback/received/${encodeURIComponent(userId)}?${params}`
+        )
+        const data = await response.json()
 
-      if (data.success) {
-        setFeedbackItems(data.feedback || [])
-        setAverageScore(data.averageScore || 0)
+        if (data.success) {
+          setFeedbackItems(data.feedback || [])
+          setAverageScore(data.averageScore || 0)
+        }
+      } catch (error) {
+        console.error('Failed to fetch feedback history:', error)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
 
     fetchFeedbackHistory()
@@ -238,19 +243,24 @@ export function FeedbackSummaryCard({
 
   useEffect(() => {
     const fetchStats = async () => {
-      const response = await fetch(
-        `/api/feedback/stats/${encodeURIComponent(userId)}`
-      )
-      const data = await response.json()
+      try {
+        const response = await fetch(
+          `/api/feedback/stats/${encodeURIComponent(userId)}`
+        )
+        const data = await response.json()
 
-      if (data.success) {
-        setStats({
-          averageScore: data.averageScore || 0,
-          totalFeedback: data.totalCount || 0,
-          recentTrend: data.recentTrend || 0,
-        })
+        if (data.success) {
+          setStats({
+            averageScore: data.averageScore || 0,
+            totalFeedback: data.totalCount || 0,
+            recentTrend: data.recentTrend || 0,
+          })
+        }
+      } catch (error) {
+        console.error('Failed to fetch feedback stats:', error)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
 
     fetchStats()

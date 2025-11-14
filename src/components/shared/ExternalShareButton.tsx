@@ -78,11 +78,9 @@ export function ExternalShareButton({
   }
 
   const handleShareToFarcaster = async () => {
-    // Warpcast compose URL format - use shareText which now includes the link
-    const castText = shareText.includes('http') 
-      ? shareText  // Already has link in text
-      : `${shareText}\n\n${shareUrl}`  // Add link if not present
-    const warpcastUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(castText)}&embeds[]=${encodeURIComponent(shareUrl)}`
+    // Warpcast compose URL format
+    const castText = `${shareText}\n\n${shareUrl}`
+    const warpcastUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(castText)}`
     window.open(warpcastUrl, '_blank', 'width=550,height=600')
     
     const result = authenticated && user
@@ -130,7 +128,7 @@ export function ExternalShareButton({
     <div className="relative">
       <button
         onClick={() => setShowMenu(!showMenu)}
-        className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-primary-foreground transition-colors ${className}`}
+        className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors ${className}`}
         aria-label="Share"
       >
         {shared ? (

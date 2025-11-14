@@ -2,7 +2,7 @@
  * Bias Engine
  *
  * Manages configurable sentiment and price biases for entities.
- * Supports commands like "bias up TeslAI" or "bias down Musk" to create
+ * Supports commands like "bias up Tesla" or "bias down Musk" to create
  * artificial price pressure in perpetual markets and sentiment shifts
  * in prediction markets.
  */
@@ -48,8 +48,8 @@ export class BiasEngine {
    * Add or update a bias configuration
    *
    * @example
-   * biasEngine.setBias('teslai', 'TeslAI', 'up', 0.8, { durationHours: 24 })
-   * biasEngine.setBias('ailon-musk', 'AIlon Musk', 'down', 0.6)
+   * biasEngine.setBias('tesla', 'Tesla', 'up', 0.8, { durationHours: 24 })
+   * biasEngine.setBias('elon-musk', 'Elon Musk', 'down', 0.6)
    */
   setBias(
     entityId: string,
@@ -267,8 +267,8 @@ export class BiasEngine {
    *
    * @example
    * biasEngine.setBulkBiases([
-   *   { entityId: 'teslai', entityName: 'TeslAI', direction: 'up', strength: 0.8 },
-   *   { entityId: 'ailon-musk', entityName: 'AIlon Musk', direction: 'down', strength: 0.6 }
+   *   { entityId: 'tesla', entityName: 'Tesla', direction: 'up', strength: 0.8 },
+   *   { entityId: 'elon-musk', entityName: 'Elon Musk', direction: 'down', strength: 0.6 }
    * ])
    */
   setBulkBiases(

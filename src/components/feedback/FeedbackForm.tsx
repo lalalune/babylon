@@ -53,48 +53,53 @@ export function FeedbackForm({
 
     setSubmitting(true)
 
-    const token = typeof window !== 'undefined' ? window.__privyAccessToken : null
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    }
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
+    try {
+      const token = typeof window !== 'undefined' ? window.__privyAccessToken : null
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
 
-    const response = await fetch('/api/feedback/submit', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        toUserId,
-        score,
-        comment: comment.trim() || null,
-        category,
-        interactionType,
-        metadata: {
-          gameId: gameId || undefined,
-          tradeId: tradeId || undefined,
-        },
-      }),
-    })
+      const response = await fetch('/api/feedback/submit', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          toUserId,
+          score,
+          comment: comment.trim() || null,
+          category,
+          interactionType,
+          metadata: {
+            gameId: gameId || undefined,
+            tradeId: tradeId || undefined,
+          },
+        }),
+      })
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Failed to submit feedback' }))
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Failed to submit feedback' }))
+        throw new Error(error.error || 'Failed to submit feedback')
+      }
+
+      const data = await response.json()
+
+      toast.success(data.message || 'Feedback submitted successfully!')
+
+      // Reset form
+      setScore(70)
+      setComment('')
+
+      if (onSuccess) {
+        onSuccess()
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to submit feedback'
+      toast.error(errorMessage)
+    } finally {
       setSubmitting(false)
-      throw new Error(error.error || 'Failed to submit feedback')
     }
-
-    const data = await response.json()
-
-    toast.success(data.message || 'Feedback submitted successfully!')
-
-    // Reset form
-    setScore(70)
-    setComment('')
-
-    if (onSuccess) {
-      onSuccess()
-    }
-    setSubmitting(false)
   }
 
   return (
@@ -148,7 +153,7 @@ export function FeedbackForm({
           disabled={submitting}
           className={cn(
             'flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold transition-colors',
-            'bg-[#1c9cf0] hover:bg-[#1c9cf0]/90 text-primary-foreground',
+            'bg-[#1c9cf0] hover:bg-[#1c9cf0]/90 text-white',
             'disabled:opacity-50 disabled:cursor-not-allowed'
           )}
         >

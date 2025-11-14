@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import type { Address } from 'viem';
 import { formatEther } from 'viem';
 
-import { Skeleton } from '@/components/shared/Skeleton';
+import { BouncingLogo } from '@/components/shared/BouncingLogo';
 
 import { cn } from '@/lib/utils';
 import { WALLET_ERROR_MESSAGES } from '@/lib/wallet-utils';
@@ -94,32 +94,14 @@ export function BuyPointsModal({
         );
       }
 
-      // Poll for balance updates with timeout (30 seconds)
-      const maxAttempts = 30;
-      const pollInterval = 1000; // 1 second
-      
-      // Show feedback to user
-      toast.info('Waiting for deposit to settle...');
-      
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        const updatedBalance = await refreshBalance();
-        
-        if (updatedBalance && updatedBalance >= requiredAmountWei) {
-          toast.success('Funds received!');
-          return true;
-        }
-        
-        // Wait before next check (except on last attempt)
-        if (attempt < maxAttempts - 1) {
-          await new Promise(resolve => setTimeout(resolve, pollInterval));
-        }
+      const updatedBalance = await refreshBalance();
+      if (!updatedBalance || updatedBalance < requiredAmountWei) {
+        throw new Error(
+          'Funds are still settling. Please try again once the deposit arrives.'
+        );
       }
 
-      // If we get here, funds didn't arrive in time
-      toast.error('Deposit is taking longer than expected');
-      throw new Error(
-        'Funds are still settling. Please try again in a moment once the deposit arrives.'
-      );
+      return true;
     },
     [balance, fundWallet, refreshBalance, smartWalletAddress]
   );
@@ -344,14 +326,13 @@ export function BuyPointsModal({
                 <div className="relative">
                   <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                   <input
-                    data-testid="points-amount-input"
                     type="number"
                     min="1"
                     max="1000"
                     step="1"
                     value={amountUSD}
                     onChange={(e) => setAmountUSD(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-sidebar border border-border rounded-lg focus:outline-none focus:border-border"
+                    className="w-full pl-10 pr-4 py-3 bg-sidebar border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder="10"
                     disabled={loading}
                   />
@@ -381,14 +362,14 @@ export function BuyPointsModal({
               </div>
 
               {/* Points Calculation */}
-              <div className="bg-sidebar border border-border rounded-2xl p-4">
+              <div className="bg-sidebar border border-border rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-muted-foreground">
                     You'll receive:
                   </span>
                   <div className="flex items-center gap-2">
                     <Sparkles className="h-5 w-5 text-yellow-500" />
-                    <span data-testid="points-amount-display" className="text-xl font-bold">
+                    <span className="text-xl font-bold">
                       {pointsAmount.toLocaleString()}
                     </span>
                     <span className="text-sm text-muted-foreground">
@@ -404,7 +385,7 @@ export function BuyPointsModal({
               {/* Info Box */}
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
                 <div className="flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+                  <AlertCircle className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
                   <div className="text-xs text-blue-700 dark:text-blue-300">
                     <p className="font-medium mb-1">
                       Points are non-transferable
@@ -428,7 +409,6 @@ export function BuyPointsModal({
                 Cancel
               </button>
               <button
-                data-testid="buy-points-submit-button"
                 onClick={handleCreatePayment}
                 disabled={loading || amountNum < 1 || amountNum > 1000}
                 className={cn(
@@ -448,7 +428,7 @@ export function BuyPointsModal({
         return (
           <div className="text-center py-8">
             <div className="mx-auto mb-4 flex justify-center">
-              <Skeleton className="h-16 w-16 rounded-full" />
+              <BouncingLogo size={64} />
             </div>
             <h3 className="text-lg font-semibold mb-2">
               {step === 'payment'
@@ -457,12 +437,11 @@ export function BuyPointsModal({
             </h3>
             <p className="text-sm text-muted-foreground mb-4">
               {step === 'payment'
-                ? 'Preparing your payment transaction...'
+                ? 'Please confirm the transaction in your wallet'
                 : 'Confirming your payment on the blockchain'}
             </p>
             {txHash && (
               <a
-                data-testid="transaction-hash-link"
                 href={`https://sepolia.basescan.org/tx/${txHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -476,13 +455,13 @@ export function BuyPointsModal({
 
       case 'success':
         return (
-          <div data-testid="payment-success" className="text-center py-8">
+          <div className="text-center py-8">
             <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">Purchase Successful!</h3>
-            <div className="bg-sidebar border border-border rounded-2xl p-4 mb-6">
+            <div className="bg-sidebar border border-border rounded-lg p-4 mb-6">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <Sparkles className="h-6 w-6 text-yellow-500" />
-                <span data-testid="points-awarded-amount" className="text-2xl font-bold">
+                <span className="text-2xl font-bold">
                   {pointsAwarded.toLocaleString()}
                 </span>
                 <span className="text-muted-foreground">points</span>
@@ -512,10 +491,10 @@ export function BuyPointsModal({
 
       case 'error':
         return (
-          <div data-testid="payment-error" className="text-center py-8">
+          <div className="text-center py-8">
             <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">Payment Failed</h3>
-            <p data-testid="payment-error-message" className="text-sm text-muted-foreground mb-6">
+            <p className="text-sm text-muted-foreground mb-6">
               {error || 'An error occurred during payment'}
             </p>
             <div className="flex gap-3">
@@ -542,7 +521,6 @@ export function BuyPointsModal({
 
   return (
     <div
-      data-testid="buy-points-modal-overlay"
       className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
@@ -551,7 +529,6 @@ export function BuyPointsModal({
       }}
     >
       <div
-        data-testid="buy-points-modal"
         className="bg-background border border-border rounded-xl w-full max-w-md shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >

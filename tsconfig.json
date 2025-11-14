@@ -87,17 +87,14 @@
   "include": [
     "next-env.d.ts",
     "src/**/*",
-    "tests/**/*",
-    "scripts/**/*",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    ".next/dev/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "plugin-babylon",
-    "src/a2a",
-    "**/*.disabled"
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/__tests__/**"
   ]
 }

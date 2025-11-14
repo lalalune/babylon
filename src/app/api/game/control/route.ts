@@ -1,98 +1,7 @@
 /**
- * Game Control API
+ * Game Control API Route
  * 
- * @route POST /api/game/control - Start or pause game
- * @route GET /api/game/control - Get current game state
- * @access POST: Admin (requires ADMIN_TOKEN or dev environment)
- * @access GET: Public
- * 
- * @description
- * Controls the main continuous game engine, allowing administrators to start,
- * pause, and monitor the game state. The game engine drives all in-game events,
- * time progression, market updates, and NPC behaviors.
- * 
- * **POST - Game Control Actions**
- * 
- * Start or pause the game engine. Creates the continuous game if it doesn't
- * exist. Only accessible to administrators or in development mode.
- * 
- * **Actions:**
- * - **start:** Starts the game engine, beginning time progression and events
- * - **pause:** Pauses the game engine, freezing all game state
- * 
- * **Authentication:**
- * Requires `x-admin-token` header matching `ADMIN_TOKEN` environment variable,
- * or must be running in development mode (`NODE_ENV=development`).
- * 
- * @param {string} action - Control action: 'start' | 'pause' (required)
- * 
- * @returns {object} Game state after action
- * @property {boolean} success - Operation success
- * @property {string} action - Action that was performed
- * @property {object} game - Current game state
- * 
- * **GET - Get Game State**
- * 
- * Returns the current state of the continuous game including running status,
- * current day, and timing information. Publicly accessible for monitoring.
- * 
- * @returns {object} Current game state
- * @property {boolean} success - Operation success
- * @property {object|null} game - Game state (null if no game exists)
- * 
- * **Game State Object:**
- * @property {string} id - Game ID
- * @property {boolean} isRunning - Whether game is running
- * @property {boolean} isContinuous - Continuous mode flag
- * @property {number} currentDay - Current day in game timeline
- * @property {string} currentDate - Current game date (ISO)
- * @property {number} speed - Game speed multiplier
- * @property {string} startedAt - When game started (ISO)
- * @property {string} pausedAt - When game was paused (ISO)
- * @property {string} lastTickAt - Last game tick timestamp (ISO)
- * @property {number} activeQuestions - Number of active questions
- * 
- * @throws {400} Invalid action (POST)
- * @throws {401} Unauthorized - admin token required (POST)
- * @throws {500} Internal server error
- * 
- * @example
- * ```typescript
- * // Start the game (admin only)
- * const response = await fetch('/api/game/control', {
- *   method: 'POST',
- *   headers: {
- *     'x-admin-token': process.env.ADMIN_TOKEN
- *   },
- *   body: JSON.stringify({ action: 'start' })
- * });
- * 
- * // Pause the game (admin only)
- * await fetch('/api/game/control', {
- *   method: 'POST',
- *   headers: { 'x-admin-token': process.env.ADMIN_TOKEN },
- *   body: JSON.stringify({ action: 'pause' })
- * });
- * 
- * // Get current game state (public)
- * const state = await fetch('/api/game/control');
- * const { game } = await state.json();
- * console.log(`Game is ${game.isRunning ? 'running' : 'paused'}`);
- * console.log(`Current day: ${game.currentDay}`);
- * ```
- * 
- * **Admin Authentication:**
- * ```typescript
- * // Set in environment
- * ADMIN_TOKEN=your-secret-token
- * 
- * // Use in requests
- * headers: { 'x-admin-token': process.env.ADMIN_TOKEN }
- * ```
- * 
- * @see {@link /lib/game-service} Game engine implementation
- * @see {@link /lib/serverless-game-tick} Game tick logic
- * @see {@link /api/cron/game-tick} Game tick cron job
+ * POST /api/game/control - Start or pause the game
  */
 
 import type { NextRequest } from 'next/server';
@@ -100,7 +9,6 @@ import { asSystem } from '@/lib/db/context';
 import { withErrorHandling, successResponse } from '@/lib/errors/error-handler';
 import { BadRequestError, AuthorizationError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { generateSnowflakeId } from '@/lib/snowflake';
 
 interface ControlRequest {
   action: 'start' | 'pause';
@@ -132,16 +40,12 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
     if (!gameState) {
       // Create the game if it doesn't exist
-      const now = new Date();
       gameState = await db.game.create({
         data: {
-          id: await generateSnowflakeId(),
           isContinuous: true,
           isRunning: action === 'start',
           currentDay: 1,
-          startedAt: action === 'start' ? now : null,
-          createdAt: now,
-          updatedAt: now,
+          startedAt: action === 'start' ? new Date() : null,
         },
       });
       logger.info(`Game created and ${action === 'start' ? 'started' : 'paused'}`, { gameId: gameState.id }, 'Game Control');

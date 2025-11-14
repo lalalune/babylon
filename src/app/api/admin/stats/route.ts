@@ -70,7 +70,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   ] = await Promise.all([
     // User counts
     prisma.user.count(),
-    prisma.actor.count(), // Count from Actor table, not User.isActor
+    prisma.user.count({ where: { isActor: true } }),
     prisma.user.count({ where: { isActor: false } }),
     prisma.user.count({ where: { isBanned: true } }),
     prisma.user.count({ where: { isAdmin: true } }),

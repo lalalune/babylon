@@ -69,7 +69,6 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         timestamp: {
           gte: oneDayAgo,
         },
-        deletedAt: null, // Filter out deleted posts
       },
       orderBy: {
         timestamp: 'desc',
@@ -116,7 +115,6 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         timestamp: {
           gte: oneDayAgo,
         },
-        deletedAt: null, // Filter out deleted posts
       },
       orderBy: {
         timestamp: 'desc',

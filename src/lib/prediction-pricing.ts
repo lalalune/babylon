@@ -14,8 +14,6 @@ export interface ShareCalculation {
   newNoPrice: number;
   priceImpact: number;
   totalCost: number;
-  newYesShares: number;
-  newNoShares: number;
 }
 
 export interface ShareCalculationWithFees extends ShareCalculation {
@@ -35,41 +33,20 @@ export class PredictionPricing {
     side: 'yes' | 'no',
     usdAmount: number
   ): ShareCalculation {
-    if (usdAmount <= 0) {
-      throw new Error('Trade amount must be positive');
-    }
-
     const k = currentYesShares * currentNoShares;
-    if (k <= 0) {
-      throw new Error('Market has insufficient liquidity');
-    }
-
     const currentTotal = currentYesShares + currentNoShares;
     const currentYesPrice = currentNoShares / currentTotal;
     const currentNoPrice = currentYesShares / currentTotal;
 
     let newYesShares: number;
     let newNoShares: number;
-    let sharesBought: number;
 
-    // CPMM: User pays USD, gets shares
-    // USD goes to opposite side reserves, shares come from same side reserves
     if (side === 'yes') {
-      // User pays USD → increases NO reserves
-      // User gets YES shares → decreases YES reserves
-      newNoShares = currentNoShares + usdAmount;
-      newYesShares = k / newNoShares;
-      sharesBought = currentYesShares - newYesShares;
-    } else {
-      // User pays USD → increases YES reserves  
-      // User gets NO shares → decreases NO reserves
       newYesShares = currentYesShares + usdAmount;
       newNoShares = k / newYesShares;
-      sharesBought = currentNoShares - newNoShares;
-    }
-
-    if (sharesBought <= 0) {
-      throw new Error('Calculated shares purchased must be positive');
+    } else {
+      newNoShares = currentNoShares + usdAmount;
+      newYesShares = k / newNoShares;
     }
 
     const newTotal = newYesShares + newNoShares;
@@ -82,14 +59,12 @@ export class PredictionPricing {
         : ((newNoPrice - currentNoPrice) / currentNoPrice) * 100;
 
     return {
-      sharesBought,
-      avgPrice: usdAmount / sharesBought,
+      sharesBought: usdAmount,
+      avgPrice: 1, // ~$1 per share in CPMM
       newYesPrice,
       newNoPrice,
       priceImpact,
       totalCost: usdAmount,
-      newYesShares,
-      newNoShares,
     };
   }
 
@@ -102,41 +77,21 @@ export class PredictionPricing {
     side: 'yes' | 'no',
     sharesToSell: number
   ): ShareCalculation {
-    if (sharesToSell <= 0) {
-      throw new Error('Shares to sell must be positive');
-    }
-
     const k = currentYesShares * currentNoShares;
-    if (k <= 0) {
-      throw new Error('Market has insufficient liquidity');
-    }
-
     const currentTotal = currentYesShares + currentNoShares;
     const currentYesPrice = currentNoShares / currentTotal;
     const currentNoPrice = currentYesShares / currentTotal;
 
     let newYesShares: number;
     let newNoShares: number;
-    let proceeds: number;
 
-    // CPMM: User returns shares, gets USD
-    // Shares go back to same side reserves, USD comes from opposite side reserves
+    // When selling, we remove shares from the pool (opposite of buying)
     if (side === 'yes') {
-      // User returns YES shares → increases YES reserves
-      // User gets USD → decreases NO reserves
-      newYesShares = currentYesShares + sharesToSell;
+      newYesShares = currentYesShares - sharesToSell;
       newNoShares = k / newYesShares;
-      proceeds = currentNoShares - newNoShares;
     } else {
-      // User returns NO shares → increases NO reserves
-      // User gets USD → decreases YES reserves
-      newNoShares = currentNoShares + sharesToSell;
+      newNoShares = currentNoShares - sharesToSell;
       newYesShares = k / newNoShares;
-      proceeds = currentYesShares - newYesShares;
-    }
-
-    if (!Number.isFinite(proceeds) || proceeds <= 0) {
-      throw new Error('Calculated proceeds must be positive');
     }
 
     const newTotal = newYesShares + newNoShares;
@@ -144,6 +99,10 @@ export class PredictionPricing {
     const newNoPrice = newYesShares / newTotal;
 
     // Calculate proceeds (how much USD user gets back)
+    const proceeds = side === 'yes'
+      ? (currentNoShares - newNoShares)
+      : (currentYesShares - newYesShares);
+
     const priceImpact =
       side === 'yes'
         ? ((currentYesPrice - newYesPrice) / currentYesPrice) * 100
@@ -156,8 +115,6 @@ export class PredictionPricing {
       newNoPrice,
       priceImpact,
       totalCost: proceeds, // Proceeds for selling
-      newYesShares,
-      newNoShares,
     };
   }
 
@@ -205,10 +162,10 @@ export class PredictionPricing {
     
     return {
       ...baseCalc,
-      fee,
-      netAmount,
+      fee: Number(fee.toFixed(2)),
+      netAmount: Number(netAmount.toFixed(2)),
       totalWithFee: totalAmount,
-      totalCost: netAmount,
+      totalCost: netAmount, // Cost to market is net amount
     }
   }
 
@@ -236,10 +193,10 @@ export class PredictionPricing {
     
     return {
       ...baseCalc,
-      fee,
-      netAmount: netProceeds,
-      netProceeds,
-      totalCost: grossProceeds,
+      fee: Number(fee.toFixed(2)),
+      netAmount: Number(netProceeds.toFixed(2)),
+      netProceeds: Number(netProceeds.toFixed(2)),
+      totalCost: grossProceeds, // Gross proceeds
     }
   }
 }

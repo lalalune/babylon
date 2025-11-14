@@ -72,15 +72,21 @@ export async function createAgentSession(agentId: string, sessionToken: string):
   };
 
   if (useRedis && redis) {
-    const key = `${SESSION_PREFIX}${sessionToken}`;
+    try {
+      const key = `${SESSION_PREFIX}${sessionToken}`;
 
-    if (redisClientType === 'upstash') {
-      await (redis as UpstashRedis).set(key, JSON.stringify(session), {
-        ex: Math.ceil(SESSION_DURATION / 1000),
-      });
-    } else if (redisClientType === 'standard') {
-      await (redis as IORedis).set(key, JSON.stringify(session), 'PX', SESSION_DURATION);
-    } else {
+      if (redisClientType === 'upstash') {
+        await (redis as UpstashRedis).set(key, JSON.stringify(session), {
+          ex: Math.ceil(SESSION_DURATION / 1000),
+        });
+      } else if (redisClientType === 'standard') {
+        await (redis as IORedis).set(key, JSON.stringify(session), 'PX', SESSION_DURATION);
+      } else {
+        agentSessions.set(sessionToken, session);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logger.error('Failed to persist agent session in Redis', { error: errorMessage }, 'AgentAuth');
       agentSessions.set(sessionToken, session);
     }
   } else {
@@ -95,27 +101,37 @@ export async function createAgentSession(agentId: string, sessionToken: string):
  */
 export async function verifyAgentSession(sessionToken: string): Promise<{ agentId: string } | null> {
   if (useRedis && redis) {
-    const key = `${SESSION_PREFIX}${sessionToken}`;
-    let stored: string | null = null;
+    try {
+      const key = `${SESSION_PREFIX}${sessionToken}`;
+      let stored: unknown = null;
 
-    if (redisClientType === 'upstash') {
-      stored = await (redis as UpstashRedis).get<string>(key);
-    } else if (redisClientType === 'standard') {
-      stored = await (redis as IORedis).get(key);
-    }
-
-    if (stored) {
-      const session = JSON.parse(stored) as AgentSession;
-      if (Date.now() <= session.expiresAt) {
-        return { agentId: session.agentId };
-      }
-      // Session expired - delete it
       if (redisClientType === 'upstash') {
-        await (redis as UpstashRedis).del(key);
+        stored = await (redis as UpstashRedis).get<string | null>(key);
       } else if (redisClientType === 'standard') {
-        await (redis as IORedis).del(key);
+        stored = await (redis as IORedis).get(key);
       }
-      return null;
+
+      if (typeof stored === 'string') {
+        const session = JSON.parse(stored) as AgentSession;
+        if (Date.now() <= session.expiresAt) {
+          return { agentId: session.agentId };
+        }
+        // Session expirée : suppression best-effort
+        try {
+          if (redisClientType === 'upstash') {
+            await (redis as UpstashRedis).del(key);
+          } else if (redisClientType === 'standard') {
+            await (redis as IORedis).del(key);
+          }
+        } catch {
+          // Ignore cleanup errors
+        }
+        return null;
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logger.error('Failed to read agent session from Redis', { error: errorMessage }, 'AgentAuth');
+      // Fallback en mémoire
     }
   }
 

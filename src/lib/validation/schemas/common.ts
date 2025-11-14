@@ -3,22 +3,9 @@
  */
 
 import { z } from 'zod';
-import { isValidSnowflakeId } from '@/lib/snowflake';
-
-/**
- * Snowflake ID validation schema
- * Used for all entity IDs in the system (users, markets, positions, etc.)
- */
-export const SnowflakeIdSchema = z.string().refine(
-  (val) => isValidSnowflakeId(val),
-  {
-    message: 'Invalid Snowflake ID format'
-  }
-);
 
 /**
  * UUID validation schema
- * Kept for legacy compatibility and external system integration
  */
 export const UUIDSchema = z.string().uuid({
   message: 'Invalid UUID format'
@@ -295,10 +282,10 @@ export const FileUploadSchema = z.object({
 });
 
 /**
- * Generic ID parameter schema - uses Snowflake IDs
+ * Generic ID parameter schema
  */
 export const IdParamSchema = z.object({
-  id: SnowflakeIdSchema
+  id: UUIDSchema
 });
 
 /**
@@ -341,6 +328,5 @@ export function createBatchSchema<T extends z.ZodType>(itemSchema: T, maxItems: 
 export const LeaderboardQuerySchema = z.object({
   page: z.coerce.number().positive().default(1),
   pageSize: z.coerce.number().positive().max(100).default(100),
-  minPoints: z.coerce.number().nonnegative().default(500), // Show all with >500 reputation
-  pointsType: z.enum(['all', 'earned', 'referral']).optional(),
+  minPoints: z.coerce.number().nonnegative().default(500) // Show all with >500 reputation
 });

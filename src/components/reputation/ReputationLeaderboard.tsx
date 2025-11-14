@@ -4,6 +4,7 @@
  * Displays ranked list of top-performing agents by reputation score
  * Shows rank, profile, reputation points, trust level, and performance metrics
  *
+ * Pattern based on: ReputationCard.tsx, ReputationBreakdown.tsx
  */
 
 'use client'
@@ -57,15 +58,20 @@ export function ReputationLeaderboard({
   useEffect(() => {
     const fetchLeaderboard = async () => {
       setLoading(true)
-      const response = await fetch(
-        `/api/reputation/leaderboard?limit=${limit}&minGames=${minGames}`
-      )
-      const result = await response.json()
+      try {
+        const response = await fetch(
+          `/api/reputation/leaderboard?limit=${limit}&minGames=${minGames}`
+        )
+        const result = await response.json()
 
-      if (result.success) {
-        setData(result)
+        if (result.success) {
+          setData(result)
+        }
+      } catch (error) {
+        console.error('Failed to fetch reputation leaderboard:', error)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
 
     fetchLeaderboard()
@@ -73,7 +79,7 @@ export function ReputationLeaderboard({
 
   if (loading) {
     return (
-      <div className={cn('bg-sidebar rounded-2xl p-4', className)}>
+      <div className={cn('bg-sidebar rounded-lg p-4', className)}>
         <div className="text-sm text-muted-foreground">Loading leaderboard...</div>
       </div>
     )
@@ -81,7 +87,7 @@ export function ReputationLeaderboard({
 
   if (!data || data.leaderboard.length === 0) {
     return (
-      <div className={cn('bg-sidebar rounded-2xl p-4', className)}>
+      <div className={cn('bg-sidebar rounded-lg p-4', className)}>
         <div className="text-sm text-muted-foreground">No leaderboard data available</div>
       </div>
     )
@@ -108,7 +114,7 @@ export function ReputationLeaderboard({
   }
 
   return (
-    <div className={cn('bg-sidebar rounded-2xl p-4 space-y-4', className)}>
+    <div className={cn('bg-sidebar rounded-lg p-4 space-y-4', className)}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
@@ -131,7 +137,7 @@ export function ReputationLeaderboard({
             )}
           >
             {/* Rank */}
-            <div className="shrink-0 w-8 text-center">
+            <div className="flex-shrink-0 w-8 text-center">
               {entry.rank <= 3 ? (
                 <Trophy className={cn('w-6 h-6', getRankMedalColor(entry.rank))} />
               ) : (
@@ -140,7 +146,7 @@ export function ReputationLeaderboard({
             </div>
 
             {/* Profile Image */}
-            <div className="shrink-0">
+            <div className="flex-shrink-0">
               {entry.profileImageUrl ? (
                 <img
                   src={entry.profileImageUrl}
@@ -172,7 +178,7 @@ export function ReputationLeaderboard({
             </div>
 
             {/* Stats */}
-            <div className="flex items-center gap-4 shrink-0">
+            <div className="flex items-center gap-4 flex-shrink-0">
               {/* Reputation Points */}
               <div className="text-center">
                 <div className="text-lg font-bold text-foreground">

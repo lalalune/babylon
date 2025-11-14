@@ -2,7 +2,7 @@ import { definePrompt } from '../define-prompt';
 
 export const phaseContext = definePrompt({
   id: 'phase-context',
-  version: '2.0.0',
+  version: '1.0.0',
   category: 'game',
   description: 'Provides phase-specific narrative instructions for content generation',
   temperature: 0,

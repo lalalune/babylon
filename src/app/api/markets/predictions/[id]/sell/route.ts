@@ -16,7 +16,6 @@ import { logger } from '@/lib/logger';
 import { FeeService } from '@/lib/services/fee-service';
 import { FEE_CONFIG } from '@/lib/config/fees';
 import { trackServerEvent } from '@/lib/posthog/server';
-import { IdParamSchema } from '@/lib/validation/schemas';
 /**
  * POST /api/markets/predictions/[id]/sell
  * Sell shares from prediction market position
@@ -26,7 +25,7 @@ export const POST = withErrorHandling(async (
   context: { params: Promise<{ id: string }> }
 ) => {
   const user = await authenticate(request);
-  const { id: marketId } = IdParamSchema.parse(await context.params);
+  const { id: marketId } = await context.params;
 
   if (!marketId) {
     throw new BusinessLogicError('Market ID is required', 'MARKET_ID_REQUIRED');
@@ -86,7 +85,6 @@ export const POST = withErrorHandling(async (
 
       const endDate = new Date(question.resolutionDate);
       const initialLiquidity = 1000;
-      const now = new Date();
 
       market = await db.market.upsert({
         where: { id: question.id },
@@ -102,8 +100,6 @@ export const POST = withErrorHandling(async (
           resolved: false,
           resolution: null,
           endDate: endDate,
-          createdAt: now,
-          updatedAt: now,
         },
         update: {},
       });
@@ -161,8 +157,8 @@ export const POST = withErrorHandling(async (
     await db.market.update({
       where: { id: marketId },
       data: {
-        yesShares: new Prisma.Decimal(calculation.newYesShares),
-        noShares: new Prisma.Decimal(calculation.newNoShares),
+        yesShares: new Prisma.Decimal(calculation.newYesPrice * (Number(market.yesShares) + Number(market.noShares))),
+        noShares: new Prisma.Decimal(calculation.newNoPrice * (Number(market.yesShares) + Number(market.noShares))),
         liquidity: {
           decrement: new Prisma.Decimal(grossProceeds),
         },
@@ -188,7 +184,7 @@ export const POST = withErrorHandling(async (
     // Calculate PnL (use net proceeds)
     const costBasis = Number(position.avgPrice) * shares;
     const profitLoss = netProceeds - costBasis;
-    await WalletService.recordPnL(user.userId, profitLoss, 'prediction_sell', marketId);
+    await WalletService.recordPnL(user.userId, profitLoss);
 
     return { 
       grossProceeds,

@@ -2,14 +2,13 @@
 
 import { CreatePostModal } from '@/components/posts/CreatePostModal'
 import { PostCard } from '@/components/posts/PostCard'
-import { ArticleCard } from '@/components/articles/ArticleCard'
 import { FeedToggle } from '@/components/shared/FeedToggle'
 import { InviteFriendsBanner } from '@/components/shared/InviteFriendsBanner'
 import { PageContainer } from '@/components/shared/PageContainer'
 import { PullToRefreshIndicator } from '@/components/shared/PullToRefreshIndicator'
+import { SearchBar } from '@/components/shared/SearchBar'
 import { FeedSkeleton } from '@/components/shared/Skeleton'
 import { WidgetSidebar } from '@/components/shared/WidgetSidebar'
-import { TradesFeed } from '@/components/trades/TradesFeed'
 import { useWidgetRefresh } from '@/contexts/WidgetRefreshContext'
 import { useAuth } from '@/hooks/useAuth'
 import { useErrorToasts } from '@/hooks/useErrorToasts'
@@ -18,20 +17,28 @@ import { cn } from '@/lib/utils'
 import type { FeedPost } from '@/shared/types'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
-import { useFeedStore } from '@/stores/feedStore'
 import { Plus } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react'
 
 const PAGE_SIZE = 20
 
 function FeedPageContent() {
   const router = useRouter()
-  const { authenticated, getAccessToken } = useAuth()
+  const searchParams = useSearchParams()
+  const { authenticated } = useAuth()
   const { user } = useAuthStore()
   const { refreshAll: refreshWidgets } = useWidgetRefresh()
-  const { registerOptimisticPostCallback, unregisterOptimisticPostCallback } = useFeedStore()
-  const [tab, setTab] = useState<'latest' | 'following' | 'trades'>('latest')
+  const [tab, setTab] = useState<'latest' | 'following'>('latest')
+  const [searchQuery, setSearchQuery] = useState('')
+  
+  // Read search query from URL params on mount
+  useEffect(() => {
+    const searchParam = searchParams.get('search')
+    if (searchParam) {
+      setSearchQuery(searchParam)
+    }
+  }, [searchParams])
   const [posts, setPosts] = useState<FeedPost[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -44,20 +51,6 @@ function FeedPageContent() {
   const [actorNames, setActorNames] = useState<Map<string, string>>(new Map())
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
-  
-  // Track locally created posts (optimistic UI)
-  const [localPosts, setLocalPosts] = useState<FeedPost[]>([])
-  
-  // Ref for scroll container (used by TradesFeed)
-  const scrollContainerRefObject = useRef<HTMLDivElement | null>(null)
-  
-  // Ref to track current posts for duplicate detection (avoids stale closure)
-  const postsRef = useRef<FeedPost[]>(posts)
-  
-  // Keep ref in sync with state
-  useEffect(() => {
-    postsRef.current = posts
-  }, [posts])
   
   // Smart banner frequency based on user referrals
   const calculateBannerInterval = () => {
@@ -113,21 +106,9 @@ function FeedPageContent() {
     loadActorNames()
   }, [])
 
-  // Register callback for optimistic posts (e.g., from quote reposts)
-  useEffect(() => {
-    const handleOptimisticPost = (post: FeedPost) => {
-      setLocalPosts(prev => [post, ...prev])
-    }
-
-    registerOptimisticPostCallback(handleOptimisticPost)
-
-    return () => {
-      unregisterOptimisticPostCallback()
-    }
-  }, [registerOptimisticPostCallback, unregisterOptimisticPostCallback])
-
   const fetchLatestPosts = useCallback(async (requestOffset: number, append = false, skipLoadingState = false) => {
     if (tab !== 'latest') return
+
     if (!skipLoadingState) {
       if (append) setLoadingMore(true)
       else setLoading(true)
@@ -136,7 +117,6 @@ function FeedPageContent() {
     const response = await fetch(`/api/posts?limit=${PAGE_SIZE}&offset=${requestOffset}`)
     if (!response.ok) {
       if (append) setHasMore(false)
-      setLoadingMore(false)
       return
     }
 
@@ -144,35 +124,10 @@ function FeedPageContent() {
     const newPosts = data.posts as FeedPost[]
     const total = data.total as number | undefined
 
-    // CRITICAL: Check for duplicates BEFORE any setState
-    // Use ref to get current posts (not stale closure)
-    const currentPosts = postsRef.current
-    const existingPostIds = new Set(currentPosts.map(p => p.id))
-    const duplicateCount = newPosts.filter(post => existingPostIds.has(post.id)).length
-    
-    // If we're appending and ALL posts are duplicates, we've hit offset drift
-    // Retry with corrected offset BEFORE any state updates
-    if (append && duplicateCount === newPosts.length && duplicateCount > 0) {
-      console.log(`♻️ ALL ${duplicateCount} posts are duplicates! Retrying with offset ${requestOffset + duplicateCount}`)
-      setLoadingMore(false)
-      await fetchLatestPosts(requestOffset + duplicateCount, true, skipLoadingState)
-      return
-    }
-    
-    // If we have SOME duplicates (but not all), retry to get clean page
-    if (append && duplicateCount > newPosts.length / 2) {
-      console.log(`♻️ Found ${duplicateCount}/${newPosts.length} duplicates! Retrying with offset ${requestOffset + duplicateCount}`)
-      setLoadingMore(false)
-      await fetchLatestPosts(requestOffset + duplicateCount, true, skipLoadingState)
-      return
-    }
-
-    // No significant duplicates - proceed with normal update
     let uniqueAdded = 0
 
     setPosts(prev => {
       const prevSize = prev.length
-      
       const combined = append ? [...prev, ...newPosts] : [...newPosts, ...prev]
       const unique = new Map<string, FeedPost>()
       combined.forEach(post => {
@@ -184,35 +139,14 @@ function FeedPageContent() {
         const bTime = new Date(b.timestamp ?? 0).getTime()
         return bTime - aTime
       })
-      
+
       uniqueAdded = deduped.length - prevSize
       setOffset(deduped.length)
-      
       return deduped
     })
-    
-    // Clear local posts when refreshing (not appending) as they should now be in the API response
-    if (!append) {
-      setLocalPosts(prev => {
-        // Remove any local posts that are now in the API response
-        const newPostIds = new Set(newPosts.map(p => p.id))
-        const fiveMinutesAgo = Date.now() - 5 * 60 * 1000
-        
-        return prev.filter(localPost => {
-          // Remove if post is in API response
-          if (newPostIds.has(localPost.id)) return false
-          
-          // Remove if post is older than 5 minutes (likely failed to save)
-          const postTime = new Date(localPost.timestamp).getTime()
-          if (postTime < fiveMinutesAgo) return false
-          
-          return true
-        })
-      })
-    }
 
     if (append && uniqueAdded === 0) {
-      setLoadingMore(false)
+      setHasMore(false)
       return
     }
 
@@ -233,33 +167,22 @@ function FeedPageContent() {
   }, [tab])
 
   const handleRefresh = useCallback(async () => {
-    if (tab !== 'latest' && tab !== 'trades') return
-    if (tab === 'latest') {
-      // Use skipLoadingState=true since pull-to-refresh shows its own loading indicator
-      await fetchLatestPosts(0, false, true)
-      // Also refresh widgets
-      refreshWidgets()
-    }
-    // For trades tab, the TradesFeed component handles its own refresh
+    if (tab !== 'latest') return
+    // Use skipLoadingState=true since pull-to-refresh shows its own loading indicator
+    await fetchLatestPosts(0, false, true)
+    // Also refresh widgets
+    refreshWidgets()
   }, [tab, fetchLatestPosts, refreshWidgets])
 
   // Pull-to-refresh hook
   const {
     pullDistance,
     isRefreshing,
-    containerRef: scrollContainerCallbackRef,
+    containerRef: scrollContainerRef,
   } = usePullToRefresh({
     onRefresh: handleRefresh,
-    enabled: tab === 'latest' || tab === 'trades',
+    enabled: tab === 'latest',
   })
-
-  // Combine callback ref from usePullToRefresh with our RefObject
-  const scrollContainerRef = useCallback((node: HTMLDivElement | null) => {
-    scrollContainerCallbackRef(node)
-    if (scrollContainerRefObject.current !== node) {
-      scrollContainerRefObject.current = node
-    }
-  }, [scrollContainerCallbackRef])
 
   // Initial load and reset when switching to latest tab
   useEffect(() => {
@@ -284,7 +207,8 @@ function FeedPageContent() {
           entry?.isIntersecting &&
           hasMore &&
           !loading &&
-          !loadingMore
+          !loadingMore &&
+          !searchQuery.trim()
         ) {
           void fetchLatestPosts(offset, true)
         }
@@ -296,7 +220,7 @@ function FeedPageContent() {
     return () => {
       observer.disconnect()
     }
-  }, [tab, hasMore, loading, loadingMore, offset, fetchLatestPosts])
+  }, [tab, hasMore, loading, loadingMore, searchQuery, offset, fetchLatestPosts])
 
   useEffect(() => {
     const fetchFollowingPosts = async () => {
@@ -309,13 +233,12 @@ function FeedPageContent() {
 
       setLoadingFollowing(true)
       
-      const token = await getAccessToken()
+      const token = typeof window !== 'undefined' ? window.__privyAccessToken : null
 
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
       }
 
-      
       if (token) {
         headers['Authorization'] = `Bearer ${token}`
       }
@@ -335,9 +258,15 @@ function FeedPageContent() {
 
   // Compute timeline-visible posts from game (mirrors viewer FeedView)
   const timelinePosts = useMemo(() => {
-    if (!startTime || !currentDate || allGames.length === 0) return [] as FeedPost[]
+    if (!startTime || !currentDate || allGames.length === 0) return [] as Array<{
+      id: string
+      content: string
+      authorId: string
+      authorName: string
+      timestamp: string
+    }>
 
-    const items: Array<{ id: string; content: string; author: string; authorId: string; authorName: string; timestamp: string; timestampMs: number }>= []
+    const items: Array<{ id: string; content: string; authorId: string; authorName: string; timestamp: string; timestampMs: number }>= []
 
     allGames.forEach((g) => {
       g.timeline?.forEach((day) => {
@@ -346,7 +275,6 @@ function FeedPageContent() {
           items.push({
             id: `game-${g.id}-${post.timestamp}`,
             content: post.content,
-            author: post.author, // Required by FeedPost interface
             authorId: post.author,
             authorName: post.authorName,
             timestamp: post.timestamp,
@@ -362,56 +290,81 @@ function FeedPageContent() {
       .sort((a, b) => b.timestampMs - a.timestampMs)
       .map(({ timestampMs: _timestampMs, ...rest }) => {
         // Explicitly exclude timestampMs from the result
-        return rest as FeedPost
+        return rest
       })
   }, [allGames, startTime, currentTimeMs])
 
-  // Choose data source: always use API posts for latest tab (game tick persists to database)
+  // Choose data source: always use API posts for latest tab (GameEngine persists to database)
   // For following tab, use followingPosts
   // Only use timelinePosts if we have no API posts (fallback for viewer mode)
-  const apiPosts = (tab === 'following') 
+  const basePosts = (tab === 'following') 
     ? followingPosts 
     : (posts.length > 0 ? posts : (startTime && allGames.length > 0 ? timelinePosts : posts))
-  
-  // Combine local posts (optimistic UI) with API posts, deduplicating by ID
-  const basePosts = useMemo(() => {
-    if (tab !== 'latest') return apiPosts
-    
-    // Efficient deduplication using Map (O(n) instead of O(n²))
-    // Local posts come first to ensure they appear at the top
-    const postMap = new Map<string, FeedPost>()
-    
-    // Add local posts first (they take priority)
-    localPosts.forEach(post => postMap.set(post.id, post))
-    
-    // Add API posts (will not override local posts with same ID)
-    apiPosts.forEach(post => {
-      if (!postMap.has(post.id)) {
-        postMap.set(post.id, post)
-      }
-    })
-    
-    // Convert back to array and sort by timestamp
-    return Array.from(postMap.values()).sort((a, b) => {
-      const aTime = new Date(a.timestamp ?? 0).getTime()
-      const bTime = new Date(b.timestamp ?? 0).getTime()
-      return bTime - aTime
-    })
-  }, [tab, localPosts, apiPosts])
 
-  // Removed early loading return to prevent layout shifts - loading state is handled inline
+  const filteredPosts = useMemo(() => {
+    if (!searchQuery.trim()) return basePosts
+    const query = searchQuery.toLowerCase()
+    return basePosts.filter((post) => {
+      const postContent = String(post.content)
+      const authorField = 'author' in post ? String(post.author) : String(post.authorId)
+      const postAuthorName = String(post.authorName)
+      return (
+        postContent.toLowerCase().includes(query) ||
+        authorField.toLowerCase().includes(query) ||
+        postAuthorName.toLowerCase().includes(query)
+      )
+    })
+  }, [basePosts, searchQuery])
+
+  if (loading) {
+    return (
+      <PageContainer noPadding className="flex flex-col">
+        <FeedToggle activeTab={tab} onTabChange={setTab} />
+        <div className="flex-1 overflow-y-auto">
+          <div className="w-full px-4 sm:px-6">
+            <FeedSkeleton count={8} />
+          </div>
+        </div>
+      </PageContainer>
+    )
+  }
 
   return (
-    <PageContainer noPadding className="flex flex-col h-full w-full overflow-hidden">
-      {/* Single responsive layout */}
-      <div className="flex flex-1 min-h-0">
-        {/* Feed area - responsive width and borders */}
-        <div className="flex-1 flex flex-col min-w-0 lg:border-l lg:border-r border-[rgba(120,120,120,0.5)]">
-          {/* Header with tabs - responsive positioning and padding */}
+    <PageContainer noPadding className="flex flex-col min-h-screen w-full overflow-visible">
+      {/* Mobile: Header with tabs and search */}
+      <div className="sticky top-0 z-10 bg-background shadow-sm flex-shrink-0 md:hidden">
+        <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-2">
+          {/* Tabs on left */}
+          <div className="flex-shrink-0">
+            <FeedToggle activeTab={tab} onTabChange={setTab} />
+          </div>
+          {/* Search on right */}
+          <div className="flex-1 max-w-[200px]">
+            <SearchBar
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Search..."
+              compact
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop: Multi-column layout with scrollable feed */}
+      <div className="hidden lg:flex flex-1 min-h-0">
+        {/* Left: Feed area - aligned with sidebar, full width */}
+        <div className="flex-1 flex flex-col min-w-0 border-l border-r border-[rgba(120,120,120,0.5)]">
+          {/* Desktop: Top bar with tabs, search, and post button */}
           <div className="sticky top-0 z-10 bg-background shadow-sm flex-shrink-0">
-            <div className="px-3 sm:px-4 lg:px-6 py-2 lg:py-4">
-              <div className="flex items-center justify-between lg:mb-3">
+            <div className="px-6 py-4">
+              {/* Top row: Tabs and Post button */}
+              <div className="flex items-center justify-between mb-3">
                 <FeedToggle activeTab={tab} onTabChange={setTab} />
+                <SearchBar
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder="Search..."
+                />
               </div>
             </div>
           </div>
@@ -421,22 +374,19 @@ function FeedPageContent() {
             ref={scrollContainerRef}
             className="flex-1 bg-background overflow-y-auto overflow-x-hidden"
           >
-            {/* Content wrapper - responsive padding and max-width */}
-            <div className="w-full px-4 lg:px-6 lg:max-w-[700px] lg:mx-auto">
-              {/* Pull to refresh indicator */}
+            <div className="w-full max-w-[700px] mx-auto">
+              {/* Pull to refresh indicator (desktop) */}
               <PullToRefreshIndicator
                 pullDistance={pullDistance}
                 isRefreshing={isRefreshing}
               />
-              
-              {tab === 'trades' ? (
-                // Trades tab - use TradesFeed component
-                <TradesFeed containerRef={scrollContainerRefObject} />
-              ) : (loading || (tab === 'following' && loadingFollowing)) ? (
-                <div className="w-full">
-                  <FeedSkeleton count={5} />
-                </div>
-              ) : basePosts.length === 0 && tab === 'latest' ? (
+            </div>
+            
+            {(loading || (tab === 'following' && loadingFollowing)) ? (
+              <div className="w-full max-w-[700px] mx-auto px-6">
+                <FeedSkeleton count={6} />
+              </div>
+            ) : filteredPosts.length === 0 && !searchQuery && tab === 'latest' ? (
                 // No posts yet
                 <div className="w-full p-4 sm:p-8 text-center">
                   <div className="text-muted-foreground py-8 sm:py-12">
@@ -450,11 +400,11 @@ function FeedPageContent() {
                     </div>
                   </div>
                 </div>
-              ) : basePosts.length === 0 && tab === 'following' ? (
+              ) : filteredPosts.length === 0 && !searchQuery && tab === 'following' ? (
                 // Following tab with no followed profiles
                 <div className="w-full p-4 sm:p-8 text-center">
                   <div className="text-muted-foreground py-8 sm:py-12">
-                    <h2 className="text-lg sm:text-xl font-semibold mb-2 text-foreground">👥 Not Following Anyone Yet</h2>
+                    <h2 className="font-semibold mb-2 text-foreground">👥 Not Following Anyone Yet</h2>
                     <p className="mb-4 text-sm sm:text-base">
                       {loadingFollowing
                         ? 'Loading following...'
@@ -462,20 +412,41 @@ function FeedPageContent() {
                     </p>
                   </div>
                 </div>
-              ) : basePosts.length === 0 ? (
+              ) : filteredPosts.length === 0 && !searchQuery ? (
                 // Game loaded but no visible posts yet
                 <div className="w-full p-4 sm:p-8 text-center">
+                <div className="text-muted-foreground py-8 sm:py-12">
+                  <h2 className="text-lg sm:text-xl font-semibold mb-2 text-foreground">⏱️ No Posts Yet</h2>
+                  <p className="mb-4 text-sm sm:text-base">
+                    Game is running in the background via realtime-daemon. Content will appear here as it&apos;s generated.
+                  </p>
+                </div>
+                </div>
+              ) : filteredPosts.length === 0 && searchQuery ? (
+                // No search results
+                <div className="w-full p-4 sm:p-8 text-center">
                   <div className="text-muted-foreground py-8 sm:py-12">
-                    <h2 className="text-lg sm:text-xl font-semibold mb-2 text-foreground">⏱️ No Posts Yet</h2>
-                    <p className="mb-4 text-sm sm:text-base">
-                      Game tick runs every 60 seconds. Content will appear here as it&apos;s generated.
+                    <h2 className="text-lg sm:text-xl font-semibold mb-2 text-foreground">No Results</h2>
+                    <p className="mb-4 text-sm sm:text-base break-words">
+                      No posts found matching &quot;{searchQuery}&quot;
                     </p>
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className={cn(
+                        'inline-block px-4 sm:px-6 py-2 sm:py-3 font-semibold rounded text-sm sm:text-base cursor-pointer',
+                        'bg-[#3462f3] text-white',
+                        'hover:bg-[#2952d9]',
+                        'transition-all duration-300'
+                      )}
+                    >
+                      Clear Search
+                    </button>
                   </div>
                 </div>
-              ) : (
-                // Show posts - single implementation
-                <div className="w-full space-y-0">
-                  {basePosts.map((post, i: number) => {
+            ) : (
+              // Show posts - centered container
+              <div className="w-full px-6 space-y-0 max-w-[700px] mx-auto">
+                {filteredPosts.map((post, i: number) => {
                     // Handle both FeedPost (from game store) and API post shapes
                     // API posts have authorId, FeedPost has author (both are author IDs)
                     const authorId = ('authorId' in post ? post.authorId : post.author) || ''
@@ -487,12 +458,7 @@ function FeedPageContent() {
 
                     const postData = {
                       id: post.id,
-                      type: ('type' in post ? post.type : undefined) || undefined,
                       content: post.content,
-                      articleTitle: ('articleTitle' in post ? post.articleTitle : null) || null,
-                      byline: ('byline' in post ? post.byline : null) || null,
-                      biasScore: ('biasScore' in post ? post.biasScore : null) ?? null,
-                      category: ('category' in post ? post.category : null) || null,
                       authorId,
                       authorName,
                       authorUsername: ('authorUsername' in post ? post.authorUsername : null) || null,
@@ -503,30 +469,14 @@ function FeedPageContent() {
                       shareCount: ('shareCount' in post ? (post.shareCount as number) : 0) || 0,
                       isLiked: ('isLiked' in post ? (post.isLiked as boolean) : false) || false,
                       isShared: ('isShared' in post ? (post.isShared as boolean) : false) || false,
-                      // Repost metadata
-                      isRepost: ('isRepost' in post ? post.isRepost : false) || false,
-                      originalPostId: ('originalPostId' in post ? post.originalPostId : null) || null,
-                      originalAuthorId: ('originalAuthorId' in post ? post.originalAuthorId : null) || null,
-                      originalAuthorName: ('originalAuthorName' in post ? post.originalAuthorName : null) || null,
-                      originalAuthorUsername: ('originalAuthorUsername' in post ? post.originalAuthorUsername : null) || null,
-                      originalAuthorProfileImageUrl: ('originalAuthorProfileImageUrl' in post ? post.originalAuthorProfileImageUrl : null) || null,
-                      originalContent: ('originalContent' in post ? post.originalContent : null) || null,
-                      quoteComment: ('quoteComment' in post ? post.quoteComment : null) || null,
                     }
 
                     return (
                       <div key={`post-wrapper-${post.id}-${i}`}>
-                        {postData.type && postData.type === 'article' ? (
-                          <ArticleCard
-                            post={postData}
-                            onClick={() => router.push(`/post/${post.id}`)}
-                          />
-                        ) : (
-                          <PostCard
-                            post={postData}
-                            onClick={() => router.push(`/post/${post.id}`)}
-                          />
-                        )}
+                        <PostCard
+                          post={postData}
+                          onClick={() => router.push(`/post/${post.id}`)}
+                        />
                         {showBannerAfterThisPost && (
                           <InviteFriendsBanner 
                             onDismiss={() => {
@@ -552,16 +502,154 @@ function FeedPageContent() {
                           You&apos;re all caught up.
                         </div>
                       )}
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Right: Widget panels - only on desktop (xl+) */}
         <WidgetSidebar />
+      </div>
+
+      {/* Mobile/Tablet: Feed area */}
+      <div 
+        ref={scrollContainerRef}
+        className="flex lg:hidden flex-1 overflow-y-auto overflow-x-hidden bg-background w-full"
+      >
+        <div className="w-full">
+          {/* Pull to refresh indicator */}
+          <PullToRefreshIndicator
+            pullDistance={pullDistance}
+            isRefreshing={isRefreshing}
+          />
+          
+          {(loading || (tab === 'following' && loadingFollowing)) ? (
+            <div className="w-full px-4">
+              <FeedSkeleton count={5} />
+            </div>
+          ) : filteredPosts.length === 0 && !searchQuery && tab === 'latest' ? (
+            // No posts yet
+            <div className="w-full p-4 sm:p-8 text-center">
+              <div className="text-muted-foreground py-8 sm:py-12">
+                <h2 className="text-xl sm:text-2xl font-bold mb-2 text-foreground">No Posts Yet</h2>
+                <p className="mb-4 text-sm sm:text-base">
+                  Engine is generating posts...
+                </p>
+                <div className="text-xs sm:text-sm text-muted-foreground space-y-2">
+                  <p>Check terminal for tick logs.</p>
+                  <p>Posts appear within 60 seconds.</p>
+                </div>
+              </div>
+            </div>
+          ) : filteredPosts.length === 0 && !searchQuery && tab === 'following' ? (
+            // Following tab with no followed profiles
+            <div className="w-full p-4 sm:p-8 text-center">
+              <div className="text-muted-foreground py-8 sm:py-12">
+                <h2 className="text-lg sm:text-xl font-semibold mb-2 text-foreground">👥 Not Following Anyone Yet</h2>
+                <p className="mb-4 text-sm sm:text-base">
+                  {loadingFollowing
+                    ? 'Loading following...'
+                    : 'Follow profiles to see their posts here. Visit a profile and click the Follow button.'}
+                </p>
+              </div>
+            </div>
+          ) : filteredPosts.length === 0 && !searchQuery ? (
+            // Game loaded but no visible posts yet
+            <div className="w-full p-4 sm:p-8 text-center">
+              <div className="text-muted-foreground py-8 sm:py-12">
+                <h2 className="text-lg sm:text-xl font-semibold mb-2 text-foreground">⏱️ No Posts Yet</h2>
+                <p className="mb-4 text-sm sm:text-base">
+                  Game is running in the background via realtime-daemon. Content will appear here as it&apos;s generated.
+                </p>
+              </div>
+            </div>
+          ) : filteredPosts.length === 0 && searchQuery ? (
+            // No search results
+            <div className="w-full p-4 sm:p-8 text-center">
+              <div className="text-muted-foreground py-8 sm:py-12">
+                <h2 className="text-lg sm:text-xl font-semibold mb-2 text-foreground">No Results</h2>
+                <p className="mb-4 text-sm sm:text-base break-words">
+                  No posts found matching &quot;{searchQuery}&quot;
+                </p>
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className={cn(
+                    'inline-block px-4 sm:px-6 py-2 sm:py-3 font-semibold rounded text-sm sm:text-base cursor-pointer',
+                    'bg-[#3462f3] text-white',
+                    'hover:bg-[#2952d9]',
+                    'transition-all duration-300'
+                  )}
+                >
+                  Clear Search
+                </button>
+              </div>
+            </div>
+          ) : (
+            // Show posts
+            <div className="w-full px-4">
+              {filteredPosts.map((post, i: number) => {
+              // Handle both FeedPost (from game store) and API post shapes
+              // API posts have authorId, FeedPost has author (both are author IDs)
+              const authorId = ('authorId' in post ? post.authorId : post.author) || ''
+              // Get actual actor name from loaded data, fallback to authorName or ID
+              const authorName = actorNames.get(authorId) || ('authorName' in post ? post.authorName : '') || authorId
+
+              // Show banner at the random interval (if not dismissed)
+              const showBannerAfterThisPost = !bannerDismissed && i === bannerInterval.current - 1
+
+              const postData = {
+                id: post.id,
+                content: post.content,
+                authorId,
+                authorName,
+                authorUsername: ('authorUsername' in post ? post.authorUsername : null) || null,
+                authorProfileImageUrl: ('authorProfileImageUrl' in post ? post.authorProfileImageUrl : null),
+                timestamp: post.timestamp,
+                likeCount: ('likeCount' in post ? (post.likeCount as number) : 0) || 0,
+                commentCount: ('commentCount' in post ? (post.commentCount as number) : 0) || 0,
+                shareCount: ('shareCount' in post ? (post.shareCount as number) : 0) || 0,
+                isLiked: ('isLiked' in post ? (post.isLiked as boolean) : false) || false,
+                isShared: ('isShared' in post ? (post.isShared as boolean) : false) || false,
+              }
+
+              return (
+                <div key={`post-wrapper-${post.id}-${i}`}>
+                  <PostCard
+                    post={postData}
+                    onClick={() => router.push(`/post/${post.id}`)}
+                  />
+                  {showBannerAfterThisPost && (
+                    <InviteFriendsBanner 
+                      onDismiss={() => {
+                        setBannerDismissed(true)
+                        // Recalculate interval for next load
+                        bannerInterval.current = calculateBannerInterval()
+                      }}
+                    />
+                  )}
+                </div>
+                )
+              })}
+              {tab === 'latest' && (
+                <>
+                  <div ref={loadMoreRef} className="h-1 w-full" />
+                  {loadingMore && (
+                    <div className="py-4 text-center text-sm text-muted-foreground">
+                      Loading more posts...
+                    </div>
+                  )}
+                  {!loadingMore && !hasMore && posts.length > 0 && (
+                    <div className="py-4 text-center text-xs text-muted-foreground">
+                      You&apos;re all caught up.
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Floating Post Button - Bottom Right */}
@@ -572,7 +660,7 @@ function FeedPageContent() {
             'fixed bottom-20 right-4 md:bottom-6 md:right-6 z-[100]',
             'flex items-center justify-center gap-2',
             'bg-[#0066FF] hover:bg-[#2952d9]',
-            'text-primary-foreground font-semibold',
+            'text-white font-semibold',
             'rounded-full',
             'transition-all duration-200',
             'shadow-lg hover:shadow-xl hover:scale-105',
@@ -588,25 +676,9 @@ function FeedPageContent() {
       <CreatePostModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        onPostCreated={(newPost) => {
-          // Add post optimistically to the top of the feed
-          const optimisticPost: FeedPost = {
-            id: newPost.id,
-            content: newPost.content,
-            author: newPost.authorId,
-            authorId: newPost.authorId,
-            authorName: newPost.authorName,
-            authorUsername: newPost.authorUsername || undefined,
-            authorProfileImageUrl: newPost.authorProfileImageUrl || undefined,
-            timestamp: newPost.timestamp,
-            likeCount: 0,
-            commentCount: 0,
-            shareCount: 0,
-            isLiked: false,
-            isShared: false,
-          }
-          
-          setLocalPosts(prev => [optimisticPost, ...prev])
+        onPostCreated={() => {
+          // Don't reload - WebSocket will handle real-time update
+          // Just close the modal, the new post will appear automatically
           setShowCreateModal(false)
 
           // If not on feed page, navigate to it

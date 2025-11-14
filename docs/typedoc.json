@@ -1,6 +1,5 @@
 {
   "$schema": "https://typedoc.org/schema.json",
-  "tsconfig": "../tsconfig.json",
   "entryPoints": [
     "../src/a2a",
     "../src/agents",
@@ -12,7 +11,6 @@
   "out": "app/reference/_generated/tsdoc",
   "plugin": ["typedoc-plugin-markdown"],
   "readme": "none",
-  "skipErrorChecking": true,
   "exclude": [
     "**/node_modules/**",
     "**/*.test.ts",

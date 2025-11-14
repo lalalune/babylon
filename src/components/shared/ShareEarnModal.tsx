@@ -63,12 +63,22 @@ export function ShareEarnModal({
   }, [isOpen, authenticated, user])
 
   const checkConfiguration = async () => {
-    const response = await fetch('/api/auth/credentials/status')
-    if (response.ok) {
-      const data = await response.json() as { twitter?: boolean; farcaster?: boolean }
-      setIsTwitterConfigured(data.twitter || false)
-    } else {
-      logger.warn('Failed to check credentials status', { status: response.status }, 'ShareEarnModal')
+    try {
+      const response = await fetch('/api/auth/credentials/status')
+      if (response.ok) {
+        const data = await response.json() as { twitter?: boolean; farcaster?: boolean }
+        setIsTwitterConfigured(data.twitter || false)
+      } else {
+        logger.warn('Failed to check credentials status', { status: response.status }, 'ShareEarnModal')
+        // Default to true to not block users if check fails
+        setIsTwitterConfigured(true)
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      logger.error('Failed to check credentials status', { 
+        error: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined 
+      }, 'ShareEarnModal')
       // Default to true to not block users if check fails
       setIsTwitterConfigured(true)
     }
@@ -80,9 +90,17 @@ export function ShareEarnModal({
     const token = typeof window !== 'undefined' ? window.__privyAccessToken : null
     if (!token) return
 
-    // Check for existing share actions
-    // This would require a new API endpoint or passing this data in
-    // For now, we'll check locally based on the response when sharing
+    try {
+      // Check for existing share actions
+      // This would require a new API endpoint or passing this data in
+      // For now, we'll check locally based on the response when sharing
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      logger.error('Failed to check existing shares', { 
+        error: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined 
+      }, 'ShareEarnModal')
+    }
   }
 
   const trackShare = async (platform: 'twitter' | 'farcaster'): Promise<boolean> => {
@@ -97,34 +115,38 @@ export function ShareEarnModal({
       return false
     }
 
-    const response = await fetch(`/api/users/${encodeURIComponent(user.id)}/share`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        platform,
-        contentType,
-        contentId,
-        url: shareUrl,
-      }),
-    })
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(user.id)}/share`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          platform,
+          contentType,
+          contentId,
+          url: shareUrl,
+        }),
+      })
 
-    if (response.ok) {
-      const data = await response.json()
-      const pointsAwarded = data.points?.awarded > 0
-      const alreadyAwarded = data.points?.alreadyAwarded
-      
-      if (pointsAwarded) {
-        logger.info(
-          `Earned ${data.points.awarded} points for sharing to ${platform}`,
-          { platform, points: data.points.awarded },
-          'ShareEarnModal'
-        )
+      if (response.ok) {
+        const data = await response.json()
+        const pointsAwarded = data.points?.awarded > 0
+        const alreadyAwarded = data.points?.alreadyAwarded
+        
+        if (pointsAwarded) {
+          logger.info(
+            `Earned ${data.points.awarded} points for sharing to ${platform}`,
+            { platform, points: data.points.awarded },
+            'ShareEarnModal'
+          )
+        }
+        
+        return pointsAwarded || alreadyAwarded
       }
-      
-      return pointsAwarded || alreadyAwarded
+    } catch (error) {
+      logger.error('Failed to track share', { error, platform }, 'ShareEarnModal')
     }
     
     return false
@@ -184,7 +206,7 @@ export function ShareEarnModal({
         <div className="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-md shadow-2xl">
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-700">
-            <h2 className="text-xl font-bold text-primary-foreground">Share & Earn</h2>
+            <h2 className="text-xl font-bold text-white">Share & Earn</h2>
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
@@ -222,7 +244,7 @@ export function ShareEarnModal({
               }`} />
               <div className="flex-1 text-left">
                 <div className="flex items-center gap-2">
-                  <h3 className={`text-sm font-semibold ${!isTwitterConfigured ? 'text-gray-500' : 'text-foreground'}`}>
+                  <h3 className={`text-sm font-semibold ${!isTwitterConfigured ? 'text-gray-500' : 'text-white'}`}>
                     Share to X
                   </h3>
                   {!isTwitterConfigured && (
@@ -269,7 +291,7 @@ export function ShareEarnModal({
             >
               <FarcasterIcon className={`w-6 h-6 ${shareStatus.farcaster.shared ? 'text-purple-400' : 'text-gray-400'}`} />
               <div className="flex-1 text-left">
-                <h3 className="text-sm font-semibold text-primary-foreground">Share to Farcaster</h3>
+                <h3 className="text-sm font-semibold text-white">Share to Farcaster</h3>
                 <p className="text-xs text-gray-400">
                   {shareStatus.farcaster.loading
                     ? 'Processing...'

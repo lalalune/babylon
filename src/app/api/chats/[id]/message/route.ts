@@ -15,9 +15,6 @@ import { broadcastChatMessage } from '@/lib/sse/event-broadcaster'
 import { logger } from '@/lib/logger'
 import { ChatMessageCreateSchema } from '@/lib/validation/schemas'
 import { trackServerEvent } from '@/lib/posthog/server'
-import { notifyDMMessage, notifyGroupChatMessage } from '@/lib/services/notification-service'
-import { generateSnowflakeId } from '@/lib/snowflake'
-import { checkRateLimitAndDuplicates, RATE_LIMIT_CONFIGS, DUPLICATE_DETECTION_CONFIGS } from '@/lib/rate-limiting'
 
 /**
  * POST /api/chats/[id]/message
@@ -38,24 +35,20 @@ export const POST = withErrorHandling(async (
   // 2. Validate request body
   const body = await request.json()
   const { content } = ChatMessageCreateSchema.parse(body)
-  
-  // 3. Apply rate limiting and duplicate detection
-  const rateLimitError = checkRateLimitAndDuplicates(
-    user.userId,
-    content,
-    RATE_LIMIT_CONFIGS.SEND_MESSAGE,
-    DUPLICATE_DETECTION_CONFIGS.MESSAGE
-  );
-  if (rateLimitError) {
-    return rateLimitError;
-  }
 
-  // 4. Determine chat type and check membership
+  // 3. Determine chat type and check membership
   let chat = await asUser(user, async (db) => {
     return await db.chat.findUnique({
       where: { id: chatId },
-      include: {
-        ChatParticipant: true,
+      select: {
+        id: true,
+        isGroup: true,
+        gameId: true,
+        participants: {
+          select: {
+            userId: true,
+          },
+        },
       },
     })
   })
@@ -95,14 +88,21 @@ export const POST = withErrorHandling(async (
       }
       
       // Create the chat
-      const now = new Date();
       await db.chat.create({
         data: {
           id: chatId,
           name: null,
           isGroup: false,
-          createdAt: now,
-          updatedAt: now,
+        },
+        select: {
+          id: true,
+          isGroup: true,
+          gameId: true,
+          participants: {
+            select: {
+              userId: true,
+            },
+          },
         },
       })
       
@@ -110,14 +110,12 @@ export const POST = withErrorHandling(async (
       await Promise.all([
         db.chatParticipant.create({
           data: {
-            id: await generateSnowflakeId(),
             chatId,
             userId: user.userId,
           },
         }),
         db.chatParticipant.create({
           data: {
-            id: await generateSnowflakeId(),
             chatId,
             userId: otherUserId,
           },
@@ -127,8 +125,15 @@ export const POST = withErrorHandling(async (
       // Reload to include participants
       return await db.chat.findUnique({
         where: { id: chatId },
-        include: {
-          ChatParticipant: true,
+        select: {
+          id: true,
+          isGroup: true,
+          gameId: true,
+          participants: {
+            select: {
+              userId: true,
+            },
+          },
         },
       })
     })
@@ -148,7 +153,7 @@ export const POST = withErrorHandling(async (
   if (!isGameChat) {
     // For DMs, check ChatParticipant
     if (isDMChat) {
-      isMember = chat.ChatParticipant.some((p) => p.userId === user.userId)
+      isMember = chat.participants.some(p => p.userId === user.userId)
       if (!isMember) {
         throw new AuthorizationError('You are not a participant in this DM', 'chat', 'write')
       }
@@ -162,7 +167,7 @@ export const POST = withErrorHandling(async (
     }
   }
 
-  // 5. Check kick probability for group chats (not DMs) - skip for now since we don't want to kick during message send
+  // 4. Check kick probability for group chats (not DMs) - skip for now since we don't want to kick during message send
   let sweepDecision: SweepDecision | null = null
 
   if (isGroupChat) {
@@ -171,7 +176,7 @@ export const POST = withErrorHandling(async (
     // Actual kicks happen via sweep background job
   }
 
-  // 6. Check message quality
+  // 5. Check message quality
   const contextType = isDMChat ? 'dm' : 'groupchat'
   const qualityResult = await MessageQualityChecker.checkQuality(
     content,
@@ -187,7 +192,7 @@ export const POST = withErrorHandling(async (
     )
   }
 
-    // 7. Create message
+    // 6. Create message
     let message = null;
     let membership = null;
     
@@ -205,19 +210,17 @@ export const POST = withErrorHandling(async (
       const result = await asUser(user, async (db) => {
         const msg = await db.message.create({
           data: {
-            id: await generateSnowflakeId(),
             content: content.trim(),
             chatId,
             senderId: user.userId,
-            createdAt: new Date(),
           },
         });
 
-        // 8. Update user's quality score in group chat (not DMs)
+        // 7. Update user's quality score in group chat (not DMs)
         if (isGroupChat) {
           await GroupChatSweep.updateQualityScore(user.userId, chatId, qualityResult.score);
 
-          // 9. Get updated membership stats
+          // 8. Get updated membership stats
           const mem = await db.groupChatMembership.findUnique({
             where: {
               userId_chatId: {
@@ -236,7 +239,7 @@ export const POST = withErrorHandling(async (
       membership = result.membership;
     }
 
-    // 10. Broadcast message via SSE
+    // 9. Broadcast message via SSE
     broadcastChatMessage(chatId, {
       id: message.id,
       content: message.content,
@@ -247,40 +250,7 @@ export const POST = withErrorHandling(async (
       isDMChat,
     });
 
-    // 11. Send notifications to other participants
-    if (!isGameChat) {
-      if (isDMChat) {
-        // For DMs, notify the other participant
-        const otherParticipant = chat.ChatParticipant.find((p) => p.userId !== user.userId);
-        if (otherParticipant) {
-          await notifyDMMessage(
-            otherParticipant.userId,
-            user.userId,
-            chatId,
-            content.trim()
-          );
-        }
-      } else if (isGroupChat) {
-        // For group chats, notify all participants except sender
-        const recipientUserIds = chat.ChatParticipant.map((p) => p.userId);
-        const chatInfo = await asUser(user, async (db) => {
-          return await db.chat.findUnique({
-            where: { id: chatId },
-            select: { name: true },
-          });
-        });
-        
-        await notifyGroupChatMessage(
-          recipientUserIds,
-          user.userId,
-          chatId,
-          chatInfo?.name || 'Group Chat',
-          content.trim()
-        );
-      }
-    }
-
-  // 12. Return success with feedback
+  // 10. Return success with feedback
   logger.info('Message sent successfully', { 
     chatId, 
     userId: user.userId, 

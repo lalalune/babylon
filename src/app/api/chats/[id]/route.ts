@@ -27,27 +27,14 @@ export const GET = withErrorHandling(async (
   
   const all = searchParams.get('all')
   const debug = searchParams.get('debug')
-  const cursor = searchParams.get('cursor') // Cursor for pagination (message ID)
-  const limitParam = searchParams.get('limit')
   
   if (all) query.all = all
   if (debug) query.debug = debug
   
   const validatedQuery = ChatQuerySchema.parse(query)
-  
-  // Parse pagination parameters
-  const limit = limitParam ? parseInt(limitParam, 10) : 50
-  const effectiveLimit = Math.min(Math.max(limit, 1), 100) // Between 1 and 100
 
   // Check for debug mode (localhost access to game chats)
   const debugMode = validatedQuery.debug === 'true'
-  
-  logger.info('GET /api/chats/[id]', { 
-    chatId, 
-    cursor, 
-    limit: effectiveLimit,
-    debugMode 
-  }, 'GET /api/chats/[id]');
 
   // Get chat first to check if it's a game chat
   const chat = await asSystem(async (db) => {
@@ -89,38 +76,27 @@ export const GET = withErrorHandling(async (
     }
   }
 
-  // Build message query with cursor-based pagination
-  const messageQuery: {
-    orderBy: { createdAt: 'desc' }
-    take: number
-    cursor?: { id: string }
-    skip?: number
-  } = {
-    orderBy: { createdAt: 'desc' }, // Get newest first
-    take: effectiveLimit + 1, // Take one extra to check if there are more
-  }
-  
-  // If cursor provided, get messages older than the cursor
-  if (cursor) {
-    messageQuery.cursor = { id: cursor }
-    messageQuery.skip = 1 // Skip the cursor itself
-  }
-
   // Get chat with messages with RLS (use system for debug mode)
   const fullChat = await (authUser ? asUser(authUser, async (db) => {
     return await db.chat.findUnique({
       where: { id: chatId },
       include: {
-        Message: messageQuery,
-        ChatParticipant: true,
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          take: 100, // Limit to last 100 messages
+        },
+        participants: true,
       },
     })
   }) : asSystem(async (db) => {
     return await db.chat.findUnique({
       where: { id: chatId },
       include: {
-        Message: messageQuery,
-        ChatParticipant: true,
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          take: 100,
+        },
+        participants: true,
       },
     })
   }))
@@ -132,7 +108,7 @@ export const GET = withErrorHandling(async (
   // Get participant details with RLS (use system for debug mode)
   const { users, actors } = await (authUser ? asUser(authUser, async (db) => {
     // Get participant details - need to check both users and actors
-    const participantUserIds = fullChat.ChatParticipant.map((p: typeof fullChat.ChatParticipant[number]) => p.userId);
+    const participantUserIds = fullChat.participants.map((p) => p.userId);
     const users = await db.user.findMany({
       where: {
         id: { in: participantUserIds },
@@ -146,10 +122,10 @@ export const GET = withErrorHandling(async (
     });
 
     // Get unique sender IDs from messages (for game chats, these are often actors)
-    const senderIds = [...new Set(fullChat.Message.map((m: typeof fullChat.Message[number]) => m.senderId))];
+    const senderIds = [...new Set(fullChat.messages.map(m => m.senderId))];
     const actors = await db.actor.findMany({
       where: {
-        id: { in: senderIds as string[] },
+        id: { in: senderIds },
       },
       select: {
         id: true,
@@ -160,7 +136,7 @@ export const GET = withErrorHandling(async (
 
     return { users, actors };
   }) : asSystem(async (db) => {
-    const participantUserIds = fullChat.ChatParticipant.map((p: typeof fullChat.ChatParticipant[number]) => p.userId);
+    const participantUserIds = fullChat.participants.map((p) => p.userId);
     const users = await db.user.findMany({
       where: {
         id: { in: participantUserIds },
@@ -173,10 +149,10 @@ export const GET = withErrorHandling(async (
       },
     });
 
-    const senderIds = [...new Set(fullChat.Message.map((m: typeof fullChat.Message[number]) => m.senderId))];
+    const senderIds = [...new Set(fullChat.messages.map(m => m.senderId))];
     const actors = await db.actor.findMany({
       where: {
-        id: { in: senderIds as string[] },
+        id: { in: senderIds },
       },
       select: {
         id: true,
@@ -188,15 +164,15 @@ export const GET = withErrorHandling(async (
     return { users, actors };
   }));
 
-    const usersMap = new Map<string, typeof users[number]>(users.map((u: typeof users[number]) => [u.id, u]));
-    const actorsMap = new Map<string, typeof actors[number]>(actors.map((a: typeof actors[number]) => [a.id, a]));
+    const usersMap = new Map(users.map((u) => [u.id, u]));
+    const actorsMap = new Map(actors.map((a) => [a.id, a]));
 
     // Get unique sender IDs from messages (for debug mode)
-    const senderIds = [...new Set(fullChat.Message.map((m: typeof fullChat.Message[number]) => m.senderId))];
+    const senderIds = [...new Set(fullChat.messages.map(m => m.senderId))];
 
     // Build participants list from ChatParticipants or message senders (for debug mode)
-    const participantsInfo = fullChat.ChatParticipant.length > 0
-      ? fullChat.ChatParticipant.map((p: typeof fullChat.ChatParticipant[number]) => {
+    const participantsInfo = fullChat.participants.length > 0
+      ? fullChat.participants.map((p) => {
           const user = usersMap.get(p.userId);
           const actor = actorsMap.get(p.userId);
           return {
@@ -207,7 +183,7 @@ export const GET = withErrorHandling(async (
           };
         })
       : // In debug mode with no participants, use actors from messages
-        (senderIds as string[]).map((senderId: string) => {
+        senderIds.map(senderId => {
           const actor = actorsMap.get(senderId);
           const user = usersMap.get(senderId);
           return {
@@ -220,9 +196,9 @@ export const GET = withErrorHandling(async (
 
     // For DMs, get the other participant's name and details
     let displayName = fullChat.name;
-    let otherUser: { id: string; displayName: string | null; username: string | null; profileImageUrl: string | null } | null = null;
+    let otherUser = null;
     if (!fullChat.isGroup && !fullChat.name && userId) {
-      const otherParticipant = fullChat.ChatParticipant.find((p: typeof fullChat.ChatParticipant[number]) => p.userId !== userId);
+      const otherParticipant = fullChat.participants.find((p) => p.userId !== userId);
       if (otherParticipant) {
         const otherUserData = usersMap.get(otherParticipant.userId);
         if (otherUserData) {
@@ -237,24 +213,11 @@ export const GET = withErrorHandling(async (
       }
     }
 
-  // Check if there are more messages
-  const hasMore = fullChat.Message.length > effectiveLimit
-  const messages = hasMore ? fullChat.Message.slice(0, effectiveLimit) : fullChat.Message
-  
-  // Reverse to get chronological order (oldest first)
-  const messagesInOrder = [...messages].reverse()
-  
-  // Get the cursor for the next page (oldest message ID in this batch)
-  const nextCursor = hasMore ? fullChat.Message[effectiveLimit - 1]?.id : null
-
   logger.info('Chat fetched successfully', { 
     chatId, 
     isGameChat, 
     isDM: !fullChat.isGroup,
-    debugMode,
-    messagesReturned: messages.length,
-    hasMore,
-    nextCursor
+    debugMode 
   }, 'GET /api/chats/[id]')
 
   return successResponse({
@@ -266,18 +229,13 @@ export const GET = withErrorHandling(async (
       updatedAt: fullChat.updatedAt,
       otherUser: otherUser,
     },
-    messages: messagesInOrder.map((msg: typeof messagesInOrder[number]) => ({
+    messages: fullChat.messages.map((msg) => ({
       id: msg.id,
       content: msg.content,
       senderId: msg.senderId,
       createdAt: msg.createdAt,
     })),
     participants: participantsInfo,
-    pagination: {
-      hasMore,
-      nextCursor,
-      limit: effectiveLimit,
-    },
   })
 })
 

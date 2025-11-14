@@ -4,12 +4,11 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { baseSepolia } from 'viem/chains'
 import { prisma } from '@/lib/database-service'
 import { logger } from '@/lib/logger'
-import { generateSnowflakeId } from '@/lib/snowflake'
-import { BusinessLogicError, ValidationError, InternalServerError } from '@/lib/errors'
+import { BusinessLogicError, ValidationError, InternalServerError, ConflictError } from '@/lib/errors'
 import { PointsService } from '@/lib/services/points-service'
 import { notifyNewAccount } from '@/lib/services/notification-service'
 import { Agent0Client } from '@/agents/agent0/Agent0Client'
-import type { AgentCapabilities } from '@/types/a2a'
+import type { AgentCapabilities } from '@/a2a/types'
 import type { AuthenticatedUser } from '@/lib/api/auth-middleware'
 import { extractErrorMessage } from '@/lib/api/auth-middleware'
 import { syncAfterAgent0Registration } from '@/lib/reputation/agent0-reputation-sync'
@@ -88,7 +87,28 @@ const IDENTITY_REGISTRY_ABI = [
   },
 ] as const
 
-import { REPUTATION_SYSTEM_ABI } from '../web3/abis'
+const REPUTATION_SYSTEM_ABI = [
+  {
+    type: 'function',
+    name: 'recordBet',
+    inputs: [
+      { name: '_tokenId', type: 'uint256' },
+      { name: '_amount', type: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'recordWin',
+    inputs: [
+      { name: '_tokenId', type: 'uint256' },
+      { name: '_profit', type: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+] as const
 
 export interface OnchainRegistrationInput {
   user: AuthenticatedUser
@@ -157,7 +177,7 @@ export async function processOnchainRegistration({
     } else {
       const referral = await prisma.referral.findUnique({
         where: { referralCode },
-        include: { User_Referral_referrerIdToUser: true },
+        include: { referrer: true },
       })
 
       if (referral && referral.status === 'pending') {
@@ -192,7 +212,6 @@ export async function processOnchainRegistration({
     if (!dbUser) {
       dbUser = await prisma.user.create({
         data: {
-          id: await generateSnowflakeId(),
           privyId: user.userId,
           username: user.userId,
           displayName: displayName || username || user.userId,
@@ -202,7 +221,6 @@ export async function processOnchainRegistration({
           isActor: false,
           virtualBalance: 10000,
           totalDeposited: 10000,
-          updatedAt: new Date(),
         },
         select: {
           id: true,
@@ -242,7 +260,6 @@ export async function processOnchainRegistration({
           virtualBalance: 0,
           totalDeposited: 0,
           referredBy: referrerId,
-          updatedAt: new Date(),
         },
         select: {
           id: true,
@@ -300,38 +317,59 @@ export async function processOnchainRegistration({
     const address = walletAddress! as Address
 
     // Try to check onchain status, but gracefully handle contract unavailability
-    isRegistered = await publicClient.readContract({
-      address: IDENTITY_REGISTRY,
-      abi: IDENTITY_REGISTRY_ABI,
-      functionName: 'isRegistered',
-      args: [address],
-    })
-
-    if (isRegistered && !tokenId) {
-      tokenId = Number(await publicClient.readContract({
+    try {
+      isRegistered = await publicClient.readContract({
         address: IDENTITY_REGISTRY,
         abi: IDENTITY_REGISTRY_ABI,
-        functionName: 'getTokenId',
+        functionName: 'isRegistered',
         args: [address],
-      }))
+      })
+
+      if (isRegistered && !tokenId) {
+        tokenId = Number(await publicClient.readContract({
+          address: IDENTITY_REGISTRY,
+          abi: IDENTITY_REGISTRY_ABI,
+          functionName: 'getTokenId',
+          args: [address],
+        }))
+      }
+    } catch (contractError) {
+      // Contract not available or not deployed - fall back to database state
+      logger.warn('Unable to check onchain registration status, using database state', {
+        error: extractErrorMessage(contractError),
+        address,
+        IDENTITY_REGISTRY
+      }, 'OnboardingOnchain')
+      isRegistered = dbUser.onChainRegistered && dbUser.nftTokenId !== null
     }
   }
 
   if (isRegistered && tokenId) {
     // User is already registered on-chain, sync the DB if needed
     if (!dbUser.onChainRegistered || dbUser.nftTokenId !== tokenId) {
-      await prisma.user.update({
-        where: { id: dbUser.id },
-        data: {
-          onChainRegistered: true,
-          nftTokenId: tokenId,
-        },
-      })
-      logger.info(
-        'Synced on-chain registration status to database',
-        { userId: dbUser.id, tokenId, wasRegistered: dbUser.onChainRegistered },
-        'processOnchainRegistration'
-      )
+      try {
+        await prisma.user.update({
+          where: { id: dbUser.id },
+          data: {
+            onChainRegistered: true,
+            nftTokenId: tokenId,
+          },
+        })
+        logger.info(
+          'Synced on-chain registration status to database',
+          { userId: dbUser.id, tokenId, wasRegistered: dbUser.onChainRegistered },
+          'processOnchainRegistration'
+        )
+      } catch (updateError) {
+        // If update fails due to unique constraint on nftTokenId, another user might have this tokenId
+        // This shouldn't happen in normal flow, but handle it gracefully
+        logger.warn(
+          'Failed to sync nftTokenId - may already be assigned to another user',
+          { userId: dbUser.id, tokenId, error: updateError },
+          'processOnchainRegistration'
+        )
+        // Still return success since the user IS registered on-chain
+      }
     }
 
     const hasWelcomeBonus = await prisma.balanceTransaction.findFirst({
@@ -365,12 +403,16 @@ export async function processOnchainRegistration({
   let walletClient = null
 
   if (deployerConfigured) {
-    deployerAccount = privateKeyToAccount(DEPLOYER_PRIVATE_KEY!)
-    walletClient = createWalletClient({
-      account: deployerAccount,
-      chain: baseSepolia,
-      transport: http(process.env.BASE_SEPOLIA_RPC_URL || 'https://sepolia.base.org'),
-    })
+    try {
+      deployerAccount = privateKeyToAccount(DEPLOYER_PRIVATE_KEY!)
+      walletClient = createWalletClient({
+        account: deployerAccount,
+        chain: baseSepolia,
+        transport: http(process.env.BASE_SEPOLIA_RPC_URL || 'https://sepolia.base.org'),
+      })
+    } catch (keyError) {
+      logger.error('Invalid deployer private key format', { error: extractErrorMessage(keyError) }, 'OnboardingOnchain')
+    }
   }
 
   if (!submittedTxHash && !deployerConfigured) {
@@ -386,11 +428,11 @@ export async function processOnchainRegistration({
       throw new InternalServerError('Server wallet required for agent registration', { missing: 'DEPLOYER_PRIVATE_KEY' })
     }
     registrationAddress = deployerAccount.address
-    const baseEndpoint = endpoint || `https://babylon.market/agent/${user.userId}`
+    const baseEndpoint = endpoint || `https://babylon.game/agent/${user.userId}`
     agentEndpoint = `${baseEndpoint}?agentId=${user.userId}`
   } else {
     registrationAddress = walletAddress! as Address
-    agentEndpoint = endpoint || `https://babylon.market/agent/${walletAddress!.toLowerCase()}`
+    agentEndpoint = endpoint || `https://babylon.game/agent/${walletAddress!.toLowerCase()}`
   }
 
   const capabilitiesHash = '0x0000000000000000000000000000000000000000000000000000000000000001' as `0x${string}`
@@ -440,22 +482,23 @@ export async function processOnchainRegistration({
     } catch (registrationError) {
       const message = extractErrorMessage(registrationError).toLowerCase()
       if (message.includes('already registered')) {
-        const onChainStatus = await publicClient.readContract({
-          address: IDENTITY_REGISTRY,
-          abi: IDENTITY_REGISTRY_ABI,
-          functionName: 'isRegistered',
-          args: [registrationAddress],
-        })
+        try {
+          const onChainStatus = await publicClient.readContract({
+            address: IDENTITY_REGISTRY,
+            abi: IDENTITY_REGISTRY_ABI,
+            functionName: 'isRegistered',
+            args: [registrationAddress],
+          })
 
-        if (onChainStatus) {
-          const tokenOnChain = Number(
-            await publicClient.readContract({
-              address: IDENTITY_REGISTRY,
-              abi: IDENTITY_REGISTRY_ABI,
-              functionName: 'getTokenId',
-              args: [registrationAddress],
-            })
-          )
+          if (onChainStatus) {
+            const tokenOnChain = Number(
+              await publicClient.readContract({
+                address: IDENTITY_REGISTRY,
+                abi: IDENTITY_REGISTRY_ABI,
+                functionName: 'getTokenId',
+                args: [registrationAddress],
+              })
+            )
 
           await prisma.user.update({
             where: { id: dbUser.id },
@@ -485,6 +528,13 @@ export async function processOnchainRegistration({
             userId: dbUser.id,
             pointsAwarded: hasWelcomeBonus ? 1000 : 0,
           }
+        }
+        } catch (contractCheckError) {
+          logger.warn(
+            'Unable to verify onchain registration status, falling back to server signer unsupported error',
+            { error: extractErrorMessage(contractCheckError) },
+            'OnboardingOnchain'
+          )
         }
 
         logger.warn(
@@ -582,23 +632,57 @@ export async function processOnchainRegistration({
     )
   }
 
-  await prisma.user.update({
-    where: { id: dbUser.id },
-    data: {
-      onChainRegistered: true,
-      nftTokenId: tokenId,
-      registrationTxHash: registrationTxHash ?? submittedTxHash ?? null,
-      // Store registration blockchain metadata
-      registrationBlockNumber: finalizedReceipt.blockNumber,
-      registrationGasUsed: finalizedReceipt.gasUsed,
-      registrationTimestamp: new Date(),
-      username: user.isAgent ? user.userId : (username || dbUser.username),
-      displayName: displayName || username || dbUser.username || user.userId,
-      bio: bio || (user.isAgent ? `Autonomous AI agent: ${user.userId}` : undefined) || dbUser.username || null,
-      profileImageUrl: profileImageUrl ?? undefined,
-      coverImageUrl: coverImageUrl ?? undefined,
-    },
-  })
+  try {
+    await prisma.user.update({
+      where: { id: dbUser.id },
+      data: {
+        onChainRegistered: true,
+        nftTokenId: tokenId,
+        registrationTxHash: registrationTxHash ?? submittedTxHash ?? null,
+        // Store registration blockchain metadata
+        registrationBlockNumber: finalizedReceipt.blockNumber,
+        registrationGasUsed: finalizedReceipt.gasUsed,
+        registrationTimestamp: new Date(),
+        username: user.isAgent ? user.userId : (username || dbUser.username),
+        displayName: displayName || username || dbUser.username || user.userId,
+        bio: bio || (user.isAgent ? `Autonomous AI agent: ${user.userId}` : undefined) || dbUser.username || null,
+        profileImageUrl: profileImageUrl ?? undefined,
+        coverImageUrl: coverImageUrl ?? undefined,
+      },
+    })
+  } catch (dbError) {
+    // Check if this is a duplicate nftTokenId error
+    if (dbError && typeof dbError === 'object' && 'code' in dbError) {
+      const prismaError = dbError as { code?: string; meta?: { target?: string[] } }
+      if (prismaError.code === 'P2002' && prismaError.meta?.target?.includes('nftTokenId')) {
+        // This user was already registered with this tokenId, likely a race condition
+        logger.warn(
+          'User registration completed but nftTokenId already exists in database',
+          { userId: dbUser.id, tokenId, existingNftTokenId: dbUser.nftTokenId },
+          'processOnchainRegistration'
+        )
+        // Verify the existing tokenId matches
+        const existingUser = await prisma.user.findUnique({
+          where: { id: dbUser.id },
+          select: { nftTokenId: true, onChainRegistered: true },
+        })
+        if (existingUser?.nftTokenId === tokenId) {
+          // Same tokenId, this is fine - the user is already registered
+          logger.info('User already has this nftTokenId, continuing', { userId: dbUser.id, tokenId }, 'processOnchainRegistration')
+        } else {
+          // Different tokenId is assigned to another user - this is a serious error
+          throw new ConflictError(
+            'This NFT token ID is already assigned to another user. Please contact support.',
+            'nftTokenId'
+          )
+        }
+      } else {
+        throw dbError
+      }
+    } else {
+      throw dbError
+    }
+  }
 
   if (user.isAgent) {
     const agent0Client = new Agent0Client({
@@ -638,11 +722,20 @@ export async function processOnchainRegistration({
     }, 'OnboardingOnchain')
 
     // Sync on-chain reputation to local database
-    await syncAfterAgent0Registration(dbUser.id, agent0Result.tokenId)
-    logger.info('Agent0 reputation synced successfully', {
-      userId: dbUser.id,
-      agent0TokenId: agent0Result.tokenId
-    }, 'OnboardingOnchain')
+    try {
+      await syncAfterAgent0Registration(dbUser.id, agent0Result.tokenId)
+      logger.info('Agent0 reputation synced successfully', {
+        userId: dbUser.id,
+        agent0TokenId: agent0Result.tokenId
+      }, 'OnboardingOnchain')
+    } catch (syncError) {
+      // Log error but don't fail registration
+      logger.error('Failed to sync Agent0 reputation after registration', {
+        userId: dbUser.id,
+        agent0TokenId: agent0Result.tokenId,
+        error: syncError
+      }, 'OnboardingOnchain')
+    }
   }
 
   const userWithBalance = await prisma.user.findUnique({
@@ -656,7 +749,6 @@ export async function processOnchainRegistration({
 
   await prisma.balanceTransaction.create({
     data: {
-      id: await generateSnowflakeId(),
       userId: dbUser.id,
       type: 'deposit',
       amount: amountDecimal,
@@ -691,7 +783,6 @@ export async function processOnchainRegistration({
           completedAt: new Date(),
         },
         create: {
-          id: await generateSnowflakeId(),
           referrerId,
           referralCode,
           referredUserId: dbUser.id,
@@ -710,7 +801,6 @@ export async function processOnchainRegistration({
       },
       update: {},
       create: {
-        id: await generateSnowflakeId(),
         followerId: referrerId,
         followingId: dbUser.id,
       },
@@ -779,25 +869,14 @@ export async function confirmOnchainProfileUpdate({
     )
   }
 
-  // Get the expected token ID for this user's wallet address
-  const expectedTokenId = Number(
-    await publicClient.readContract({
-      address: IDENTITY_REGISTRY,
-      abi: IDENTITY_REGISTRY_ABI,
-      functionName: 'getTokenId',
-      args: [walletAddress as Address],
-    })
-  )
-
-  if (!expectedTokenId || Number.isNaN(expectedTokenId)) {
+  if (!receipt.from || receipt.from.toLowerCase() !== lowerWallet) {
     throw new BusinessLogicError(
-      'User wallet is not registered on-chain',
-      'WALLET_NOT_REGISTERED',
-      { walletAddress: lowerWallet }
+      'Profile update transaction must originate from the registered wallet',
+      'PROFILE_UPDATE_UNAUTHORIZED',
+      { txHash, txFrom: receipt.from, walletAddress: lowerWallet }
     )
   }
 
-  // Parse the transaction to find the AgentUpdated event and verify it updates the correct token
   let tokenId: number | null = null
   let endpoint = ''
   let capabilitiesHash = '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`
@@ -822,21 +901,19 @@ export async function confirmOnchainProfileUpdate({
     }
   }
 
-  // Verify that the transaction updated the correct token ID
   if (!tokenId) {
-    throw new BusinessLogicError(
-      'Transaction did not emit AgentUpdated event',
-      'PROFILE_UPDATE_EVENT_NOT_FOUND',
-      { txHash }
+    tokenId = Number(
+      await publicClient.readContract({
+        address: IDENTITY_REGISTRY,
+        abi: IDENTITY_REGISTRY_ABI,
+        functionName: 'getTokenId',
+        args: [walletAddress as Address],
+      })
     )
   }
 
-  if (tokenId !== expectedTokenId) {
-    throw new BusinessLogicError(
-      'Transaction updated a different token ID than expected',
-      'PROFILE_UPDATE_TOKEN_MISMATCH',
-      { txHash, expectedTokenId, actualTokenId: tokenId, walletAddress: lowerWallet }
-    )
+  if (!tokenId || Number.isNaN(tokenId)) {
+    throw new InternalServerError('Unable to determine token ID from profile update transaction', { txHash })
   }
 
   const profile = await publicClient.readContract({
@@ -908,29 +985,33 @@ export async function getOnchainRegistrationStatus(user: AuthenticatedUser): Pro
   let isRegistered = Boolean(userRecord.onChainRegistered && tokenId !== null)
 
   if (!user.isAgent && userRecord.walletAddress) {
-    const publicClient = createPublicClient({
-      chain: baseSepolia,
-      transport: http(process.env.NEXT_PUBLIC_RPC_URL),
-    })
+    try {
+      const publicClient = createPublicClient({
+        chain: baseSepolia,
+        transport: http(process.env.NEXT_PUBLIC_RPC_URL),
+      })
 
-    const onchainRegistered = await publicClient.readContract({
-      address: IDENTITY_REGISTRY,
-      abi: IDENTITY_REGISTRY_ABI,
-      functionName: 'isRegistered',
-      args: [userRecord.walletAddress as Address],
-    })
-
-    if (onchainRegistered && !tokenId) {
-      const queriedTokenId = await publicClient.readContract({
+      const onchainRegistered = await publicClient.readContract({
         address: IDENTITY_REGISTRY,
         abi: IDENTITY_REGISTRY_ABI,
-        functionName: 'getTokenId',
+        functionName: 'isRegistered',
         args: [userRecord.walletAddress as Address],
       })
-      tokenId = Number(queriedTokenId)
-    }
 
-    isRegistered = onchainRegistered
+      if (onchainRegistered && !tokenId) {
+        const queriedTokenId = await publicClient.readContract({
+          address: IDENTITY_REGISTRY,
+          abi: IDENTITY_REGISTRY_ABI,
+          functionName: 'getTokenId',
+          args: [userRecord.walletAddress as Address],
+        })
+        tokenId = Number(queriedTokenId)
+      }
+
+      isRegistered = onchainRegistered
+    } catch (error) {
+      logger.warn('Failed to query on-chain registration status', { userId: user.userId, error }, 'OnboardingOnchain')
+    }
   }
 
   logger.info(

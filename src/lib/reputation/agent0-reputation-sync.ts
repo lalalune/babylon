@@ -5,12 +5,11 @@
  * Provides bidirectional sync between local database and blockchain.
  */
 
-import { getAgent0Client } from '@/agents/agent0/Agent0Client'
 import { prisma } from '@/lib/database-service'
-import { logger } from '@/lib/logger'
-import { generateSnowflakeId } from '@/lib/snowflake'
 import { getOnChainReputation, syncOnChainReputation } from './blockchain-reputation'
-import { getReputationBreakdown, recalculateReputation } from './reputation-service'
+import { getAgent0Client } from '@/agents/agent0/Agent0Client'
+import { recalculateReputation, getReputationBreakdown } from './reputation-service'
+import { logger } from '@/lib/logger'
 
 /**
  * Sync Agent0 on-chain reputation to local database after registration
@@ -23,59 +22,64 @@ import { getReputationBreakdown, recalculateReputation } from './reputation-serv
  * @returns Updated performance metrics
  */
 export async function syncAfterAgent0Registration(userId: string, agent0TokenId: number) {
-  logger.info('Syncing reputation after Agent0 registration', { userId, agent0TokenId })
+  try {
+    logger.info('Syncing reputation after Agent0 registration', { userId, agent0TokenId })
 
-  // Get on-chain reputation data
-  const onChainRep = await getOnChainReputation(agent0TokenId)
+    // Get on-chain reputation data
+    const onChainRep = await getOnChainReputation(agent0TokenId)
 
-  if (!onChainRep) {
-    logger.warn('No on-chain reputation data found', { agent0TokenId })
-    // Initialize with default metrics
-    return await prisma.agentPerformanceMetrics.upsert({
+    if (!onChainRep) {
+      logger.warn('No on-chain reputation data found', { agent0TokenId })
+      // Initialize with default metrics
+      return await prisma.agentPerformanceMetrics.upsert({
+        where: { userId },
+        create: {
+          userId,
+          onChainReputationSync: true,
+          lastSyncedAt: new Date(),
+        },
+        update: {
+          onChainReputationSync: true,
+          lastSyncedAt: new Date(),
+        },
+      })
+    }
+
+    // Get or create performance metrics
+    let metrics = await prisma.agentPerformanceMetrics.findUnique({
       where: { userId },
-      create: {
-        id: await generateSnowflakeId(),
-        userId,
-        onChainReputationSync: true,
-        lastSyncedAt: new Date(),
-        updatedAt: new Date(),
-      },
-      update: {
-        onChainReputationSync: true,
-        lastSyncedAt: new Date(),
-      },
     })
-  }
 
-  // Get or create performance metrics
-  let metrics = await prisma.agentPerformanceMetrics.findUnique({
-    where: { userId },
-  })
+    if (!metrics) {
+      metrics = await prisma.agentPerformanceMetrics.create({
+        data: {
+          userId,
+        },
+      })
+    }
 
-  if (!metrics) {
-    metrics = await prisma.agentPerformanceMetrics.create({
-      data: {
-        id: await generateSnowflakeId(),
-        userId,
-        updatedAt: new Date(),
-      },
+    // Sync on-chain data to local database
+    const updated = await syncOnChainReputation(userId, agent0TokenId)
+
+    // Recalculate local reputation with synced data
+    await recalculateReputation(userId)
+
+    logger.info('Agent0 reputation sync completed', {
+      userId,
+      agent0TokenId,
+      trustScore: onChainRep.trustScore.toString(),
+      accuracyScore: onChainRep.accuracyScore.toString(),
     })
+
+    return updated
+  } catch (error) {
+    logger.error('Failed to sync reputation after Agent0 registration', {
+      userId,
+      agent0TokenId,
+      error,
+    })
+    throw error
   }
-
-  // Sync on-chain data to local database
-  const updated = await syncOnChainReputation(userId, agent0TokenId)
-
-  // Recalculate local reputation with synced data
-  await recalculateReputation(userId)
-
-  logger.info('Agent0 reputation sync completed', {
-    userId,
-    agent0TokenId,
-    trustScore: onChainRep.trustScore.toString(),
-    accuracyScore: onChainRep.accuracyScore.toString(),
-  })
-
-  return updated
 }
 
 /**
@@ -89,89 +93,94 @@ export async function syncAfterAgent0Registration(userId: string, agent0TokenId:
  * @returns Agent0 submission result
  */
 export async function submitFeedbackToAgent0(feedbackId: string, submitToBlockchain = false) {
-  // Get feedback record with agent info
-  const feedback = await prisma.feedback.findUnique({
-    where: { id: feedbackId },
-    include: {
-      User_Feedback_toUserIdToUser: {
-        select: {
-          id: true,
-          agent0TokenId: true,
-          nftTokenId: true,
+  try {
+    // Get feedback record with agent info
+    const feedback = await prisma.feedback.findUnique({
+      where: { id: feedbackId },
+      include: {
+        toUser: {
+          select: {
+            id: true,
+            agent0TokenId: true,
+            nftTokenId: true,
+          },
         },
       },
-    },
-  })
-
-  if (!feedback) {
-    throw new Error(`Feedback ${feedbackId} not found`)
-  }
-
-  if (!feedback.User_Feedback_toUserIdToUser) {
-    throw new Error('Feedback has no recipient user')
-  }
-
-  const agent0TokenId = feedback.User_Feedback_toUserIdToUser.agent0TokenId
-
-  if (!agent0TokenId) {
-    logger.warn('Agent has no Agent0 token ID, skipping submission', {
-      feedbackId,
-      userId: feedback.User_Feedback_toUserIdToUser.id,
     })
-    return null
-  }
 
-  // Get Agent0 client
-  const agent0Client = getAgent0Client()
+    if (!feedback) {
+      throw new Error(`Feedback ${feedbackId} not found`)
+    }
 
-  // Convert 0-100 score to -5 to +5 scale for Agent0
-  // 0-100 → -5 to +5 (0 = -5, 50 = 0, 100 = +5)
-  const agent0Rating = Math.round((feedback.score / 100) * 10 - 5)
+    if (!feedback.toUser) {
+      throw new Error('Feedback has no recipient user')
+    }
 
-  // Submit to Agent0 network
-  await agent0Client.submitFeedback({
-    targetAgentId: agent0TokenId,
-    rating: agent0Rating,
-    comment: feedback.comment || 'Feedback from Babylon platform',
-    transactionId: feedback.id,
-  })
+    const agent0TokenId = feedback.toUser.agent0TokenId
 
-  // Update feedback record to mark as submitted to Agent0
-  await prisma.feedback.update({
-    where: { id: feedbackId },
-    data: {
-      agent0TokenId: agent0TokenId,
-      metadata: {
-        ...(typeof feedback.metadata === 'object' && feedback.metadata !== null
-          ? feedback.metadata
-          : {}),
-        agent0Submitted: true,
-        agent0SubmittedAt: new Date().toISOString(),
+    if (!agent0TokenId) {
+      logger.warn('Agent has no Agent0 token ID, skipping submission', {
+        feedbackId,
+        userId: feedback.toUser.id,
+      })
+      return null
+    }
+
+    // Get Agent0 client
+    const agent0Client = getAgent0Client()
+
+    // Convert 0-100 score to -5 to +5 scale for Agent0
+    // 0-100 → -5 to +5 (0 = -5, 50 = 0, 100 = +5)
+    const agent0Rating = Math.round((feedback.score / 100) * 10 - 5)
+
+    // Submit to Agent0 network
+    await agent0Client.submitFeedback({
+      targetAgentId: agent0TokenId,
+      rating: agent0Rating,
+      comment: feedback.comment || 'Feedback from Babylon platform',
+      transactionId: feedback.id,
+    })
+
+    // Update feedback record to mark as submitted to Agent0
+    await prisma.feedback.update({
+      where: { id: feedbackId },
+      data: {
+        agent0TokenId: agent0TokenId,
+        metadata: {
+          ...(typeof feedback.metadata === 'object' && feedback.metadata !== null
+            ? feedback.metadata
+            : {}),
+          agent0Submitted: true,
+          agent0SubmittedAt: new Date().toISOString(),
+        },
       },
-    },
-  })
-
-  logger.info('Feedback submitted to Agent0', {
-    feedbackId,
-    agent0TokenId,
-    score: feedback.score,
-    agent0Rating,
-  })
-
-  // If requested, also submit to blockchain (ERC-8004)
-  if (submitToBlockchain && feedback.User_Feedback_toUserIdToUser.nftTokenId) {
-    logger.info('Submitting feedback to blockchain would require wallet client', {
-      feedbackId,
-      nftTokenId: feedback.User_Feedback_toUserIdToUser.nftTokenId,
     })
-    // Note: Blockchain submission requires wallet client and gas
-    // This would be called from a user-facing endpoint with wallet connection
-  }
 
-  return {
-    agent0TokenId,
-    agent0Rating,
-    submitted: true,
+    logger.info('Feedback submitted to Agent0', {
+      feedbackId,
+      agent0TokenId,
+      score: feedback.score,
+      agent0Rating,
+    })
+
+    // If requested, also submit to blockchain (ERC-8004)
+    if (submitToBlockchain && feedback.toUser.nftTokenId) {
+      logger.info('Submitting feedback to blockchain would require wallet client', {
+        feedbackId,
+        nftTokenId: feedback.toUser.nftTokenId,
+      })
+      // Note: Blockchain submission requires wallet client and gas
+      // This would be called from a user-facing endpoint with wallet connection
+    }
+
+    return {
+      agent0TokenId,
+      agent0Rating,
+      submitted: true,
+    }
+  } catch (error) {
+    logger.error('Failed to submit feedback to Agent0', { feedbackId, error })
+    throw error
   }
 }
 
@@ -185,71 +194,95 @@ export async function submitFeedbackToAgent0(feedbackId: string, submitToBlockch
  * @returns Sync results
  */
 export async function periodicReputationSync(userId?: string) {
-  logger.info('Starting periodic reputation sync', { userId })
+  try {
+    logger.info('Starting periodic reputation sync', { userId })
 
-  // Get users with Agent0 registration
-  const users = await prisma.user.findMany({
-    where: {
-      agent0TokenId: { not: null },
-      ...(userId ? { id: userId } : {}),
-    },
-    select: {
-      id: true,
-      agent0TokenId: true,
-      nftTokenId: true,
-      AgentPerformanceMetrics: {
-        select: {
-          lastSyncedAt: true,
+    // Get users with Agent0 registration
+    const users = await prisma.user.findMany({
+      where: {
+        agent0TokenId: { not: null },
+        ...(userId ? { id: userId } : {}),
+      },
+      select: {
+        id: true,
+        agent0TokenId: true,
+        nftTokenId: true,
+        performanceMetrics: {
+          select: {
+            lastSyncedAt: true,
+          },
         },
       },
-    },
-  })
+    })
 
-  logger.info(`Found ${users.length} agents to sync`, { userId })
+    logger.info(`Found ${users.length} agents to sync`, { userId })
 
-  const results = []
+    const results = []
 
-  for (const user of users) {
-    if (!user.agent0TokenId) continue
+    for (const user of users) {
+      try {
+        if (!user.agent0TokenId) continue
 
-    // Skip if synced recently (within last hour)
-    const lastSync = user.AgentPerformanceMetrics?.lastSyncedAt
-    if (lastSync && Date.now() - lastSync.getTime() < 3600000) {
-      logger.debug('Skipping recently synced user', {
-        userId: user.id,
-        lastSync,
-      })
-      continue
+        // Skip if synced recently (within last hour)
+        const lastSync = user.performanceMetrics?.lastSyncedAt
+        if (lastSync && Date.now() - lastSync.getTime() < 3600000) {
+          logger.debug('Skipping recently synced user', {
+            userId: user.id,
+            lastSync,
+          })
+          continue
+        }
+
+        // Sync on-chain reputation
+        await syncOnChainReputation(user.id, user.agent0TokenId)
+
+        // Recalculate local reputation
+        await recalculateReputation(user.id)
+
+        results.push({
+          userId: user.id,
+          agent0TokenId: user.agent0TokenId,
+          success: true,
+          syncedAt: new Date(),
+        })
+
+        logger.info('User reputation synced', {
+          userId: user.id,
+          agent0TokenId: user.agent0TokenId,
+        })
+      } catch (error) {
+        logger.error('Failed to sync user reputation', {
+          userId: user.id,
+          error,
+        })
+
+        results.push({
+          userId: user.id,
+          agent0TokenId: user.agent0TokenId,
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
     }
 
-    // Sync on-chain reputation
-    await syncOnChainReputation(user.id, user.agent0TokenId)
-
-    // Recalculate local reputation
-    await recalculateReputation(user.id)
-
-    results.push({
-      userId: user.id,
-      agent0TokenId: user.agent0TokenId,
-      success: true,
-      syncedAt: new Date(),
+    logger.info('Periodic reputation sync completed', {
+      total: users.length,
+      successful: results.filter((r) => r.success).length,
+      failed: results.filter((r) => !r.success).length,
     })
 
-    logger.info('User reputation synced', {
-      userId: user.id,
-      agent0TokenId: user.agent0TokenId,
-    })
-  }
-
-  logger.info('Periodic reputation sync completed', {
-    total: users.length,
-    successful: results.filter((r) => r.success).length,
-    failed: results.filter((r) => !r.success).length,
-  })
-
-  return {
-    total: users.length,
-    results,
+    return {
+      total: users.length,
+      results,
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+    logger.error('Failed to run periodic reputation sync', { 
+      error: errorMessage,
+      stack: errorStack 
+    }, 'PeriodicReputationSync')
+    throw error
   }
 }
 
@@ -263,32 +296,43 @@ export async function periodicReputationSync(userId?: string) {
  * @returns Enhanced metadata object
  */
 export async function getReputationForAgent0Metadata(userId: string) {
-  // Get reputation breakdown
-  const reputation = await getReputationBreakdown(userId)
+  try {
+    // Get reputation breakdown
+    const reputation = await getReputationBreakdown(userId)
 
-  if (!reputation) {
+    if (!reputation) {
+      return {
+        reputation: {
+          score: 50,
+          trustLevel: 'UNRATED',
+          confidence: 0,
+          gamesPlayed: 0,
+          winRate: 0,
+        },
+      }
+    }
+
+    return {
+      reputation: {
+        score: Math.round(reputation.reputationScore),
+        trustLevel: reputation.trustLevel,
+        confidence: Math.round(reputation.confidenceScore * 100) / 100,
+        gamesPlayed: reputation.metrics.gamesPlayed,
+        winRate: Math.round(reputation.metrics.winRate * 100) / 100,
+        normalizedPnL: Math.round(reputation.metrics.normalizedPnL * 100) / 100,
+        averageFeedbackScore: Math.round(reputation.metrics.averageFeedbackScore),
+        totalFeedback: reputation.metrics.totalFeedbackCount,
+      },
+    }
+  } catch (error) {
+    logger.error('Failed to get reputation for Agent0 metadata', { userId, error })
     return {
       reputation: {
         score: 50,
         trustLevel: 'UNRATED',
         confidence: 0,
-        gamesPlayed: 0,
-        winRate: 0,
       },
     }
-  }
-
-  return {
-    reputation: {
-      score: Math.round(reputation.reputationScore),
-      trustLevel: reputation.trustLevel,
-      confidence: Math.round(reputation.confidenceScore * 100) / 100,
-      gamesPlayed: reputation.metrics.gamesPlayed,
-      winRate: Math.round(reputation.metrics.winRate * 100) / 100,
-      normalizedPnL: Math.round(reputation.metrics.normalizedPnL * 100) / 100,
-      averageFeedbackScore: Math.round(reputation.metrics.averageFeedbackScore),
-      totalFeedback: reputation.metrics.totalFeedbackCount,
-    },
   }
 }
 
@@ -301,34 +345,39 @@ export async function getReputationForAgent0Metadata(userId: string) {
  * @returns Updated metrics
  */
 export async function syncUserReputationNow(userId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      agent0TokenId: true,
-      nftTokenId: true,
-    },
-  })
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        agent0TokenId: true,
+        nftTokenId: true,
+      },
+    })
 
-  if (!user) {
-    throw new Error(`User ${userId} not found`)
+    if (!user) {
+      throw new Error(`User ${userId} not found`)
+    }
+
+    if (!user.agent0TokenId) {
+      throw new Error(`User ${userId} has no Agent0 token ID`)
+    }
+
+    // Sync on-chain reputation
+    const metrics = await syncOnChainReputation(userId, user.agent0TokenId)
+
+    // Recalculate local reputation
+    await recalculateReputation(userId)
+
+    logger.info('On-demand reputation sync completed', {
+      userId,
+      agent0TokenId: user.agent0TokenId,
+    })
+
+    return metrics
+  } catch (error) {
+    logger.error('Failed to sync user reputation on demand', { userId, error })
+    throw error
   }
-
-  if (!user.agent0TokenId) {
-    throw new Error(`User ${userId} has no Agent0 token ID`)
-  }
-
-  // Sync on-chain reputation
-  const metrics = await syncOnChainReputation(userId, user.agent0TokenId)
-
-  // Recalculate local reputation
-  await recalculateReputation(userId)
-
-  logger.info('On-demand reputation sync completed', {
-    userId,
-    agent0TokenId: user.agent0TokenId,
-  })
-
-  return metrics
 }
 
 // Reputation sync interval (3 hours in milliseconds)
@@ -362,26 +411,34 @@ async function shouldSyncReputation(): Promise<boolean> {
  * @returns Object with synced status and optional results
  */
 export async function periodicReputationSyncIfNeeded() {
-  const shouldSync = await shouldSyncReputation()
+  try {
+    const shouldSync = await shouldSyncReputation()
 
-  if (!shouldSync) {
-    logger.debug('Reputation sync not needed yet', undefined, 'ReputationSync')
-    return { synced: false }
-  }
+    if (!shouldSync) {
+      logger.debug('Reputation sync not needed yet', undefined, 'ReputationSync')
+      return { synced: false }
+    }
 
-  logger.info('Starting periodic reputation sync from game tick', undefined, 'ReputationSync')
-  const results = await periodicReputationSync()
+    logger.info('Starting periodic reputation sync from game tick', undefined, 'ReputationSync')
+    const results = await periodicReputationSync()
 
-  logger.info('Reputation sync completed', {
-    total: results.total,
-    successful: results.results.filter((r) => r.success).length,
-    failed: results.results.filter((r) => !r.success).length,
-  }, 'ReputationSync')
+    logger.info('Reputation sync completed', {
+      total: results.total,
+      successful: results.results.filter((r) => r.success).length,
+      failed: results.results.filter((r) => !r.success).length,
+    }, 'ReputationSync')
 
-  return {
-    synced: true,
-    total: results.total,
-    successful: results.results.filter((r) => r.success).length,
-    failed: results.results.filter((r) => !r.success).length,
+    return {
+      synced: true,
+      total: results.total,
+      successful: results.results.filter((r) => r.success).length,
+      failed: results.results.filter((r) => !r.success).length,
+    }
+  } catch (error) {
+    logger.error('Failed to run periodic reputation sync', { error }, 'ReputationSync')
+    return {
+      synced: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
   }
 }

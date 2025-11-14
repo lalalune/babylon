@@ -1,24 +1,47 @@
 {
+  "framework": "nextjs",
+  "regions": ["iad1"],
   "crons": [
     {
       "path": "/api/cron/game-tick",
       "schedule": "* * * * *"
+    }
+  ],
+  "functions": {
+    "src/app/api/sse/events/route.ts": {
+      "memory": 512,
+      "maxDuration": 300
     },
-    {
-      "path": "/api/cron/world-facts",
-      "schedule": "0 0 * * *"
+    "src/app/api/cron/game-tick/route.ts": {
+      "memory": 1024,
+      "maxDuration": 300
     },
+    "src/app/api/**/*.ts": {
+      "memory": 1024,
+      "maxDuration": 30
+    }
+  },
+  "headers": [
     {
-      "path": "/api/cron/training-check",
-      "schedule": "0 * * * *"
-    },
-    {
-      "path": "/api/cron/training",
-      "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/cron/health-check",
-      "schedule": "*/15 * * * *"
+      "source": "/api/:path*",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Credentials",
+          "value": "true"
+        },
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET,DELETE,PATCH,POST,PUT,OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization"
+        }
+      ]
     }
   ]
 }

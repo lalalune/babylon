@@ -6,10 +6,8 @@
 
 import { describe, test, expect } from 'bun:test'
 
-describe('BaseRepository', () => {
-  test('BaseRepository stub file exists (pending implementation)', () => {
-    // This is a placeholder for future BaseRepository implementation
-    // Test passes to confirm the test file structure is in place
+describe.skip('BaseRepository', () => {
+  test('BaseRepository stub file exists', () => {
     expect(true).toBe(true)
   })
 })

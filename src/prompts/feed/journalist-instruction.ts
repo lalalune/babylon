@@ -2,7 +2,7 @@ import { definePrompt } from '../define-prompt';
 
 export const journalistInstruction = definePrompt({
   id: 'journalist-instruction',
-  version: '2.0.0',
+  version: '1.0.0',
   category: 'feed',
   description: 'Actor instruction block for batch journalist post generation',
   temperature: 0.8,
@@ -12,6 +12,6 @@ export const journalistInstruction = definePrompt({
    {{emotionalContext}}{{voiceContext}}
 
    Write breaking news. Your current mood and luck may subtly influence your reporting angle.
-   Max 280 chars. Stay in character. No hashtags/emojis.
+   Max 280 chars. Stay in character.
 `.trim()
 });

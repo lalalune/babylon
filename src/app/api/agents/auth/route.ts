@@ -1,66 +1,8 @@
 /**
  * Agent Authentication API
- * 
- * @route POST /api/agents/auth
- * @access Public (with credentials)
- * 
- * @description
- * Secure authentication endpoint for autonomous Babylon agents. Provides
- * session-based authentication without requiring user Privy tokens. Agent
- * credentials are validated against environment variables, and successful
- * authentication returns a time-limited session token.
- * 
- * **Authentication Flow:**
- * 1. Agent provides agentId and agentSecret
- * 2. Credentials verified against environment configuration
- * 3. Session token generated and stored
- * 4. Expired sessions automatically cleaned up
- * 5. Token used for subsequent authenticated requests
- * 
- * **Security Features:**
- * - Secure credential validation via environment variables
- * - Time-limited session tokens (configurable expiration)
- * - Automatic cleanup of expired sessions
- * - Cryptographically secure token generation
- * - Rate limiting and abuse prevention
- * 
- * **POST /api/agents/auth - Authenticate Agent**
- * 
- * @param {string} agentId - Agent identifier (required)
- * @param {string} agentSecret - Agent secret key (required)
- * 
- * @returns {object} Authentication response
- * @property {boolean} success - Authentication success status
- * @property {string} sessionToken - Session token for authenticated requests
- * @property {string} expiresAt - ISO timestamp of session expiration
- * @property {number} expiresIn - Seconds until session expires
- * 
- * @throws {400} Bad Request - Invalid request format
- * @throws {401} Unauthorized - Invalid credentials
- * @throws {500} Internal Server Error
- * 
- * @example
- * ```typescript
- * // Authenticate agent
- * const response = await fetch('/api/agents/auth', {
- *   method: 'POST',
- *   headers: { 'Content-Type': 'application/json' },
- *   body: JSON.stringify({
- *     agentId: 'my-agent-id',
- *     agentSecret: process.env.AGENT_SECRET
- *   })
- * });
- * 
- * const { sessionToken, expiresIn } = await response.json();
- * 
- * // Use token for authenticated requests
- * await fetch('/api/some-endpoint', {
- *   headers: { 'Authorization': `Bearer ${sessionToken}` }
- * });
- * ```
- * 
- * @see {@link /lib/auth/agent-auth} Agent authentication implementation
- * @see {@link /examples/autonomous-babylon-agent} Example agent usage
+ *
+ * Provides authentication for Babylon agents without requiring user Privy tokens.
+ * Uses internal agent credentials stored securely in environment variables.
  */
 
 import type { NextRequest } from 'next/server';

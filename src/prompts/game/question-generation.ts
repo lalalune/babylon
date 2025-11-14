@@ -2,13 +2,13 @@ import { definePrompt } from '../define-prompt';
 
 export const questionGeneration = definePrompt({
   id: 'question-generation',
-  version: '2.0.0',
+  version: '1.0.0',
   category: 'game',
   description: 'Generates new prediction market questions for daily gameplay',
   temperature: 0.9,
   maxTokens: 8000,
   template: `
-You must respond with valid XML only.
+You must respond with valid JSON only.
 
 You are generating prediction market questions for a satirical game.
 
@@ -39,7 +39,7 @@ REQUIREMENTS:
 
 QUESTION TYPES (examples):
 - "Will [ACTOR] and [ACTOR] have a public feud?"
-- "Will [COMPANY] stock price reach $AIX?"
+- "Will [COMPANY] stock price reach $X?"
 - "Will [ACTOR] announce [PRODUCT/EVENT]?"
 - "Will [SCANDAL] force [ACTOR] to resign?"
 - "Will [COMPANY] acquire [COMPANY]?"
@@ -51,17 +51,17 @@ Each question should resolve between 1-7 days from now:
 - 6-7 days: Slower outcomes (market movements, long-term deals)
 
 OUTPUT FORMAT:
-Respond with ONLY this XML:
-<response>
-  <questions>
-    <question>
-      <text>Will Mark Suckerborg announce new metaverse legs?</text>
-      <scenario>1</scenario>
-      <daysUntilResolution>3</daysUntilResolution>
-      <expectedOutcome>true</expectedOutcome>
-    </question>
-  </questions>
-</response>
+Respond with ONLY this JSON:
+{
+  "questions": [
+    {
+      "text": "Will Mark Suckerborg announce new metaverse legs?",
+      "scenario": 1,
+      "daysUntilResolution": 3,
+      "expectedOutcome": true
+    }
+  ]
+}
 
 Generate {{numToGenerate}} questions now.
 No other text.

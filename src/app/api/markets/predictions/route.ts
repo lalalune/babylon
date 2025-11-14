@@ -1,102 +1,8 @@
 /**
  * Prediction Markets API
- * 
- * @route GET /api/markets/predictions
- * @access Public (enhanced with authentication)
- * 
- * @description
- * Retrieves active prediction markets with real-time pricing, share counts,
- * and optional user position data. Implements automated market maker (AMM)
- * pricing model with yes/no binary outcomes. Supports both anonymous and
- * authenticated access with position tracking.
- * 
- * **Market Data Includes:**
- * - **Question Details:** text, status, creation/resolution dates, outcomes
- * - **Market Pricing:** yes/no share counts, implied probabilities
- * - **User Positions:** shares owned, entry price, current value, unrealized P&L
- * - **Scenario Context:** associated scenario/event ID
- * 
- * **Pricing Model:**
- * Markets use an Automated Market Maker (AMM) where:
- * - Price = shares / totalShares
- * - Yes Price = yesShares / (yesShares + noShares)
- * - No Price = noShares / (yesShares + noShares)
- * - Prices represent implied probability (0.0 to 1.0)
- * 
- * **Market States:**
- * - `active` - Open for trading
- * - `resolved` - Outcome determined
- * - `cancelled` - Market cancelled/invalid
- * 
- * **User Position Metrics:**
- * When `userId` provided and user has positions:
- * - `shares` - Number of shares owned
- * - `avgPrice` - Average entry price
- * - `currentPrice` - Current market price
- * - `currentValue` - Current position value
- * - `costBasis` - Total cost of position
- * - `unrealizedPnL` - Unrealized profit/loss
- * 
- * **Row Level Security (RLS):**
- * Uses context-aware database access:
- * - Authenticated users: `asUser()` with user context
- * - Unauthenticated: `asPublic()` with read-only access
- * 
- * **GET /api/markets/predictions - Get Prediction Markets**
- * 
- * @query {string} [userId] - User ID to include position data
- * 
- * @returns {object} Prediction markets response
- * @property {boolean} success - Operation success status
- * @property {array} questions - Array of prediction market objects
- * @property {number} count - Total markets count
- * 
- * **Question Object Fields:**
- * @property {string} id - Question/market ID
- * @property {number} questionNumber - Sequential question number
- * @property {string} text - Question text
- * @property {string} status - Market status
- * @property {string} createdDate - Creation timestamp
- * @property {string} resolutionDate - Resolution deadline
- * @property {string} [resolvedOutcome] - Outcome if resolved
- * @property {string} scenario - Associated scenario ID
- * @property {number} yesShares - Yes shares in market
- * @property {number} noShares - No shares in market
- * @property {object} [userPosition] - User position (if userId provided)
- * 
- * @throws {400} Bad Request - Invalid query parameters
- * @throws {500} Internal Server Error
- * 
- * @example
- * ```typescript
- * // Get all active markets (public)
- * const markets = await fetch('/api/markets/predictions')
- *   .then(r => r.json());
- * 
- * markets.questions.forEach(q => {
- *   const yesPrice = q.yesShares / (q.yesShares + q.noShares);
- *   const noPrice = q.noShares / (q.yesShares + q.noShares);
- *   console.log(`${q.text}: YES ${(yesPrice * 100).toFixed(1)}%`);
- * });
- * 
- * // Get markets with user positions
- * const userMarkets = await fetch(`/api/markets/predictions?userId=${userId}`, {
- *   headers: { 'Authorization': `Bearer ${token}` }
- * }).then(r => r.json());
- * 
- * userMarkets.questions.forEach(q => {
- *   if (q.userPosition) {
- *     const { shares, avgPrice, currentPrice, unrealizedPnL } = q.userPosition;
- *     console.log(`Position: ${shares} @ $${avgPrice}, P&L: $${unrealizedPnL}`);
- *   }
- * });
- * ```
- * 
- * @see {@link /lib/database-service} Database query layer
- * @see {@link /lib/db/context} RLS context management
- * @see {@link /api/markets/predictions/[id]/buy} Buy shares endpoint
- * @see {@link /api/markets/predictions/[id]/sell} Sell shares endpoint
- * @see {@link /src/app/markets/page.tsx} Markets UI
+ *
+ * GET /api/markets/predictions - Get active prediction questions
+ * Query params: ?userId=xxx - Include user positions if authenticated
  */
 
 import type { NextRequest } from 'next/server';
@@ -104,9 +10,8 @@ import { db } from '@/lib/database-service';
 import { optionalAuth } from '@/lib/api/auth-middleware';
 import { asUser, asPublic } from '@/lib/db/context';
 import { withErrorHandling, successResponse } from '@/lib/errors/error-handler';
-import { MarketQuerySchema } from '@/lib/validation/schemas';
+import { MarketQuerySchema, UserIdParamSchema } from '@/lib/validation/schemas';
 import { logger } from '@/lib/logger';
-import { z } from 'zod';
 
 /**
  * GET /api/markets/predictions
@@ -114,15 +19,33 @@ import { z } from 'zod';
  */
 export const GET = withErrorHandling(async (request: NextRequest) => {
   const questions = await db.getActiveQuestions();
-  const { searchParams } = new URL(request.url);
-
-  const queryParse = MarketQuerySchema.merge(z.object({ userId: z.string().optional() })).partial().safeParse(Object.fromEntries(searchParams));
-
-  if (!queryParse.success) {
-    return successResponse({ error: 'Invalid query parameters', details: queryParse.error.flatten() }, 400);
+  const searchParams = request.nextUrl.searchParams;
+  
+  // Build query params object, filtering out null values
+  const queryParams: Record<string, string | number> = {};
+  const status = searchParams.get('status');
+  const category = searchParams.get('category');
+  const minLiquidity = searchParams.get('minLiquidity');
+  const maxLiquidity = searchParams.get('maxLiquidity');
+  const search = searchParams.get('search');
+  const page = searchParams.get('page');
+  const limit = searchParams.get('limit');
+  
+  if (status) queryParams.status = status;
+  if (category) queryParams.category = category;
+  if (minLiquidity) queryParams.minLiquidity = minLiquidity;
+  if (maxLiquidity) queryParams.maxLiquidity = maxLiquidity;
+  if (search) queryParams.search = search;
+  if (page) queryParams.page = page;
+  if (limit) queryParams.limit = limit;
+  
+  // Validate only if there are params to validate
+  if (Object.keys(queryParams).length > 0) {
+    MarketQuerySchema.partial().parse(queryParams);
   }
-
-  const { userId } = queryParse.data;
+  
+  const userIdParam = searchParams.get('userId');
+  const userId = userIdParam ? UserIdParamSchema.parse({ userId: userIdParam }).userId : undefined;
 
   // Optional auth
   const authUser = await optionalAuth(request).catch(() => null);
@@ -148,13 +71,13 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
           marketId: { in: marketIds },
         },
         include: {
-          Market: true,
+          market: true,
         },
       });
 
       // Create map of marketId -> position data
       positions.forEach(p => {
-        const market = p.Market;
+        const market = p.market;
         const totalShares = Number(market.yesShares) + Number(market.noShares);
         const currentYesPrice = totalShares > 0 ? Number(market.yesShares) / totalShares : 0.5;
         const currentNoPrice = totalShares > 0 ? Number(market.noShares) / totalShares : 0.5;
@@ -193,13 +116,13 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
             marketId: { in: marketIds },
           },
           include: {
-            Market: true,
+            market: true,
           },
         });
 
         // Create map of marketId -> position data
         positions.forEach(p => {
-          const market = p.Market;
+          const market = p.market;
           const totalShares = Number(market.yesShares) + Number(market.noShares);
           const currentYesPrice = totalShares > 0 ? Number(market.yesShares) / totalShares : 0.5;
           const currentNoPrice = totalShares > 0 ? Number(market.noShares) / totalShares : 0.5;

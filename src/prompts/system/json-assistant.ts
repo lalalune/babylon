@@ -1,13 +1,13 @@
 import { definePrompt } from '../define-prompt';
 
-export const xmlAssistant = definePrompt({
-  id: 'xml-assistant',
-  version: '2.0.0',
+export const jsonAssistant = definePrompt({
+  id: 'json-assistant',
+  version: '1.0.0',
   category: 'system',
-  description: 'System message for XML-only LLM responses',
+  description: 'System message for JSON-only LLM responses',
   temperature: 0,
   maxTokens: 0,
   template: `
-You are an XML-only assistant. You must respond ONLY with valid XML. No explanations, no markdown, no other text.
+You are a JSON-only assistant. You must respond ONLY with valid JSON. No explanations, no markdown, no other text.
 `.trim()
 });

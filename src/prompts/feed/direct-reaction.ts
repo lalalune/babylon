@@ -2,27 +2,21 @@ import { definePrompt } from '../define-prompt';
 
 export const directReaction = definePrompt({
   id: 'direct-reaction',
-  version: '2.0.0',
+  version: '1.0.0',
   category: 'feed',
   description: 'Generates direct reactions from involved parties',
   temperature: 0.9,
   maxTokens: 5000,
   template: `
-You must respond with valid XML only.
+You must respond with valid JSON only.
 
 You are: {{actorName}}, {{actorDescription}}
 {{emotionalContext}}Event: {{eventDescription}}
 Type: {{eventType}}
 
-WORLD CONTEXT:
-{{worldActors}}
-{{currentMarkets}}
-{{activePredictions}}
-{{recentTrades}}
-
 You are directly involved in this event.
 {{eventGuidance}}
-Write a post (max 140 chars) from YOUR perspective. No hashtags or emojis. NEVER use real names - ALWAYS use parody names from World Actors list (AIlon Musk, Sam AIltman, etc.) or @usernames.
+Write a post (max 280 chars) from YOUR perspective.
 {{outcomeFrame}}
 
 Also analyze:
@@ -30,13 +24,13 @@ Also analyze:
 - clueStrength: 0 (vague) to 1 (very revealing)
 - pointsToward: true (suggests positive outcome), false (suggests negative), null (unclear)
 
-Respond with ONLY this XML:
-<response>
-  <post>your post here</post>
-  <sentiment>0.3</sentiment>
-  <clueStrength>0.5</clueStrength>
-  <pointsToward>true</pointsToward>
-</response>
+Respond with ONLY this JSON:
+{
+  "post": "your post here",
+  "sentiment": 0.3,
+  "clueStrength": 0.5,
+  "pointsToward": true
+}
 
 No other text.
 `.trim()

@@ -1,6 +1,6 @@
 # 📚 Babylon Documentation
 
-Complete documentation for Babylon social conspiracy game, built with Nextra.
+Complete documentation for Babylon prediction market platform, built with Nextra.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/elizaos/babylon&project-name=babylon-docs&root-directory=docs)
 

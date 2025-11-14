@@ -85,8 +85,3 @@ export function getWalletErrorMessage(error: unknown): string {
     ? error.message
     : 'An unknown error occurred with your wallet.';
 }
-
-
-
-
-

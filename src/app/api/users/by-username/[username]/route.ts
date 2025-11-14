@@ -58,11 +58,11 @@ export const GET = withErrorHandling(async (
         createdAt: true,
         _count: {
           select: {
-            Position: true,
-            Comment: true,
-            Reaction: true,
-            Follow_Follow_followingIdToUser: true,
-            Follow_Follow_followerIdToUser: true,
+            positions: true,
+            comments: true,
+            reactions: true,
+            followedBy: true,
+            following: true,
           },
         },
       },
@@ -106,11 +106,11 @@ export const GET = withErrorHandling(async (
       twitterUsername: dbUser.twitterUsername,
       createdAt: dbUser.createdAt.toISOString(),
       stats: {
-        positions: dbUser._count.Position,
-        comments: dbUser._count.Comment,
-        reactions: dbUser._count.Reaction,
-        followers: dbUser._count.Follow_Follow_followingIdToUser,
-        following: dbUser._count.Follow_Follow_followerIdToUser,
+        positions: dbUser._count.positions,
+        comments: dbUser._count.comments,
+        reactions: dbUser._count.reactions,
+        followers: dbUser._count.followedBy,
+        following: dbUser._count.following,
       },
     },
   });

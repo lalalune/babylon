@@ -241,12 +241,9 @@ export function buildRelationshipContext(
 
 /**
  * Convert question ID to number safely
- * 
- * ⚠️  WARNING: Do NOT use with Question.id (Snowflake strings)!
- * This function is for converting Question.questionNumber or legacy numeric IDs.
- * 
- * @deprecated Prefer using question.questionNumber directly
- * @param questionId - Question number (can be string or number, but NOT Snowflake ID)
+ * Handles both string and number IDs, converting strings to numbers when possible
+ *
+ * @param questionId - Question ID (can be string or number)
  * @returns Number ID, or 0 if conversion fails
  */
 export function toQuestionIdNumber(questionId: string | number): number {
@@ -259,12 +256,9 @@ export function toQuestionIdNumber(questionId: string | number): number {
 
 /**
  * Convert question ID to number or null
- * 
- * ⚠️  WARNING: Do NOT use with Question.id (Snowflake strings)!
- * This function is for converting Question.questionNumber or legacy numeric IDs.
- * 
- * @deprecated Prefer using question.questionNumber directly
- * @param questionId - Question number (can be string, number, null, or undefined, but NOT Snowflake ID)
+ * Returns null if conversion fails or if questionId is null/undefined
+ *
+ * @param questionId - Question ID (can be string, number, null, or undefined)
  * @returns Number ID, or null if conversion fails or input is null/undefined
  */
 export function toQuestionIdNumberOrNull(questionId: string | number | null | undefined): number | null {

@@ -52,21 +52,6 @@ services:
       timeout: 5s
       retries: 5
 
-  anvil:
-    image: ghcr.io/foundry-rs/foundry:latest
-    container_name: babylon-anvil
-    restart: unless-stopped
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - "anvil --host 0.0.0.0 --chain-id 31337 --block-time 1 --no-cors --accounts 10 --balance 10000"
-    ports:
-      - "8545:8545"
-    healthcheck:
-      test: ["CMD", "cast", "block-number", "--rpc-url", "http://localhost:8545"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
 volumes:
   postgres_data:
     driver: local

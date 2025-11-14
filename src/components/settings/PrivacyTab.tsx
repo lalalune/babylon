@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 
 export function PrivacyTab() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const [isExporting, setIsExporting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
@@ -17,36 +17,32 @@ export function PrivacyTab() {
 
   const handleExportData = async () => {
     setIsExporting(true)
-    
-    const response = await apiFetch('/api/users/export-data').catch((error: Error) => {
+    try {
+      const response = await apiFetch('/api/users/export-data')
+      
+      if (!response.ok) {
+        throw new Error('Failed to export data')
+      }
+
+      // Get the JSON data and create a download
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `babylon-data-export-${Date.now()}.json`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast.success('Data exported successfully')
+      logger.info('User exported their data', undefined, 'PrivacyTab')
+    } catch (error) {
       logger.error('Failed to export user data', { error }, 'PrivacyTab')
       toast.error('Failed to export data. Please try again.')
+    } finally {
       setIsExporting(false)
-      throw error
-    })
-    
-    if (!response.ok) {
-      const error = new Error('Failed to export data')
-      logger.error('Failed to export user data', { error }, 'PrivacyTab')
-      toast.error('Failed to export data. Please try again.')
-      setIsExporting(false)
-      throw error
     }
-
-    // Get the JSON data and create a download
-    const blob = await response.blob()
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `babylon-data-export-${Date.now()}.json`
-    document.body.appendChild(a)
-    a.click()
-    window.URL.revokeObjectURL(url)
-    document.body.removeChild(a)
-
-    toast.success('Data exported successfully')
-    logger.info('User exported their data', undefined, 'PrivacyTab')
-    setIsExporting(false)
   }
 
   const handleDeleteAccount = async () => {
@@ -56,40 +52,33 @@ export function PrivacyTab() {
     }
 
     setIsDeleting(true)
-    
-    const response = await apiFetch('/api/users/delete-account', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        confirmation: 'DELETE MY ACCOUNT',
-        reason: deleteReason || undefined,
-      }),
-    }).catch((error: Error) => {
-      logger.error('Failed to delete account', { error }, 'PrivacyTab')
-      toast.error('Failed to delete account. Please try again or contact support.')
-      setIsDeleting(false)
-      throw error
-    })
+    try {
+      const response = await apiFetch('/api/users/delete-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          confirmation: 'DELETE MY ACCOUNT',
+          reason: deleteReason || undefined,
+        }),
+      })
 
-    if (!response.ok) {
-      const error = new Error('Failed to delete account')
+      if (!response.ok) {
+        throw new Error('Failed to delete account')
+      }
+      
+      toast.success('Account deleted successfully')
+      logger.info('User deleted their account', undefined, 'PrivacyTab')
+
+      // Redirect to logout after a brief delay
+      setTimeout(() => {
+        window.location.href = '/api/auth/logout'
+      }, 2000)
+    } catch (error) {
       logger.error('Failed to delete account', { error }, 'PrivacyTab')
       toast.error('Failed to delete account. Please try again or contact support.')
+    } finally {
       setIsDeleting(false)
-      throw error
     }
-    
-    toast.success('Account deleted successfully')
-    logger.info('User deleted their account', undefined, 'PrivacyTab')
-
-    // Logout after a brief delay to show success message
-    setTimeout(async () => {
-      await logout()
-      // After logout, redirect to home page
-      window.location.href = '/'
-    }, 2000)
-    
-    setIsDeleting(false)
   }
 
   return (
@@ -148,7 +137,7 @@ export function PrivacyTab() {
             <button
               onClick={handleExportData}
               disabled={isExporting}
-              className="mt-3 px-4 py-2 bg-[#0066FF] text-primary-foreground rounded-lg hover:bg-[#0066FF]/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="mt-3 px-4 py-2 bg-[#0066FF] text-white rounded-lg hover:bg-[#0066FF]/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isExporting ? 'Exporting...' : 'Export My Data'}
             </button>
@@ -191,7 +180,7 @@ export function PrivacyTab() {
             {!showDeleteConfirm ? (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                className="mt-3 px-4 py-2 bg-red-500 text-primary-foreground rounded-lg hover:bg-red-600"
+                className="mt-3 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
               >
                 Delete My Account
               </button>
@@ -242,7 +231,7 @@ export function PrivacyTab() {
                   <button
                     onClick={handleDeleteAccount}
                     disabled={isDeleting || deleteConfirmation !== 'DELETE MY ACCOUNT'}
-                    className="px-4 py-2 bg-red-500 text-primary-foreground rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isDeleting ? 'Deleting...' : 'Confirm Deletion'}
                   </button>

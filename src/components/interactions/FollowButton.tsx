@@ -6,7 +6,7 @@ import { UserPlus, UserMinus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { toast } from 'sonner'
-import { Skeleton } from '@/components/shared/Skeleton'
+import { BouncingLogo } from '@/components/shared/BouncingLogo'
 import { useSocialTracking } from '@/hooks/usePostHog'
 
 interface FollowButtonProps {
@@ -16,7 +16,6 @@ interface FollowButtonProps {
   variant?: 'button' | 'icon'
   className?: string
   onFollowChange?: (isFollowing: boolean) => void
-  onFollowerCountChange?: (delta: number) => void // +1 for follow, -1 for unfollow
 }
 
 export function FollowButton({
@@ -26,7 +25,6 @@ export function FollowButton({
   variant = 'button',
   className,
   onFollowChange,
-  onFollowerCountChange,
 }: FollowButtonProps) {
   const { authenticated, user } = useAuth()
   const [isFollowing, setIsFollowing] = useState(initialFollowing)
@@ -110,17 +108,9 @@ export function FollowButton({
       return
     }
 
-    // Optimistic update
-    const newFollowingState = !isFollowing
-    const delta = newFollowingState ? 1 : -1
-    
-    setIsFollowing(newFollowingState)
-    onFollowChange?.(newFollowingState)
-    onFollowerCountChange?.(delta) // Update follower count immediately
-
     // Encode userId/username to handle special characters
     const encodedIdentifier = encodeURIComponent(userId)
-    const method = newFollowingState ? 'POST' : 'DELETE'
+    const method = isFollowing ? 'DELETE' : 'POST'
     const response = await fetch(`/api/users/${encodedIdentifier}/follow`, {
       method,
       headers: {
@@ -132,14 +122,10 @@ export function FollowButton({
       const newFollowingState = !isFollowing
       setIsFollowing(newFollowingState)
       onFollowChange?.(newFollowingState)
+      toast.success(newFollowingState ? 'Following' : 'Unfollowed')
+      // Track follow action (client-side for instant feedback)
       trackFollow(userId, newFollowingState)
-      // Success! The follower count is already updated via onFollowerCountChange callback
     } else {
-      // Revert optimistic update on error
-      setIsFollowing(!newFollowingState)
-      onFollowChange?.(!newFollowingState)
-      onFollowerCountChange?.(-delta) // Revert follower count
-      
       // Try to get error message, but don't show generic errors for 404s
       const errorData = await response.json().catch(() => ({ error: null }))
       if (response.status === 404) {
@@ -184,10 +170,10 @@ export function FollowButton({
     lg: 'w-5 h-5',
   }
 
-  const skeletonSizes = {
-    sm: 'w-3 h-3',
-    md: 'w-4 h-4',
-    lg: 'w-5 h-5',
+  const iconPixelSizes = {
+    sm: 12,
+    md: 16,
+    lg: 20,
   }
 
   if (variant === 'icon') {
@@ -206,7 +192,7 @@ export function FollowButton({
         aria-label={isFollowing ? 'Unfollow' : 'Follow'}
       >
         {isLoading ? (
-          <Skeleton className={cn(skeletonSizes[size], "rounded")} />
+          <BouncingLogo size={iconPixelSizes[size]} />
         ) : isFollowing ? (
           <UserMinus className={iconSizes[size]} />
         ) : (
@@ -226,7 +212,7 @@ export function FollowButton({
         'border',
         isFollowing
           ? 'text-foreground bg-background border-border hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-500'
-          : 'text-primary-foreground bg-[#0066FF] border-[#0066FF] hover:bg-[#0052CC]',
+          : 'text-white bg-[#0066FF] border-[#0066FF] hover:bg-[#0052CC]',
         sizeClasses[size],
         isLoading && 'opacity-50 cursor-not-allowed',
         className
@@ -234,6 +220,7 @@ export function FollowButton({
     >
       {isLoading ? (
         <>
+          <BouncingLogo size={iconPixelSizes[size]} />
           <span>...</span>
         </>
       ) : isFollowing ? (
