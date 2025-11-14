@@ -39,6 +39,7 @@
     "@aws-sdk/client-s3": "^3.928.0",
     "@aws-sdk/lib-storage": "^3.928.0",
     "@elizaos/core": "^1.6.4",
+    "@elizaos/plugin-sql": "^1.6.4",
     "@fal-ai/client": "^1.7.2",
     "@farcaster/auth-kit": "^0.8.1",
     "@farcaster/miniapp-sdk": "^0.2.1",
