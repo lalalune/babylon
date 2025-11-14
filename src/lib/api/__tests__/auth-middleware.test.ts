@@ -1,15 +1,18 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
 import type { NextRequest } from 'next/server'
 
-const mockVerifyAgentSession = vi.fn()
-const mockVerifyAuthToken = vi.fn()
-const mockFindUnique = vi.fn()
+const mockVerifyAgentSession = mock()
+const mockVerifyAuthToken = mock()
+const mockFindUnique = mock()
+const mockPrivyClient = mock(() => ({
+  verifyAuthToken: mockVerifyAuthToken,
+}))
 
-vi.mock('@/lib/auth/agent-auth', () => ({
+mock.module('@/lib/auth/agent-auth', () => ({
   verifyAgentSession: mockVerifyAgentSession,
 }))
 
-vi.mock('@/lib/database-service', () => ({
+mock.module('@/lib/database-service', () => ({
   prisma: {
     user: {
       findUnique: mockFindUnique,
@@ -17,10 +20,8 @@ vi.mock('@/lib/database-service', () => ({
   },
 }))
 
-vi.mock('@privy-io/server-auth', () => ({
-  PrivyClient: vi.fn().mockImplementation(() => ({
-    verifyAuthToken: mockVerifyAuthToken,
-  })),
+mock.module('@privy-io/server-auth', () => ({
+  PrivyClient: mockPrivyClient,
 }))
 
 const createRequest = (token: string) =>
@@ -42,6 +43,7 @@ describe('authenticate middleware', () => {
     mockVerifyAgentSession.mockReset()
     mockVerifyAuthToken.mockReset()
     mockFindUnique.mockReset()
+    mockPrivyClient.mockReset()
     process.env.NEXT_PUBLIC_PRIVY_APP_ID = 'test-app'
     process.env.PRIVY_APP_SECRET = 'test-secret'
   })

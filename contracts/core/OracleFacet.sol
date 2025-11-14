@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import "../libraries/LibMarket.sol";
-import "../libraries/LibDiamond.sol";
-import "../oracles/ChainlinkOracleMock.sol";
-import "../oracles/UMAOracleMock.sol";
+import {LibMarket} from "../libraries/LibMarket.sol";
+import {LibDiamond} from "../libraries/LibDiamond.sol";
+import {ChainlinkOracleMock} from "../oracles/ChainlinkOracleMock.sol";
+import {UMAOracleMock} from "../oracles/UMAOracleMock.sol";
 
 /// @title OracleFacet
 /// @notice Facet for oracle integration and market resolution

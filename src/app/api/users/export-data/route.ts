@@ -114,6 +114,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         articleTitle: true,
         timestamp: true,
         createdAt: true,
+        deletedAt: true, // Include deleted status for GDPR export
       },
     }),
     prisma.position.findMany({

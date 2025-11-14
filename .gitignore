@@ -1,6 +1,8 @@
 node_modules
 .env
 .env*.local
+.env.test
+!.env.example
 .DS_Store
 dist/
 .next/
@@ -28,3 +30,21 @@ test-results/
 games/babylon
 games/
 .vercel
+CLAUDE.md
+
+# Sentry Config File
+.env.sentry-build-plugin
+
+training_data
+training_recording
+test-empty
+
+.rl-training-complete
+.system-status
+.rl-training-status
+dev-server.log
+dev-server.pid
+benchmarks/
+__pycache__
+.env.staging
+.secrets

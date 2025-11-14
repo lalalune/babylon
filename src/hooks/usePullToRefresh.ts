@@ -116,16 +116,21 @@ export function usePullToRefresh(options: PullToRefreshOptions): PullToRefreshRe
 
     nodeRef.current = node
 
+    // Helper to get actual scroll position (works with both node and document)
+    const getScrollTop = (): number => {
+      return (document.scrollingElement?.scrollTop ?? 0) || node.scrollTop
+    }
+
     // === TOUCH HANDLERS ===
     const onTouchStart = (e: TouchEvent) => {
-      if (node.scrollTop === 0 && !hasTriggeredRef.current) {
+      if (getScrollTop() === 0 && !hasTriggeredRef.current) {
         touchStartY.current = e.touches[0]?.clientY ?? 0
         isPulling.current = true
       }
     }
 
     const onTouchMove = (e: TouchEvent) => {
-      if (!isPulling.current || hasTriggeredRef.current || node.scrollTop > 0) {
+      if (!isPulling.current || hasTriggeredRef.current || getScrollTop() > 0) {
         isPulling.current = false
         return
       }
@@ -158,6 +163,8 @@ export function usePullToRefresh(options: PullToRefreshOptions): PullToRefreshRe
 
     // === WHEEL HANDLER ===
     const onWheel = (e: WheelEvent) => {
+      const scrollTop = getScrollTop()
+      
       const now = Date.now()
       if (now - lastWheelTriggerRef.current < 800) {
         wheelAccumulator.current = 0
@@ -173,7 +180,7 @@ export function usePullToRefresh(options: PullToRefreshOptions): PullToRefreshRe
         return
       }
       
-      if (node.scrollTop > 0) {
+      if (scrollTop > 0) {
         wheelAccumulator.current = 0
         return
       }

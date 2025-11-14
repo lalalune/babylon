@@ -42,7 +42,7 @@ export function useUpdateAgentProfileTx() {
 
       const targetEndpoint =
         endpoint ??
-        `https://babylon.game/agent/${smartWalletAddress.toLowerCase()}`;
+        `https://babylon.market/agent/${smartWalletAddress.toLowerCase()}`;
 
       const metadataJson = JSON.stringify({
         ...metadata,

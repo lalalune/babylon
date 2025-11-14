@@ -1,0 +1,11 @@
+[**babylon v0.1.0**](../../../../README.md)
+
+***
+
+[babylon](../../../../README.md) / [lib/web3/abis](../README.md) / PREDICTION\_MARKET\_ABI
+
+# Variable: PREDICTION\_MARKET\_ABI
+
+> `const` **PREDICTION\_MARKET\_ABI**: readonly \[`"function createMarket(string calldata _question, string[] calldata _outcomeNames, uint256 _resolveAt, address _oracle) external returns (bytes32)"`, `"function resolveMarket(bytes32 _marketId, uint8 _winningOutcome) external"`, `"function buyShares(bytes32 _marketId, uint8 _outcome, uint256 _numShares) external payable"`, `"function sellShares(bytes32 _marketId, uint8 _outcome, uint256 _numShares) external"`, `"function claimWinnings(bytes32 _marketId) external"`, `"function calculateCost(bytes32 _marketId, uint8 _outcome, uint256 _numShares) external view returns (uint256)"`, `"function calculateSellPayout(bytes32 _marketId, uint8 _outcome, uint256 _numShares) external view returns (uint256)"`, `"function deposit() external payable"`, `"function withdraw(uint256 _amount) external"`, `"function getBalance(address _user) external view returns (uint256)"`, `"function getMarket(bytes32 _marketId) external view returns (string memory question, uint8 numOutcomes, uint256 liquidity, bool resolved, uint8 winningOutcome)"`, `"function getMarketShares(bytes32 _marketId, uint8 _outcome) external view returns (uint256)"`, `"function getPosition(address _user, bytes32 _marketId, uint8 _outcome) external view returns (uint256)"`, `"event MarketCreated(bytes32 indexed marketId, string question, uint8 numOutcomes, uint256 liquidity)"`, `"event SharesPurchased(bytes32 indexed marketId, address indexed buyer, uint8 outcome, uint256 shares, uint256 cost)"`, `"event SharesSold(bytes32 indexed marketId, address indexed seller, uint8 outcome, uint256 shares, uint256 payout)"`, `"event MarketResolved(bytes32 indexed marketId, uint8 winningOutcome)"`, `"event PositionClaimed(bytes32 indexed marketId, address indexed claimer, uint256 payout)"`, `"event Deposited(address indexed user, uint256 amount)"`, `"event Withdrawn(address indexed user, uint256 amount)"`\]
+
+Defined in: [src/lib/web3/abis.ts:59](https://github.com/lalalune/babylon/blob/309d41be44719cd3238d25a6c463d399f70ddf34/src/lib/web3/abis.ts#L59)

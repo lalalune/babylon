@@ -168,7 +168,7 @@ export class CapitalAllocationService {
     const role = this.extractRole(actor.description || '');
     const primaryDomain = actor.domain?.[0] || 'general';
     
-    return `${tier.replace('_TIER', '-tier')} ${role} in ${primaryDomain}: $${tierCapital.toLocaleString()} base × ${roleMultiplier}x role × ${domainMultiplier}x domain`;
+    return `${tier.replace('_TIER', '-tier')} ${role} in ${primaryDomain}: $${tierCapital.toLocaleString()} base × ${roleMultiplier}aix role × ${domainMultiplier}aix domain`;
   }
   
   /**
@@ -196,11 +196,11 @@ export class CapitalAllocationService {
    */
   static getExampleAllocations(): Array<{ description: string; capital: number; reputation: number }> {
     return [
-      { description: 'S-tier Tech CEO (Elon)', capital: 500000, reputation: 7071 },
-      { description: 'S-tier VC Founder (Peter Thiel)', capital: 450000, reputation: 6708 },
-      { description: 'A-tier VC (Marc Andreessen)', capital: 135000, reputation: 3674 },
-      { description: 'A-tier CEO (Jeff Bezos)', capital: 150000, reputation: 3873 },
-      { description: 'B-tier Investor (Cathie Wood)', capital: 27500, reputation: 1658 },
+      { description: 'S-tier Tech CEO (AIlon)', capital: 500000, reputation: 7071 },
+      { description: 'S-tier VC Founder (Peter ThAIl)', capital: 450000, reputation: 6708 },
+      { description: 'A-tier VC (Mark And‑Reason)', capital: 135000, reputation: 3674 },
+      { description: 'A-tier CEO (Jeff BAIzos)', capital: 150000, reputation: 3873 },
+      { description: 'B-tier Investor (Cashie Wood)', capital: 27500, reputation: 1658 },
       { description: 'B-tier Media Host (Tucker)', capital: 20000, reputation: 1414 },
       { description: 'C-tier Influencer', capital: 8000, reputation: 894 },
       { description: 'C-tier Journalist', capital: 8000, reputation: 894 },

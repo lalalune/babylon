@@ -1,0 +1,169 @@
+# CLI Overview
+
+Babylon provides a comprehensive set of command-line tools for game generation, simulation, validation, and development. All CLI commands are built with TypeScript and designed to work with Bun for optimal performance.
+
+## Quick Reference
+
+| Command | Purpose | When to Use |
+|---------|---------|-------------|
+| `bun run dev` | **Start development server** (PRIMARY) | ✅ Always - This runs everything |
+| `command:validate` | Validate actor data integrity | Before setup |
+| `command:images` | Generate AI profile pictures and banners | One-time setup |
+| `command:simulate` | Run game simulations for testing | Testing/debugging |
+| `command:world` | Generate test narratives | Testing/demos |
+| `command:generate` | Pre-generate game scenarios | Optional - Testing only |
+
+## How It Works
+
+```
+Production:  Vercel Cron (every 60s) → /api/cron/game-tick → executeGameTick()
+Development: bun run dev → local cron simulator → executeGameTick()
+```
+
+One simple function (`executeGameTick()`) handles everything - no complex daemon needed!
+
+## Installation
+
+All CLI tools are included in the main Babylon repository. No separate installation required.
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/babylon.git
+cd babylon
+
+# Install dependencies
+bun install
+
+# CLI tools are now available
+bun run command:validate
+```
+
+## Common Workflows
+
+### 🚀 Quick Start (Recommended)
+
+```bash
+# 1. Set API key
+export GROQ_API_KEY=your_key
+
+# 2. Start dev server - that's it!
+bun run dev
+```
+
+Content generates automatically every 60 seconds - posts, events, markets, questions. No pre-generation needed!
+
+### 🎨 One-Time Setup
+
+Only needed once or when adding new actors:
+
+```bash
+# Validate actor data
+bun run command:validate
+
+# Generate profile images (requires FAL_KEY)
+export FAL_KEY=your_fal_key
+bun run command:images
+```
+
+### 💻 Local Development
+
+```bash
+# Full dev server (includes automatic game tick)
+bun run dev
+
+# OR web only (no game tick)
+bun run dev:web-only
+```
+
+### 🧪 Testing & Analysis
+
+```bash
+# Test game mechanics
+bun run command:simulate --verbose
+
+# Batch analysis (100 games)
+bun run command:simulate:batch
+
+# Generate test narratives
+bun run command:world --verbose
+```
+
+## Environment Variables
+
+Most CLI tools require API keys:
+
+```bash
+# LLM API Keys (at least one required)
+export GROQ_API_KEY=your_groq_key          # Preferred (fast)
+export OPENAI_API_KEY=your_openai_key      # Fallback
+
+# Image Generation
+export FAL_KEY=your_fal_key                # Required for image generation
+
+# Optional Features
+export AGENT0_ENABLED=true                 # Enable Agent0 blockchain integration
+export AUTO_START_AGENTS=false             # Auto-start agents with daemon (not recommended)
+export AGENT_AUTO_TRADE=false              # Enable agent auto-trading
+export A2A_ENABLE_BLOCKCHAIN=false         # Enable blockchain for agent discovery
+```
+
+## Output Formats
+
+### Console Output (Default)
+
+Human-readable output with colors and formatting:
+
+```bash
+bun run generate --verbose
+```
+
+### JSON Output
+
+Machine-readable output for automation:
+
+```bash
+bun run src/cli/run-game.ts --json > game-data.json
+```
+
+### File Export
+
+Save results to files:
+
+```bash
+bun run src/cli/run-game.ts --save=game-123.json
+bun run src/cli/generate-world.ts --save=world.json
+```
+
+## Error Handling
+
+All CLI tools use consistent error codes:
+
+- **Exit Code 0**: Success
+- **Exit Code 1**: Error (details printed to stderr)
+
+Example error handling in scripts:
+
+```bash
+#!/bin/bash
+if bun run generate; then
+  echo "Game generated successfully"
+else
+  echo "Game generation failed"
+  exit 1
+fi
+```
+
+## Performance Tips
+
+1. **Use Groq for faster LLM inference** - Up to 10x faster than OpenAI
+2. **Run batch operations with `--fast`** - Skips verbose logging
+3. **Use concurrency** - Image generation uses 10 concurrent jobs
+4. **Cache existing assets** - Image generation skips existing files
+
+## Next Steps
+
+- [💻 Development Tools →](/cli/development) - **Start here!**
+- [🎨 Setup Images →](/cli/images)
+- [🧪 Testing & Simulation →](/cli/simulation)
+- [✅ Data Validation →](/cli/validation)
+

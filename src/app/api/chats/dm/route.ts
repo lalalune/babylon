@@ -1,6 +1,81 @@
 /**
- * API Route: /api/chats/dm
- * Methods: POST (create or get DM chat with a user)
+ * Direct Message (DM) Chat API
+ * 
+ * @route POST /api/chats/dm
+ * @access Authenticated
+ * 
+ * @description
+ * Creates or retrieves a direct message chat between two users. Implements
+ * idempotent chat creation with consistent ID generation based on participant
+ * user IDs. Includes validation to prevent self-DMing and NPC interactions.
+ * 
+ * **DM Chat Features:**
+ * - Idempotent creation (same chat for same participants)
+ * - Consistent chat ID format: `dm-{userId1}-{userId2}` (sorted)
+ * - Automatic participant addition
+ * - Real user validation (no NPCs/actors)
+ * - Self-DM prevention
+ * - Event tracking for analytics
+ * 
+ * **Business Rules:**
+ * - Cannot DM yourself
+ * - Cannot DM NPC actors (use group chats instead)
+ * - Target user must exist
+ * - Both participants automatically added
+ * 
+ * **Chat ID Generation:**
+ * Chat IDs are deterministic based on sorted participant IDs:
+ * ```typescript
+ * const sortedIds = [userId1, userId2].sort();
+ * const chatId = `dm-${sortedIds.join('-')}`;
+ * ```
+ * This ensures the same chat is always returned for the same two users.
+ * 
+ * **POST /api/chats/dm - Create or Get DM Chat**
+ * 
+ * @param {string} userId - Target user ID to DM (required)
+ * 
+ * @returns {object} DM chat response
+ * @property {object} chat - Chat object
+ * @property {string} chat.id - Chat ID (deterministic)
+ * @property {string} chat.name - Chat name (null for DMs)
+ * @property {boolean} chat.isGroup - Always false for DMs
+ * @property {object} chat.otherUser - Target user profile
+ * @property {string} chat.otherUser.id - User ID
+ * @property {string} chat.otherUser.displayName - Display name
+ * @property {string} chat.otherUser.username - Username
+ * @property {string} chat.otherUser.profileImageUrl - Profile image
+ * 
+ * @throws {400} Bad Request - Missing userId or self-DM attempt
+ * @throws {401} Unauthorized - Not authenticated
+ * @throws {403} Forbidden - Target is NPC actor
+ * @throws {404} Not Found - Target user doesn't exist
+ * @throws {500} Internal Server Error
+ * 
+ * @example
+ * ```typescript
+ * // Create or get DM with user
+ * const response = await fetch('/api/chats/dm', {
+ *   method: 'POST',
+ *   headers: { 
+ *     'Authorization': `Bearer ${token}`,
+ *     'Content-Type': 'application/json'
+ *   },
+ *   body: JSON.stringify({ userId: 'target-user-id' })
+ * });
+ * 
+ * const { chat } = await response.json();
+ * console.log(`DM with ${chat.otherUser.displayName}`);
+ * console.log(`Chat ID: ${chat.id}`);
+ * 
+ * // Navigate to chat
+ * router.push(`/chats/${chat.id}`);
+ * ```
+ * 
+ * @see {@link /lib/db/context} RLS context management
+ * @see {@link /lib/posthog/server} Analytics tracking
+ * @see {@link /src/app/chats/page.tsx} Chat list UI
+ * @see {@link /src/app/chats/[id]/page.tsx} Chat room UI
  */
 
 import type { NextRequest } from 'next/server';
@@ -11,6 +86,7 @@ import { BusinessLogicError, NotFoundError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { DMChatCreateSchema } from '@/lib/validation/schemas';
 import { trackServerEvent } from '@/lib/posthog/server';
+import { generateSnowflakeId } from '@/lib/snowflake';
 
 /**
  * POST /api/chats/dm
@@ -63,7 +139,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     let existingChat = await db.chat.findUnique({
       where: { id: chatId },
       include: {
-        participants: {
+        ChatParticipant: {
           select: {
             userId: true,
           },
@@ -73,18 +149,12 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
     if (!existingChat) {
       // Create new DM chat
-      existingChat = await db.chat.create({
+      await db.chat.create({
         data: {
           id: chatId,
           name: null, // DMs don't have names
           isGroup: false,
-        },
-        include: {
-          participants: {
-            select: {
-              userId: true,
-            },
-          },
+          updatedAt: new Date(),
         },
       });
 
@@ -92,24 +162,47 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       await Promise.all([
         db.chatParticipant.create({
           data: {
+            id: await generateSnowflakeId(),
             chatId,
             userId: user.userId,
           },
         }),
         db.chatParticipant.create({
           data: {
+            id: await generateSnowflakeId(),
             chatId,
             userId: targetUserId,
           },
         }),
       ]);
+
+      // Reload chat with participants
+      existingChat = await db.chat.findUnique({
+        where: { id: chatId },
+        select: {
+          id: true,
+          name: true,
+          isGroup: true,
+          gameId: true,
+          groupId: true,
+          dayNumber: true,
+          createdAt: true,
+          updatedAt: true,
+          ChatParticipant: {
+            select: {
+              userId: true,
+            },
+          },
+        },
+      });
     } else {
       // Chat exists, ensure both participants are added
-      const participantIds = existingChat.participants.map(p => p.userId);
+      const participantIds = existingChat.ChatParticipant.map(p => p.userId);
       
       if (!participantIds.includes(user.userId)) {
         await db.chatParticipant.create({
           data: {
+            id: await generateSnowflakeId(),
             chatId,
             userId: user.userId,
           },
@@ -119,6 +212,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       if (!participantIds.includes(targetUserId)) {
         await db.chatParticipant.create({
           data: {
+            id: await generateSnowflakeId(),
             chatId,
             userId: targetUserId,
           },
@@ -129,13 +223,17 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     return { chat: existingChat, targetUser };
   });
 
+  if (!chat.chat) {
+    throw new Error('Chat creation failed');
+  }
+
   logger.info('DM chat created or retrieved successfully', { chatId: chat.chat.id, userId: user.userId, targetUserId }, 'POST /api/chats/dm');
 
   // Track DM created/opened event
   trackServerEvent(user.userId, 'dm_opened', {
     chatId: chat.chat.id,
     recipientId: targetUserId,
-    isNewChat: !chat.chat.participants || chat.chat.participants.length === 0,
+    isNewChat: !chat.chat.ChatParticipant || chat.chat.ChatParticipant.length === 0,
   }).catch((error) => {
     logger.warn('Failed to track dm_opened event', { error });
   });

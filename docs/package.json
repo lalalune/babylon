@@ -1,13 +1,13 @@
 {
   "name": "babylon-docs",
   "version": "1.0.0",
-  "description": "Documentation for Babylon prediction market platform",
+  "description": "Documentation for Babylon",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3001",
-    "build": "NODE_OPTIONS='--max-old-space-size=8192' next build",
+    "dev": "bunx next dev -p 3001",
+    "build": "NODE_OPTIONS='--max-old-space-size=8192' bunx next build",
     "postbuild": "pagefind --site .next/server/app --output-path public/_pagefind",
-    "start": "next start",
+    "start": "bunx next start",
     "lint": "eslint .",
     "generate:api-docs": "tsx scripts/generate-api-docs.ts",
     "generate:tsdoc": "typedoc",

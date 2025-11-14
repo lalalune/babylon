@@ -88,11 +88,11 @@ export function UpcomingEventsDetailModal({ isOpen, onClose, event }: UpcomingEv
           {/* Header */}
           <div className="flex items-start justify-between mb-6">
             <div className="flex items-start gap-4 flex-1">
-              <div className="text-[#0066FF] mt-1 flex-shrink-0">
+              <div className="text-[#0066FF] mt-1 shrink-0">
                 <Calendar className="w-8 h-8" />
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3 leading-tight">
+                <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-3 leading-tight">
                   {event.title}
                 </h2>
                 <div className="flex items-center gap-3">
@@ -101,7 +101,7 @@ export function UpcomingEventsDetailModal({ isOpen, onClose, event }: UpcomingEv
                     <span>{formatFullDate(event.date, event.time)}</span>
                   </div>
                   {event.isLive && (
-                    <span className="text-sm font-semibold text-[#0066FF] bg-[#0066FF]/10 px-3 py-1 rounded flex-shrink-0">
+                    <span className="text-sm font-semibold text-[#0066FF] bg-[#0066FF]/10 px-3 py-1 rounded shrink-0">
                       LIVE
                     </span>
                   )}
@@ -111,7 +111,7 @@ export function UpcomingEventsDetailModal({ isOpen, onClose, event }: UpcomingEv
             <button
               type="button"
               onClick={onClose}
-              className="text-gray-400 hover:text-white transition-colors p-2 -mt-2 -mr-2"
+              className="text-gray-400 hover:text-foreground transition-colors p-2 -mt-2 -mr-2"
             >
               <X size={24} />
             </button>
@@ -135,7 +135,7 @@ export function UpcomingEventsDetailModal({ isOpen, onClose, event }: UpcomingEv
           <div className="space-y-4">
             {event.fullDescription && (
               <div className="p-4 bg-[#2d2d2d] rounded-lg border border-white/5">
-                <p className="text-base sm:text-lg text-white leading-relaxed whitespace-pre-wrap">
+                <p className="text-base sm:text-lg text-foreground leading-relaxed whitespace-pre-wrap">
                   {event.fullDescription}
                 </p>
               </div>
@@ -154,7 +154,7 @@ export function UpcomingEventsDetailModal({ isOpen, onClose, event }: UpcomingEv
             <div className="space-y-3 pt-4 border-t border-white/10">
               {event.relatedQuestion && (
                 <div>
-                  <p className="text-sm text-white">
+                  <p className="text-sm text-foreground">
                     <span className="font-semibold text-gray-400">Related Question:</span> #{event.relatedQuestion}
                   </p>
                 </div>
@@ -162,7 +162,7 @@ export function UpcomingEventsDetailModal({ isOpen, onClose, event }: UpcomingEv
 
               {event.source && (
                 <div>
-                  <p className="text-sm text-white">
+                  <p className="text-sm text-foreground">
                     <span className="font-semibold text-gray-400">Source:</span> {event.source}
                   </p>
                 </div>

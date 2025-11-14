@@ -310,7 +310,7 @@ curl -X POST http://localhost:3000/api/agents/auth \
 
 2. **Verify balance**:
    ```bash
-   bun run scripts/check-wallet-status.ts
+   bun run status wallet
    ```
 
 3. **Check confidence thresholds**:
@@ -483,8 +483,8 @@ bun run game:status
 # 2. Start game if paused
 bun run game:start
 
-# 3. Check daemon is running (dev mode)
-ps aux | grep realtime-daemon
+# 3. Check if dev server is running
+ps aux | grep "next dev"
 
 # 4. Check cron (production mode)
 curl -X POST http://localhost:3000/api/cron/game-tick \
@@ -498,17 +498,11 @@ curl -X POST http://localhost:3000/api/cron/game-tick \
 **Solution**:
 
 ```bash
-# Stop existing daemon
-bun run daemon:stop
-
-# Force stop if needed
-bun run daemon:stop:force
-
-# Check no process running
-ps aux | grep realtime-daemon
+# Stop dev server
+# Press Ctrl+C in the terminal running bun run dev
 
 # Start fresh
-bun run daemon
+bun run dev
 ```
 
 ---

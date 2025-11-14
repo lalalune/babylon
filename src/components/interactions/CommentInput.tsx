@@ -5,7 +5,6 @@ import { useInteractionStore } from '@/stores/interactionStore';
 import type { CommentInputProps } from '@/types/interactions';
 import { Send, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { BouncingLogo } from '@/components/shared/BouncingLogo';
 
 const MAX_COMMENT_LENGTH = 5000;
 
@@ -78,6 +77,7 @@ export function CommentInput({
       setContent(originalContent);
       setOptimisticComment(null);
     }
+    
     setIsSubmitting(false);
   };
 
@@ -201,7 +201,6 @@ export function CommentInput({
             >
               {isSubmitting ? (
                 <>
-                  <BouncingLogo size={16} />
                   <span>Posting...</span>
                 </>
               ) : (

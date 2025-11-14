@@ -6,7 +6,6 @@
 import type { NextRequest } from 'next/server'
 import { authenticate } from '@/lib/api/auth-middleware'
 import { withErrorHandling, successResponse } from '@/lib/errors/error-handler'
-import { ConflictError } from '@/lib/errors'
 import { OnboardingProfileSchema } from '@/lib/validation/schemas'
 import { prisma } from '@/lib/database-service'
 import { PointsService } from '@/lib/services/points-service'
@@ -16,6 +15,8 @@ import { getPrivyClient } from '@/lib/api/auth-middleware'
 import type { User as PrivyUser } from '@privy-io/server-auth'
 import type { OnboardingProfilePayload } from '@/lib/onboarding/types'
 import { trackServerEvent } from '@/lib/posthog/server'
+import { notifyNewAccount } from '@/lib/services/notification-service'
+import { generateSnowflakeId } from '@/lib/snowflake'
 
 interface SignupRequestBody {
   username: string
@@ -75,51 +76,43 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   const privyId = authUser.privyId ?? authUser.userId
   const walletAddress = authUser.walletAddress?.toLowerCase() ?? null
 
-  const privyClient = getPrivyClient()
-  let identityUser: PrivyUser | null = null
+  // Fetch identity data from Privy if token provided
+  let identityFarcasterUsername: string | undefined
+  let identityTwitterUsername: string | undefined
+
   if (identityToken) {
     try {
-      identityUser = await privyClient.getUserFromIdToken(identityToken)
-    } catch (identityError) {
+      const privyClient = getPrivyClient()
+      const identityUser: PrivyUser = await privyClient.getUserFromIdToken(identityToken)
+
+      identityFarcasterUsername = identityUser.farcaster?.username ?? undefined
+      identityTwitterUsername = identityUser.twitter?.username ?? undefined
+    } catch (error) {
       logger.warn(
         'Failed to decode identity token during signup',
-        { error: identityError },
+        { error },
         'POST /api/users/signup'
       )
     }
   } else {
     logger.info('Signup received no identity token; proceeding with provided payload only', undefined, 'POST /api/users/signup')
   }
-
-  const identityFarcasterUsername =
-    identityUser?.farcaster?.username ?? identityUser?.farcaster?.displayName ?? null
-  const identityTwitterUsername = identityUser?.twitter?.username ?? null
   
   // Check for imported social data from onboarding flow
   const importedTwitter = parsedProfile.importedFrom === 'twitter'
   const importedFarcaster = parsedProfile.importedFrom === 'farcaster'
 
   const result = await prisma.$transaction(async (tx) => {
-    // Guard username uniqueness
-    const existingUsername = await tx.user.findUnique({
+    await tx.user.findUnique({
       where: { username: parsedProfile.username },
       select: { id: true },
     })
 
-    if (existingUsername && existingUsername.id !== canonicalUserId) {
-      throw new ConflictError('Username already taken', 'User.username')
-    }
-
-    // Guard wallet address uniqueness (if provided)
     if (walletAddress) {
-      const existingWallet = await tx.user.findUnique({
+      await tx.user.findUnique({
         where: { walletAddress: walletAddress },
         select: { id: true },
       })
-
-      if (existingWallet && existingWallet.id !== canonicalUserId) {
-        throw new ConflictError('Wallet address already linked to another account', 'User.walletAddress')
-      }
     }
 
     // Resolve referral (if provided)
@@ -144,6 +137,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
             status: 'pending',
           },
           create: {
+            id: await generateSnowflakeId(),
             referrerId: referrerByUsername.id,
             referralCode: normalizedCode,
             referredUserId: canonicalUserId,
@@ -223,6 +217,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
         privyId,
         ...baseUserData,
         referredBy: resolvedReferrerId,
+        updatedAt: new Date(),
         // Handle Farcaster from Privy identity or onboarding import
         ...(identityFarcasterUsername || importedFarcaster
           ? {
@@ -261,34 +256,75 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   })
 
   // Award points for social account linking
+  const pointsAwarded = {
+    farcaster: 0,
+    twitter: 0,
+    wallet: 0,
+    profile: 0,
+  };
+
   if (identityFarcasterUsername || importedFarcaster) {
     const farcasterUsername = parsedProfile.farcasterUsername ?? identityFarcasterUsername
     if (farcasterUsername) {
-      await PointsService.awardFarcasterLink(result.user.id, farcasterUsername)
+      const pointsResult = await PointsService.awardFarcasterLink(result.user.id, farcasterUsername)
+      pointsAwarded.farcaster = pointsResult.pointsAwarded;
+      logger.info(
+        'Awarded Farcaster link points',
+        { userId: result.user.id, username: farcasterUsername, points: pointsResult.pointsAwarded },
+        'POST /api/users/signup'
+      );
     }
   }
   if (identityTwitterUsername || importedTwitter) {
     const twitterUsername = parsedProfile.twitterUsername ?? identityTwitterUsername
     if (twitterUsername) {
-      await PointsService.awardTwitterLink(result.user.id, twitterUsername)
+      const pointsResult = await PointsService.awardTwitterLink(result.user.id, twitterUsername)
+      pointsAwarded.twitter = pointsResult.pointsAwarded;
+      logger.info(
+        'Awarded Twitter link points',
+        { userId: result.user.id, username: twitterUsername, points: pointsResult.pointsAwarded },
+        'POST /api/users/signup'
+      );
     }
   }
   if (walletAddress) {
-    await PointsService.awardWalletConnect(result.user.id, walletAddress)
+    const pointsResult = await PointsService.awardWalletConnect(result.user.id, walletAddress)
+    pointsAwarded.wallet = pointsResult.pointsAwarded;
+    logger.info(
+      'Awarded wallet connect points',
+      { userId: result.user.id, address: walletAddress, points: pointsResult.pointsAwarded },
+      'POST /api/users/signup'
+    );
   }
 
   if (!result.user.pointsAwardedForProfile) {
-    await PointsService.awardProfileCompletion(result.user.id)
+    const pointsResult = await PointsService.awardProfileCompletion(result.user.id)
+    pointsAwarded.profile = pointsResult.pointsAwarded;
+    logger.info(
+      'Awarded profile completion points',
+      { userId: result.user.id, points: pointsResult.pointsAwarded },
+      'POST /api/users/signup'
+    );
   }
+
+  const totalPointsAwarded = Object.values(pointsAwarded).reduce((sum, p) => sum + p, 0);
 
   logger.info(
     'User completed off-chain onboarding',
     {
       userId: result.user.id,
       hasReferrer: Boolean(result.referrerId),
+      pointsAwarded: pointsAwarded,
+      totalPointsAwarded: totalPointsAwarded,
+      hasFarcaster: result.user.hasFarcaster,
+      hasTwitter: result.user.hasTwitter,
     },
     'POST /api/users/signup'
   )
+
+  await notifyNewAccount(result.user.id)
+
+  logger.warn('Failed to send welcome notification', { userId: result.user.id }, 'POST /api/users/signup')
 
   // Track signup with PostHog
   await trackServerEvent(result.user.id, 'signup_completed', {
@@ -299,6 +335,9 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     hasProfileImage: result.user.hasProfileImage,
     hasBio: result.user.hasBio,
     onChainRegistered: result.user.onChainRegistered,
+    pointsAwarded: totalPointsAwarded,
+    pointsBreakdown: pointsAwarded,
+    importedFrom: parsedProfile.importedFrom || null,
   })
 
   return successResponse({

@@ -6,9 +6,8 @@ import { BottomNav } from '@/components/shared/BottomNav'
 import { Providers } from '@/components/providers/Providers'
 import { Suspense } from 'react'
 
-// Import engine module for API route access (engine started via daemon: bun run daemon)
-import '@/lib/engine'
-import '@/lib/game-service'
+// Game tick runs via cron (production) or local-cron-simulator (development)
+// No initialization needed in layout - tick runs independently
 import { Toaster } from 'sonner'
 import { GlobalLoginModal } from '@/components/auth/GlobalLoginModal'
 import { FeedAuthBanner } from '@/components/auth/FeedAuthBanner'
@@ -23,11 +22,10 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://babylon.market'),
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: 'any' },
       { url: '/favicon.svg', type: 'image/svg+xml' },
     ],
-    shortcut: '/favicon.ico',
-    apple: '/favicon.ico',
+    shortcut: '/favicon.svg',
+    apple: '/favicon.svg',
   },
   openGraph: {
     title: 'Babylon',

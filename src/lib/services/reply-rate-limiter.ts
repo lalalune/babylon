@@ -8,6 +8,7 @@
  */
 
 import { prisma } from '@/lib/database-service';
+import { generateSnowflakeId } from '@/lib/snowflake';
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -154,6 +155,7 @@ export class ReplyRateLimiter {
   ): Promise<void> {
     await prisma.userInteraction.create({
       data: {
+        id: await generateSnowflakeId(),
         userId,
         npcId,
         postId,
@@ -192,13 +194,49 @@ export class ReplyRateLimiter {
     const averageQuality =
       interactions.reduce((sum, i) => sum + i.qualityScore, 0) / interactions.length;
 
+    // Calculate longest streak from all historical interactions
+    const longestStreak = await this.calculateLongestStreak(userId, npcId, interactions);
+
     return {
       totalReplies: interactions.length,
       currentStreak,
-      longestStreak: currentStreak, // TODO: Calculate actual longest streak
+      longestStreak,
       averageQuality,
       lastReplyAt: interactions[0]?.timestamp,
     };
+  }
+
+  /**
+   * Calculate longest consecutive reply streak from all interactions
+   */
+  private static async calculateLongestStreak(
+    _userId: string,
+    _npcId: string,
+    interactions: Array<{ timestamp: Date }>
+  ): Promise<number> {
+    if (interactions.length < 2) return interactions.length;
+
+    let maxStreak = 1;
+    let currentStreak = 1;
+
+    for (let i = 0; i < interactions.length - 1; i++) {
+      const current = interactions[i]!.timestamp;
+      const next = interactions[i + 1]!.timestamp;
+      const gap = current.getTime() - next.getTime();
+
+      // If gap is within ideal window (55-65 minutes), continue streak
+      if (gap >= this.MIN_REPLY_INTERVAL_MS && gap <= this.MAX_REPLY_INTERVAL_MS) {
+        currentStreak++;
+        if (currentStreak > maxStreak) {
+          maxStreak = currentStreak;
+        }
+      } else {
+        // Streak broken, reset
+        currentStreak = 1;
+      }
+    }
+
+    return maxStreak;
   }
 
   /**

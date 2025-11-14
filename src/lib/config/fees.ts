@@ -6,7 +6,7 @@
 
 export const FEE_CONFIG = {
   // Trading fees
-  TRADING_FEE_RATE: 0.02, // 2% on all trades
+  TRADING_FEE_RATE: 0.001, // 0.1% on all trades
   
   // Fee distribution
   PLATFORM_SHARE: 0.50, // 50% to platform
@@ -32,6 +32,7 @@ export const FEE_CONFIG = {
 
 export type FeeType = typeof FEE_CONFIG.FEE_TYPES[keyof typeof FEE_CONFIG.FEE_TYPES]
 export type FeeTransactionType = typeof FEE_CONFIG.TRANSACTION_TYPES[keyof typeof FEE_CONFIG.TRANSACTION_TYPES]
+
 
 
 

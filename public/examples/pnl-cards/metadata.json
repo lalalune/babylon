@@ -16,7 +16,6 @@
       "availableBalance": 5000,
       "unrealizedPerpPnL": 1200,
       "unrealizedPredictionPnL": 800,
-      "unrealizedPoolPnL": 500,
       "totalUnrealizedPnL": 2500,
       "totalPnL": 2500,
       "accountEquity": 12500
@@ -41,7 +40,6 @@
       "availableBalance": 2000,
       "unrealizedPerpPnL": -300,
       "unrealizedPredictionPnL": -150,
-      "unrealizedPoolPnL": -50,
       "totalUnrealizedPnL": -500,
       "totalPnL": -500,
       "accountEquity": 4500

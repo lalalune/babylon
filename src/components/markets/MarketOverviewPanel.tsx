@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { TrendingUp, TrendingDown, BarChart3, DollarSign } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Skeleton } from '@/components/shared/Skeleton'
 
 interface PerpMarket {
   ticker: string
@@ -75,13 +76,16 @@ export function MarketOverviewPanel() {
   }
 
   return (
-    <div className="bg-sidebar rounded-lg p-4 flex-1 flex flex-col">
+    <div className="bg-sidebar rounded-2xl p-4 flex-1 flex flex-col">
       <div className="flex items-center gap-2 mb-3">
         <BarChart3 className="w-5 h-5 text-[#0066FF]" />
         <h2 className="text-xl font-bold text-foreground">Market Overview</h2>
       </div>
       {loading ? (
-        <div className="text-sm text-muted-foreground flex-1">Loading...</div>
+        <div className="space-y-3 flex-1">
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+        </div>
       ) : overview ? (
         <div className="space-y-3 flex-1">
           <div className="space-y-2">

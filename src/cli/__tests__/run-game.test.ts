@@ -148,9 +148,9 @@ describe('CLI Game Runner', () => {
       ]);
 
       const output = result.stdout.toString();
-      expect(output).toContain('Avg time');
-      expect(output).toContain('YES outcomes');
-      expect(output).toContain('NO outcomes');
+      expect(output).toContain('avgTime');
+      expect(output).toContain('yesOutcomes');
+      expect(output).toContain('noOutcomes');
     });
   });
 

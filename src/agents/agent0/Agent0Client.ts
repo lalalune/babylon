@@ -24,6 +24,14 @@ import type {
   SearchParams,
   RegistrationFile
 } from 'agent0-sdk'
+import { z } from 'zod';
+
+const CapabilitiesSchema = z.object({
+  strategies: z.array(z.string()).optional(),
+  markets: z.array(z.string()).optional(),
+  actions: z.array(z.string()).optional(),
+  version: z.string().optional(),
+});
 
 export class Agent0Client implements IAgent0Client {
   private sdk: SDK | null
@@ -56,47 +64,33 @@ export class Agent0Client implements IAgent0Client {
   }
   
   /**
-   * Initialize SDK lazily
+   * Initialize SDK - fails fast on any error
    */
   private async ensureSDK(): Promise<void> {
     if (this.sdk) return
     
-    // Prevent multiple simultaneous initializations
     if (this.initPromise) {
       await this.initPromise
       return
     }
     
     this.initPromise = (async () => {
-      try {
-        const sdkConfig: SDKConfig = {
-          chainId: this.chainId,
-          rpcUrl: this.config.rpcUrl,
-          signer: this.config.privateKey,
-          ipfs: this.config.ipfsProvider || 'node',
-          ipfsNodeUrl: this.config.ipfsNodeUrl,
-          pinataJwt: this.config.pinataJwt,
-          filecoinPrivateKey: this.config.filecoinPrivateKey,
-          subgraphUrl: this.config.subgraphUrl
-        }
-        
-        this.sdk = new SDK(sdkConfig)
-        logger.info('Agent0Client initialized successfully', { 
-          chainId: this.chainId, 
-          rpcUrl: this.config.rpcUrl 
-        }, 'Agent0Client')
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        const errorStack = error instanceof Error ? error.stack : undefined
-        logger.error('Failed to initialize Agent0Client', {
-          error: errorMessage,
-          stack: errorStack,
-          config: { chainId: this.chainId, rpcUrl: this.config.rpcUrl, network: this.config.network }
-        }, 'Agent0Client')
-        this.sdk = null
-        this.initPromise = null
-        throw new Error(`Agent0Client initialization failed: ${errorMessage}`)
+      const sdkConfig: SDKConfig = {
+        chainId: this.chainId,
+        rpcUrl: this.config.rpcUrl,
+        signer: this.config.privateKey,
+        ipfs: this.config.ipfsProvider || 'node',
+        ipfsNodeUrl: this.config.ipfsNodeUrl,
+        pinataJwt: this.config.pinataJwt,
+        filecoinPrivateKey: this.config.filecoinPrivateKey,
+        subgraphUrl: this.config.subgraphUrl
       }
+      
+      this.sdk = new SDK(sdkConfig)
+      logger.info('Agent0Client initialized successfully', { 
+        chainId: this.chainId, 
+        rpcUrl: this.config.rpcUrl 
+      }, 'Agent0Client')
     })()
     
     await this.initPromise
@@ -113,153 +107,156 @@ export class Agent0Client implements IAgent0Client {
   async registerAgent(params: Agent0RegistrationParams): Promise<Agent0RegistrationResult> {
     await this.ensureSDK()
     
-    if (!this.sdk) {
-      throw new Error('SDK not initialized')
-    }
-    
-    if (this.sdk.isReadOnly) {
-      throw new Error('Agent0Client not properly initialized with signer')
+    if (!this.sdk || this.sdk.isReadOnly) {
+      throw new Error('SDK not initialized with write access')
     }
     
     logger.info(`Registering agent: ${params.name}`, undefined, 'Agent0Client [registerAgent]')
     
-    try {
-      // Create agent instance
-      const agent = this.sdk.createAgent(
-        params.name,
-        params.description,
-        params.imageUrl
-      )
-      
-      // Set wallet address if provided
-      if (params.walletAddress) {
-        agent.setAgentWallet(params.walletAddress as `0x${string}`, this.chainId)
-      }
-      
-      // Set endpoints
-      if (params.mcpEndpoint) {
-        // Use semantic version for Babylon's MCP implementation
-        await agent.setMCP(params.mcpEndpoint, '1.0.0', false)
-      }
-      
-      if (params.a2aEndpoint) {
-        // Use semantic version for Babylon's A2A implementation
-        await agent.setA2A(params.a2aEndpoint, '1.0.0', false)
-      }
-      
-      // Set capabilities in metadata
-      agent.setMetadata({
-        capabilities: params.capabilities,
-        version: params.capabilities.version || '1.0.0'
-      })
-      
-      // Set agent as active (required for proper registration)
-      agent.setActive(true)
-      
-      // Set X402 support if applicable
-      if (params.capabilities.x402Support !== undefined) {
-        agent.setX402Support(params.capabilities.x402Support)
-      }
-      
-      // Register on-chain with IPFS
-      const registrationFile: RegistrationFile = await agent.registerIPFS()
-      
-      // Debug: Log the full registration file to see what the SDK returned
-      logger.info('Registration file returned from SDK:', {
-        agentId: registrationFile.agentId,
-        agentURI: registrationFile.agentURI,
-        active: registrationFile.active,
-        x402support: registrationFile.x402support
-      }, 'Agent0Client [registerAgent]')
-      
-      // Extract token ID from agentId (format: chainId:tokenId)
-      const agentId = registrationFile.agentId
-      if (!agentId) {
-        throw new Error('Registration succeeded but agentId not returned')
-      }
-      
-      const tokenId = parseInt(agentId.split(':')[1] || '0', 10)
-      if (isNaN(tokenId)) {
-        throw new Error(`Invalid agentId format: ${agentId}`)
-      }
-      
-      logger.info(`Agent registered successfully: ${agentId}`, undefined, 'Agent0Client [registerAgent]')
-      
-      return {
-        tokenId,
-        txHash: '', // SDK doesn't return txHash directly, would need to extract from registration
-        metadataCID: registrationFile.agentURI?.replace('ipfs://', '') || undefined
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      const errorStack = error instanceof Error ? error.stack : undefined
-      logger.error('Failed to register agent', {
-        error: errorMessage,
-        stack: errorStack,
-        agentName: params.name
-      }, 'Agent0Client [registerAgent]')
-      throw new Error(`Agent registration failed: ${errorMessage}`)
+    const agent = this.sdk.createAgent(
+      params.name,
+      params.description,
+      params.imageUrl
+    )
+    
+    if (params.walletAddress) {
+      agent.setAgentWallet(params.walletAddress as `0x${string}`, this.chainId)
+    }
+    
+    if (params.mcpEndpoint) {
+      await agent.setMCP(params.mcpEndpoint, '1.0.0', false)
+    }
+    
+    if (params.a2aEndpoint) {
+      await agent.setA2A(params.a2aEndpoint, '1.0.0', false)
+    }
+    
+    agent.setMetadata({
+      capabilities: params.capabilities,
+      version: params.capabilities.version || '1.0.0'
+    })
+    
+    agent.setActive(true)
+    
+    if (params.capabilities.x402Support !== undefined) {
+      agent.setX402Support(params.capabilities.x402Support)
+    }
+    
+    const registrationFile: RegistrationFile = await agent.registerIPFS()
+    
+    logger.info('Registration file returned from SDK:', {
+      agentId: registrationFile.agentId,
+      agentURI: registrationFile.agentURI,
+      active: registrationFile.active,
+      x402support: registrationFile.x402support
+    }, 'Agent0Client [registerAgent]')
+    
+    if (!registrationFile.agentId) {
+      throw new Error('Registration file missing agentId')
+    }
+    
+    const agentId = registrationFile.agentId
+    const parts = agentId.split(':')
+    const tokenId = parseInt(parts[1]!, 10)
+    
+    logger.info(`Agent registered successfully: ${agentId}`, undefined, 'Agent0Client [registerAgent]')
+    
+    return {
+      tokenId,
+      txHash: '',
+      metadataCID: registrationFile.agentURI?.replace('ipfs://', '')
     }
   }
   
+  /**
+   * Register Babylon game itself on agent0 (Ethereum)
+   *
+   * This registers the GAME as an agent in the agent0 ecosystem for:
+   * - Cross-game discovery
+   * - External agent onboarding
+   * - Interoperability with agent0 network
+   *
+   * The game's metadata includes pointers to Base network where game operates
+   */
+  async registerBabylonGame(): Promise<Agent0RegistrationResult> {
+    const baseChainId = parseInt(process.env.BASE_CHAIN_ID || '8453', 10) // Base mainnet by default
+    const baseRegistryAddress = process.env.BASE_IDENTITY_REGISTRY_ADDRESS
+    const baseReputationAddress = process.env.BASE_REPUTATION_SYSTEM_ADDRESS
+    const baseMarketAddress = process.env.BASE_DIAMOND_ADDRESS
+
+    if (!baseRegistryAddress) {
+      throw new Error('BASE_IDENTITY_REGISTRY_ADDRESS required for game registration')
+    }
+
+    logger.info('Registering Babylon game on agent0', {
+      baseChainId,
+      baseRegistryAddress
+    }, 'Agent0Client [registerBabylonGame]')
+
+    return this.registerAgent({
+      name: process.env.BABYLON_GAME_NAME || 'Babylon Prediction Game',
+      description: process.env.BABYLON_GAME_DESCRIPTION || 'AI-powered prediction market game on Base network',
+      imageUrl: process.env.BABYLON_LOGO_URL,
+      walletAddress: process.env.BABYLON_GAME_WALLET || process.env.AGENT0_PRIVATE_KEY || '',
+      mcpEndpoint: process.env.BABYLON_MCP_URL ? `${process.env.BABYLON_MCP_URL}/mcp` : undefined,
+      a2aEndpoint: process.env.BABYLON_A2A_URL ? `${process.env.BABYLON_A2A_URL}/a2a` : undefined,
+      capabilities: {
+        strategies: ['prediction-markets', 'reputation-tracking', 'agent-discovery'],
+        markets: ['sports', 'crypto', 'politics', 'entertainment', 'ai'],
+        actions: ['register-player', 'create-market', 'place-bet', 'resolve-market', 'submit-feedback'],
+        version: '1.0.0',
+        platform: 'babylon',
+        userType: 'game',
+        x402Support: true,
+        // Cross-chain game network info
+        gameNetwork: {
+          chainId: baseChainId,
+          registryAddress: baseRegistryAddress,
+          reputationAddress: baseReputationAddress,
+          marketAddress: baseMarketAddress
+        }
+      }
+    })
+  }
+
   /**
    * Search for agents using Agent0 SDK
    */
   async searchAgents(filters: Agent0SearchFilters): Promise<Agent0SearchResult[]> {
     await this.ensureSDK()
     
-    if (!this.sdk) {
-      throw new Error('SDK not initialized')
-    }
-    
     logger.info('Searching agents with filters:', filters, 'Agent0Client [searchAgents]')
     
-    try {
-      const searchParams: SearchParams = {}
-      
-      // Map strategies to MCP tools or A2A skills
-      if (filters.strategies && filters.strategies.length > 0) {
-        // Strategies could be MCP tools or stored in metadata
-        searchParams.a2aSkills = filters.strategies
-      }
-      
-      if (filters.name) {
-        searchParams.name = filters.name
-      }
-      
-      if (filters.x402Support !== undefined) {
-        searchParams.x402support = filters.x402Support
-      }
-      
-      const { items } = await this.sdk.searchAgents(searchParams)
-      
-      // Map SDK results to our format
-      return items.map((agent: AgentSummary) => ({
-        tokenId: parseInt(agent.agentId.split(':')[1] || '0', 10),
+    const searchParams: SearchParams = {}
+    
+    if (filters.strategies && filters.strategies.length > 0) {
+      searchParams.a2aSkills = filters.strategies
+    }
+    
+    if (filters.name) {
+      searchParams.name = filters.name
+    }
+    
+    if (filters.x402Support !== undefined) {
+      searchParams.x402support = filters.x402Support
+    }
+    
+    const { items } = await this.sdk!.searchAgents(searchParams)
+    
+    return items.map((agent: AgentSummary) => {
+      const capabilities = this.parseCapabilities(agent.extras);
+      return {
+        tokenId: parseInt(agent.agentId.split(':')[1] ?? '0', 10),
         name: agent.name,
-        walletAddress: agent.walletAddress || '',
+        walletAddress: agent.walletAddress ?? '',
         metadataCID: agent.agentId,
-        capabilities: {
-          strategies: (agent.extras?.capabilities as { strategies?: string[] })?.strategies || [],
-          markets: (agent.extras?.capabilities as { markets?: string[] })?.markets || [],
-          actions: (agent.extras?.capabilities as { actions?: string[] })?.actions || [],
-          version: (agent.extras?.capabilities as { version?: string })?.version || '1.0.0'
-        },
+        capabilities,
         reputation: {
-          trustScore: 0, // Would need to query reputation separately
+          trustScore: 0,
           accuracyScore: 0
         }
-      }))
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      const errorStack = error instanceof Error ? error.stack : undefined
-      logger.error('Failed to search agents', {
-        error: errorMessage,
-        stack: errorStack,
-        filters
-      }, 'Agent0Client [searchAgents]')
-      return []
-    }
+      };
+    })
   }
   
   /**
@@ -268,51 +265,28 @@ export class Agent0Client implements IAgent0Client {
   async submitFeedback(params: Agent0FeedbackParams): Promise<void> {
     await this.ensureSDK()
     
-    if (!this.sdk) {
-      throw new Error('SDK not initialized')
-    }
-    
-    if (this.sdk.isReadOnly) {
-      throw new Error('Agent0Client not properly initialized with signer')
+    if (!this.sdk || this.sdk.isReadOnly) {
+      throw new Error('SDK not initialized with write access')
     }
     
     logger.info(`Submitting feedback for agent ${params.targetAgentId}`, undefined, 'Agent0Client [submitFeedback]')
     
-    try {
-      // Convert token ID to agentId format (chainId:tokenId)
-      const agentId = `${this.chainId}:${params.targetAgentId}` as `${number}:${number}`
-      
-      // Convert rating from -5 to +5 scale to 0-100 scale used by Agent0 SDK
-      // Agent0 SDK uses 0-100, so we map: -5=-100, 0=50, +5=100
-      const agent0Score = Math.max(0, Math.min(100, (params.rating + 5) * 10))
-      
-      // Prepare feedback using SDK's prepareFeedback method
-      // Signature: prepareFeedback(agentId, score, tags?, text?, capability?, name?, skill?)
-      const feedbackFile = this.sdk.prepareFeedback(
-        agentId,
-        agent0Score, // Score: 0-100 (mandatory)
-        [], // Tags (optional)
-        params.comment || undefined, // Text (optional)
-        undefined, // Capability (optional)
-        undefined, // Name (optional)
-        undefined  // Skill (optional)
-      )
-      
-      // Submit feedback using SDK's giveFeedback method
-      await this.sdk.giveFeedback(agentId, feedbackFile)
-      
-      logger.info(`Feedback submitted successfully for agent ${agentId}`, undefined, 'Agent0Client [submitFeedback]')
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      const errorStack = error instanceof Error ? error.stack : undefined
-      logger.error('Failed to submit feedback', {
-        error: errorMessage,
-        stack: errorStack,
-        targetAgentId: params.targetAgentId,
-        rating: params.rating
-      }, 'Agent0Client [submitFeedback]')
-      throw new Error(`Feedback submission failed: ${errorMessage}`)
-    }
+    const agentId = `${this.chainId}:${params.targetAgentId}` as `${number}:${number}`
+    const agent0Score = Math.max(0, Math.min(100, (params.rating + 5) * 10))
+    
+    const feedbackFile = this.sdk.prepareFeedback(
+      agentId,
+      agent0Score,
+      [],
+      params.comment || undefined,
+      undefined,
+      undefined,
+      undefined
+    )
+    
+    await this.sdk.giveFeedback(agentId, feedbackFile)
+    
+    logger.info(`Feedback submitted successfully for agent ${agentId}`, undefined, 'Agent0Client [submitFeedback]')
   }
   
   /**
@@ -321,48 +295,59 @@ export class Agent0Client implements IAgent0Client {
   async getAgentProfile(tokenId: number): Promise<Agent0AgentProfile | null> {
     await this.ensureSDK()
     
-    if (!this.sdk) {
-      throw new Error('SDK not initialized')
-    }
-    
     logger.info(`Getting agent profile for token ${tokenId}`, undefined, 'Agent0Client [getAgentProfile]')
     
-    try {
-      // Convert token ID to agentId format (chainId:tokenId)
-      const agentId = `${this.chainId}:${tokenId}` as `${number}:${number}`
-      
-      const agent: AgentSummary | null = await this.sdk.getAgent(agentId)
-      
-      if (!agent) {
-        return null
-      }
-      
-      return {
-        tokenId,
-        name: agent.name,
-        walletAddress: agent.walletAddress || '',
-        metadataCID: agent.agentId,
-        capabilities: {
-          strategies: (agent.extras?.capabilities as { strategies?: string[] })?.strategies || [],
-          markets: (agent.extras?.capabilities as { markets?: string[] })?.markets || [],
-          actions: (agent.extras?.capabilities as { actions?: string[] })?.actions || [],
-          version: (agent.extras?.capabilities as { version?: string })?.version || '1.0.0'
-        },
-        reputation: {
-          trustScore: 0, // Would need to query reputation separately
-          accuracyScore: 0
-        }
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      const errorStack = error instanceof Error ? error.stack : undefined
-      logger.error(`Failed to get agent profile for token ${tokenId}`, {
-        error: errorMessage,
-        stack: errorStack,
-        tokenId
-      }, 'Agent0Client [getAgentProfile]')
+    const agentId = `${this.chainId}:${tokenId}` as `${number}:${number}`
+    const agent: AgentSummary | null = await this.sdk!.getAgent(agentId)
+    
+    if (!agent) {
       return null
     }
+    
+    const capabilities = this.parseCapabilities(agent.extras);
+
+    return {
+      tokenId,
+      name: agent.name,
+      walletAddress: agent.walletAddress ?? '',
+      metadataCID: agent.agentId,
+      capabilities,
+      reputation: {
+        trustScore: 0,
+        accuracyScore: 0
+      }
+    }
+  }
+
+  private parseCapabilities(extras: Record<string, unknown> | undefined): {
+    strategies: string[];
+    markets: string[];
+    actions: string[];
+    version: string;
+  } {
+    const defaultCapabilities = {
+      strategies: [],
+      markets: [],
+      actions: [],
+      version: '1.0.0',
+    };
+
+    if (!extras?.capabilities) {
+      return defaultCapabilities;
+    }
+
+    const validation = CapabilitiesSchema.safeParse(extras.capabilities);
+    if (!validation.success) {
+      logger.warn('Invalid agent capabilities in search result', { error: validation.error, capabilities: extras.capabilities });
+      return defaultCapabilities;
+    }
+
+    return {
+      strategies: validation.data.strategies ?? [],
+      markets: validation.data.markets ?? [],
+      actions: validation.data.actions ?? [],
+      version: validation.data.version ?? '1.0.0',
+    };
   }
   
   /**
@@ -410,4 +395,3 @@ export function getAgent0Client(): Agent0Client {
   
   return agent0ClientInstance
 }
-

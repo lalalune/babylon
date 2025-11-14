@@ -70,6 +70,7 @@ export class ParticipationService {
       prisma.post.findFirst({
         where: {
           authorId: userId,
+          deletedAt: null, // Filter out deleted posts
         },
         orderBy: {
           createdAt: 'desc',

@@ -1,0 +1,133 @@
+# Data Validation
+
+Validate actor and organization data integrity with the `validate-actors` CLI.
+
+## Overview
+
+Ensures actor affiliations reference valid organizations before game generation.
+
+## Usage
+
+```bash
+bun run command:validate
+```
+
+## Validation Checks
+
+1. **Schema Validation** - Zod schemas for actors and organizations
+2. **Affiliation Integrity** - All affiliations must reference existing orgs
+3. **Required Fields** - Checks for `realName` and `username`
+4. **Organization IDs** - Validates all organization references
+
+## Output
+
+### Success
+
+```bash
+Validating 50 actors against 25 organizations...
+All actor affiliations are valid!
+{ actorsChecked: 50, organizationsVerified: 25, warnings: 0 }
+```
+
+### Warnings (Non-Fatal)
+
+```bash
+WARNINGS:
+⚠️  Actor1 (actor1) missing 'realName' field
+⚠️  Actor2 (actor2) missing 'username' field
+```
+
+### Errors (Fatal)
+
+```bash
+VALIDATION ERRORS:
+❌ Actor1 (actor1) has invalid affiliation: "nonexistent-org"
+❌ Actor2 (actor2) has invalid affiliation: "deleted-company"
+Found 2 error(s)
+```
+
+Exit code: 1
+
+## Data Source
+
+Reads from `public/data/actors.json`:
+
+```json
+{
+  "actors": [
+    {
+      "id": "actor1",
+      "name": "John Doe",
+      "realName": "John Doe",
+      "username": "jdoe",
+      "affiliations": ["org1", "org2"]
+    }
+  ],
+  "organizations": [
+    {
+      "id": "org1",
+      "name": "OpenLie",
+      "type": "AI Company"
+    }
+  ]
+}
+```
+
+## Integration
+
+The validation is automatically run by `generate-game` before generation:
+
+```typescript
+// In generate-game.ts
+await validateActorsData();
+// Will exit if validation fails
+```
+
+## Fixing Errors
+
+### Invalid Affiliation
+
+```bash
+❌ Actor1 has invalid affiliation: "old-org"
+```
+
+**Solution:** Either:
+1. Add the organization to `public/data/actors.json`
+2. Remove the affiliation from the actor
+3. Update the affiliation ID
+
+### Missing Required Fields
+
+```bash
+⚠️ Actor1 missing 'realName' field
+```
+
+**Solution:** Add the missing field:
+
+```json
+{
+  "id": "actor1",
+  "name": "John Doe",
+  "realName": "John Doe",  // Add this
+  "username": "jdoe",
+  "affiliations": []
+}
+```
+
+## Exit Codes
+
+- **0** - Validation passed (warnings OK)
+- **1** - Validation failed (errors found)
+
+Use in scripts:
+
+```bash
+if bun run command:validate; then
+  echo "Validation passed"
+  bun run command:generate
+else
+  echo "Validation failed"
+  exit 1
+fi
+```
+

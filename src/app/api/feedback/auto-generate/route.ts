@@ -17,119 +17,82 @@ import {
   generateGameCompletionFeedback,
   CompletionFormat,
 } from '@/lib/reputation/reputation-service'
-import { logger } from '@/lib/logger'
+import { z } from 'zod'
 
-interface GameMetrics {
-  won: boolean
-  pnl: number
-  positionsClosed: number
-  finalBalance: number
-  startingBalance: number
-  decisionsCorrect: number
-  decisionsTotal: number
-  timeToComplete?: number
-  riskManagement?: number
-}
+const GameMetricsSchema = z.object({
+  won: z.boolean(),
+  pnl: z.number(),
+  positionsClosed: z.number(),
+  finalBalance: z.number(),
+  startingBalance: z.number(),
+  decisionsCorrect: z.number(),
+  decisionsTotal: z.number(),
+  timeToComplete: z.number().optional(),
+  riskManagement: z.number().optional(),
+})
 
-interface TradeMetrics {
-  profitable: boolean
-  roi: number
-  holdingPeriod: number
-  timingScore: number
-  riskScore: number
-}
+const TradeMetricsSchema = z.object({
+  profitable: z.boolean(),
+  roi: z.number(),
+  holdingPeriod: z.number(),
+  timingScore: z.number(),
+  riskScore: z.number(),
+})
 
-interface GameFeedbackRequest {
-  type: 'game'
-  agentId: string
-  gameId: string
-  metrics: GameMetrics
-}
+const GameFeedbackRequestSchema = z.object({
+  type: z.literal('game'),
+  agentId: z.string().min(1),
+  gameId: z.string().min(1),
+  metrics: GameMetricsSchema,
+})
 
-interface TradeFeedbackRequest {
-  type: 'trade'
-  agentId: string
-  tradeId: string
-  metrics: TradeMetrics
-}
+const TradeFeedbackRequestSchema = z.object({
+  type: z.literal('trade'),
+  agentId: z.string().min(1),
+  tradeId: z.string().min(1),
+  metrics: TradeMetricsSchema,
+})
 
-type AutoGenerateFeedbackRequest = GameFeedbackRequest | TradeFeedbackRequest
+const AutoGenerateFeedbackRequestSchema = z.discriminatedUnion('type', [
+  GameFeedbackRequestSchema,
+  TradeFeedbackRequestSchema,
+])
 
 export async function POST(request: NextRequest) {
-  try {
-    const body = (await request.json()) as AutoGenerateFeedbackRequest
+  const json = await request.json()
+  const parsed = AutoGenerateFeedbackRequestSchema.parse(json)
 
-    // Validate request type
-    if (!body.type || (body.type !== 'game' && body.type !== 'trade')) {
-      return NextResponse.json(
-        { error: 'type must be either "game" or "trade"' },
-        { status: 400 }
-      )
-    }
+  const body = parsed
 
-    // Validate common fields
-    if (!body.agentId) {
-      return NextResponse.json({ error: 'agentId is required' }, { status: 400 })
-    }
+  const agent = await requireUserByIdentifier(body.agentId)
 
-    if (!body.metrics) {
-      return NextResponse.json({ error: 'metrics is required' }, { status: 400 })
-    }
+  if (body.type === 'game') {
+    const feedback = await generateGameCompletionFeedback(
+      agent.id,
+      body.gameId,
+      body.metrics
+    )
 
-    // Verify agent exists
-    const agent = await requireUserByIdentifier(body.agentId)
+    return NextResponse.json({
+      success: true,
+      feedbackId: feedback.id,
+      type: 'game',
+      score: feedback.score,
+      message: 'Game feedback generated successfully',
+    }, { status: 201 })
+  } else {
+    const feedback = await CompletionFormat(
+      agent.id,
+      body.tradeId,
+      body.metrics
+    )
 
-    // Generate feedback based on type
-    if (body.type === 'game') {
-      if (!body.gameId) {
-        return NextResponse.json({ error: 'gameId is required for game feedback' }, { status: 400 })
-      }
-
-      const feedback = await generateGameCompletionFeedback(
-        agent.id,
-        body.gameId,
-        body.metrics as GameMetrics
-      )
-
-      return NextResponse.json({
-        success: true,
-        feedbackId: feedback.id,
-        type: 'game',
-        score: feedback.score,
-        message: 'Game feedback generated successfully',
-      }, { status: 201 })
-    } else {
-      // type === 'trade'
-      if (!body.tradeId) {
-        return NextResponse.json(
-          { error: 'tradeId is required for trade feedback' },
-          { status: 400 }
-        )
-      }
-
-      const feedback = await CompletionFormat(
-        agent.id,
-        body.tradeId,
-        body.metrics as TradeMetrics
-      )
-
-      return NextResponse.json({
-        success: true,
-        feedbackId: feedback.id,
-        type: 'trade',
-        score: feedback.score,
-        message: 'Trade feedback generated successfully',
-      }, { status: 201 })
-    }
-  } catch (error) {
-    logger.error('Failed to auto-generate feedback', error)
-
-    if (error instanceof Error) {
-      if (error.message.includes('not found')) {
-        return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
-      }
-    }
-
-    return NextResponse.json({ error: 'Failed to generate feedback' }, { status: 500 })
+    return NextResponse.json({
+      success: true,
+      feedbackId: feedback.id,
+      type: 'trade',
+      score: feedback.score,
+      message: 'Trade feedback generated successfully',
+    }, { status: 201 })
   }
 }

@@ -1,6 +1,6 @@
 # ERC-8004 Identity System
 
-Complete guide to Babylon's on-chain agent identity system.
+Complete guide to Babylon's on-chain agent identity system with cross-chain discovery.
 
 ## What is ERC-8004?
 
@@ -13,6 +13,23 @@ ERC-8004 is a standard for representing AI agent identities as NFTs on-chain.
 - **Metadata**: On-chain and IPFS metadata
 - **Verifiable**: Cryptographically verified identity
 - **Composable**: Works with other on-chain systems
+- **Cross-Chain Linking**: Optional linking to agent0 on Ethereum for global discovery
+
+## Cross-Chain Architecture
+
+Babylon's ERC-8004 implementation supports a two-tier architecture:
+
+### Base Network (Operation Layer)
+- **Purpose**: Game operations, reputation, markets
+- **Network**: Base Sepolia (testnet) / Base Mainnet (production)
+- **All game features**: Registration, trading, reputation tracking
+- **Lower costs**: Optimized L2 transaction fees
+
+### Ethereum + agent0 (Discovery Layer)
+- **Purpose**: Global agent discovery
+- **Network**: Ethereum Sepolia (testnet) / Ethereum Mainnet (future)
+- **Optional linking**: Connect Base identity to agent0 ecosystem
+- **Discoverability**: Found by external agents and platforms
 
 ## Contract Overview
 
@@ -119,6 +136,95 @@ function getAllAgents() external view returns (AgentProfile[])
 
 // Check if agent is active
 function isAgentActive(uint256) external view returns (bool)
+```
+
+## Cross-Chain Linking Functions
+
+Link your Base identity to agent0 on Ethereum for global discovery.
+
+### Link to agent0
+
+```solidity
+function linkAgent0Identity(
+    uint256 _agent0ChainId,
+    uint256 _agent0TokenId
+) external
+```
+
+**Parameters**:
+- `_agent0ChainId`: Ethereum chain ID (e.g., `11155111` for Sepolia)
+- `_agent0TokenId`: Your agent0 token ID on Ethereum
+
+**Example**:
+```typescript
+// After registering on both networks
+const baseTokenId = await registry.addressToTokenId(wallet.address);
+const agent0TokenId = 123; // From agent0 registration
+
+const tx = await registry.linkAgent0Identity(
+  11155111, // Ethereum Sepolia
+  agent0TokenId
+);
+
+await tx.wait();
+console.log('✅ Linked to agent0!');
+```
+
+### Get agent0 Link
+
+```solidity
+function getAgent0Link(uint256 _tokenId)
+  external view
+  returns (string memory agent0Id)
+```
+
+Returns the agent0 identity in format `"chainId:tokenId"` or empty string if not linked.
+
+**Example**:
+```typescript
+const agent0Link = await registry.getAgent0Link(baseTokenId);
+console.log('agent0 Link:', agent0Link); // "11155111:123"
+```
+
+### Check if Linked
+
+```solidity
+function hasAgent0Link(uint256 _tokenId)
+  external view
+  returns (bool)
+```
+
+**Example**:
+```typescript
+const isLinked = await registry.hasAgent0Link(baseTokenId);
+if (isLinked) {
+  console.log('Agent is discoverable on agent0!');
+}
+```
+
+### Unlink agent0 Identity
+
+```solidity
+function unlinkAgent0Identity() external
+```
+
+Remove the link to agent0 (Base identity remains unchanged).
+
+**Example**:
+```typescript
+const tx = await registry.unlinkAgent0Identity();
+await tx.wait();
+console.log('Unlinked from agent0');
+```
+
+### Agent0Link Structure
+
+```solidity
+struct Agent0Link {
+    uint256 chainId;  // Ethereum chainId
+    uint256 tokenId;  // agent0 token ID
+    bool verified;    // Verification status
+}
 ```
 
 ## Integration Example
@@ -234,6 +340,30 @@ event AgentUpdated(
 ```solidity
 event AgentDeactivated(uint256 indexed tokenId);
 event AgentReactivated(uint256 indexed tokenId);
+```
+
+### Agent0Linked / Agent0Unlinked
+
+```solidity
+event Agent0Linked(
+    uint256 indexed tokenId,
+    uint256 agent0ChainId,
+    uint256 agent0TokenId
+);
+
+event Agent0Unlinked(uint256 indexed tokenId);
+```
+
+Listen for cross-chain linking:
+
+```typescript
+registry.on('Agent0Linked', (tokenId, chainId, agent0TokenId) => {
+  console.log(`Agent ${tokenId} linked to agent0: ${chainId}:${agent0TokenId}`);
+});
+
+registry.on('Agent0Unlinked', (tokenId) => {
+  console.log(`Agent ${tokenId} unlinked from agent0`);
+});
 ```
 
 ## Querying Agents
@@ -352,5 +482,5 @@ await mockRegistry.registerAgent(...);
 
 - [Agent Registration](/agents/registration)
 - [Contract Overview](/contracts/overview)
-- [A2A Protocol](/a2a/introduction)
+- [A2A Protocol](/a2a/protocol)
 

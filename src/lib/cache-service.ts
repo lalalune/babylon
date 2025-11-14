@@ -43,8 +43,6 @@ export const CACHE_KEYS = {
   ORGANIZATION: 'org',
   MARKET: 'market',
   MARKETS_LIST: 'markets:list',
-  POOL: 'pool',
-  POOLS_LIST: 'pools:list',
   TRENDING_TAGS: 'trending:tags',
   WIDGET: 'widget',
 } as const;
@@ -63,8 +61,6 @@ export const DEFAULT_TTLS = {
   
   // Moderate change frequency - medium TTL
   USER: 300, // 5 minutes
-  POOL: 180, // 3 minutes
-  POOLS_LIST: 180, // 3 minutes
   TRENDING_TAGS: 300, // 5 minutes
   WIDGET: 300, // 5 minutes
   
@@ -102,48 +98,48 @@ export async function getCache<T>(
 ): Promise<T | null> {
   const fullKey = options.namespace ? `${options.namespace}:${key}` : key;
 
-  try {
-    // Try Redis first
-    if (redis && redisClientType) {
-      const cached = await redis.get(fullKey);
-      
-      if (cached) {
-        logger.debug('Cache hit (Redis)', { key: fullKey }, 'CacheService');
-        
-        try {
-          return JSON.parse(cached as string) as T;
-        } catch (error) {
-          logger.error('Failed to parse cached value', { key: fullKey, error }, 'CacheService');
-          // Invalidate corrupted cache entry
-          await invalidateCache(key, options);
+  if (redis && redisClientType) {
+    const cached = await redis.get(fullKey);
+    
+    if (cached) {
+      try {
+        // Check if cached value is empty or whitespace
+        const cachedStr = cached as string;
+        if (!cachedStr || cachedStr.trim() === '') {
+          logger.warn('Empty cached value in Redis', { key: fullKey }, 'CacheService');
           return null;
         }
+        
+        logger.debug('Cache hit (Redis)', { key: fullKey }, 'CacheService');
+        return JSON.parse(cachedStr) as T;
+      } catch (error) {
+        logger.error('Failed to parse cached value from Redis', { 
+          key: fullKey, 
+          error: error instanceof Error ? error.message : 'Unknown error',
+          preview: (cached as string).substring(0, 100)
+        }, 'CacheService');
+        // Return null to trigger a fresh fetch
+        return null;
       }
-      
-      logger.debug('Cache miss (Redis)', { key: fullKey }, 'CacheService');
-      return null;
     }
-
-    // Fall back to memory cache
-    const entry = memoryCache.get(fullKey);
     
-    if (entry) {
-      if (entry.expiresAt > Date.now()) {
-        logger.debug('Cache hit (Memory)', { key: fullKey }, 'CacheService');
-        return entry.value as T;
-      } else {
-        // Expired
-        memoryCache.delete(fullKey);
-        logger.debug('Cache expired (Memory)', { key: fullKey }, 'CacheService');
-      }
-    }
-
-    logger.debug('Cache miss (Memory)', { key: fullKey }, 'CacheService');
-    return null;
-  } catch (error) {
-    logger.error('Cache get error', { key: fullKey, error }, 'CacheService');
+    logger.debug('Cache miss (Redis)', { key: fullKey }, 'CacheService');
     return null;
   }
+
+  const entry = memoryCache.get(fullKey);
+  
+  if (entry) {
+    if (entry.expiresAt > Date.now()) {
+      logger.debug('Cache hit (Memory)', { key: fullKey }, 'CacheService');
+      return entry.value as T;
+    }
+    memoryCache.delete(fullKey);
+    logger.debug('Cache expired (Memory)', { key: fullKey }, 'CacheService');
+  }
+
+  logger.debug('Cache miss (Memory)', { key: fullKey }, 'CacheService');
+  return null;
 }
 
 /**
@@ -155,31 +151,23 @@ export async function setCache<T>(
   options: CacheOptions = {}
 ): Promise<void> {
   const fullKey = options.namespace ? `${options.namespace}:${key}` : key;
-  const ttl = options.ttl || 300; // Default 5 minutes
+  const ttl = options.ttl || 300;
 
-  try {
-    const serialized = JSON.stringify(value);
+  const serialized = JSON.stringify(value);
 
-    // Try Redis first
-    if (redis && redisClientType) {
-      if (redisClientType === 'upstash') {
-        // Upstash Redis uses options object
-        await (redis as UpstashRedis).set(fullKey, serialized, { ex: ttl });
-      } else {
-        // IORedis uses positional arguments
-        await (redis as IORedis).set(fullKey, serialized, 'EX', ttl);
-      }
-      logger.debug('Cache set (Redis)', { key: fullKey, ttl }, 'CacheService');
-      return;
+  if (redis && redisClientType) {
+    if (redisClientType === 'upstash') {
+      await (redis as UpstashRedis).set(fullKey, serialized, { ex: ttl });
+    } else {
+      await (redis as IORedis).set(fullKey, serialized, 'EX', ttl);
     }
-
-    // Fall back to memory cache
-    const expiresAt = Date.now() + (ttl * 1000);
-    memoryCache.set(fullKey, { value, expiresAt });
-    logger.debug('Cache set (Memory)', { key: fullKey, ttl }, 'CacheService');
-  } catch (error) {
-    logger.error('Cache set error', { key: fullKey, error }, 'CacheService');
+    logger.debug('Cache set (Redis)', { key: fullKey, ttl }, 'CacheService');
+    return;
   }
+
+  const expiresAt = Date.now() + (ttl * 1000);
+  memoryCache.set(fullKey, { value, expiresAt });
+  logger.debug('Cache set (Memory)', { key: fullKey, ttl }, 'CacheService');
 }
 
 /**
@@ -191,19 +179,13 @@ export async function invalidateCache(
 ): Promise<void> {
   const fullKey = options.namespace ? `${options.namespace}:${key}` : key;
 
-  try {
-    // Invalidate in Redis
-    if (redis && redisClientType) {
-      await redis.del(fullKey);
-      logger.debug('Cache invalidated (Redis)', { key: fullKey }, 'CacheService');
-    }
-
-    // Invalidate in memory cache
-    memoryCache.delete(fullKey);
-    logger.debug('Cache invalidated (Memory)', { key: fullKey }, 'CacheService');
-  } catch (error) {
-    logger.error('Cache invalidation error', { key: fullKey, error }, 'CacheService');
+  if (redis && redisClientType) {
+    await redis.del(fullKey);
+    logger.debug('Cache invalidated (Redis)', { key: fullKey }, 'CacheService');
   }
+
+  memoryCache.delete(fullKey);
+  logger.debug('Cache invalidated (Memory)', { key: fullKey }, 'CacheService');
 }
 
 /**
@@ -215,56 +197,52 @@ export async function invalidateCachePattern(
 ): Promise<void> {
   const fullPattern = options.namespace ? `${options.namespace}:${pattern}` : pattern;
 
-  try {
-    // Invalidate in Redis
-    if (redis && redisClientType === 'upstash') {
-      // Upstash Redis doesn't support SCAN, so we'll need to track keys manually
-      // For now, log a warning
-      logger.warn(
-        'Pattern invalidation not fully supported with Upstash Redis',
-        { pattern: fullPattern },
-        'CacheService'
-      );
-    } else if (redis && redisClientType === 'standard') {
-      // For standard Redis, use SCAN to find matching keys
-      const ioRedis = redis as { scanStream: (opts: { match: string }) => NodeJS.ReadableStream; del: (...keys: string[]) => Promise<unknown> };
-      const stream = ioRedis.scanStream({ match: fullPattern });
-      const keys: string[] = [];
-
-      stream.on('data', (resultKeys: string[]) => {
-        keys.push(...resultKeys);
-      });
-
-      await new Promise((resolve, reject) => {
-        stream.on('end', resolve);
-        stream.on('error', reject);
-      });
-
-      if (keys.length > 0) {
-        await ioRedis.del(...keys);
-        logger.info(
-          'Cache pattern invalidated (Redis)',
-          { pattern: fullPattern, count: keys.length },
-          'CacheService'
-        );
-      }
-    }
-
-    // Invalidate in memory cache
-    const memoryKeys = Array.from(memoryCache.keys()).filter(key =>
-      key.includes(pattern)
+  // Invalidate in Redis
+  if (redis && redisClientType === 'upstash') {
+    // Upstash Redis doesn't support SCAN, so we'll need to track keys manually
+    // For now, log a warning
+    logger.warn(
+      'Pattern invalidation not fully supported with Upstash Redis',
+      { pattern: fullPattern },
+      'CacheService'
     );
-    memoryKeys.forEach(key => memoryCache.delete(key));
-    
-    if (memoryKeys.length > 0) {
-      logger.debug(
-        'Cache pattern invalidated (Memory)',
-        { pattern: fullPattern, count: memoryKeys.length },
+  } else if (redis && redisClientType === 'standard') {
+    // For standard Redis, use SCAN to find matching keys
+    const ioRedis = redis as { scanStream: (opts: { match: string }) => NodeJS.ReadableStream; del: (...keys: string[]) => Promise<unknown> };
+    const stream = ioRedis.scanStream({ match: fullPattern });
+    const keys: string[] = [];
+
+    stream.on('data', (resultKeys: string[]) => {
+      keys.push(...resultKeys);
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      stream.on('end', () => resolve());
+      stream.on('error', reject);
+    });
+
+    if (keys.length > 0) {
+      await ioRedis.del(...keys);
+      logger.info(
+        'Cache pattern invalidated (Redis)',
+        { pattern: fullPattern, count: keys.length },
         'CacheService'
       );
     }
-  } catch (error) {
-    logger.error('Cache pattern invalidation error', { pattern: fullPattern, error }, 'CacheService');
+  }
+
+  // Invalidate in memory cache
+  const memoryKeys = Array.from(memoryCache.keys()).filter(key =>
+    key.includes(pattern)
+  );
+  memoryKeys.forEach(key => memoryCache.delete(key));
+  
+  if (memoryKeys.length > 0) {
+    logger.debug(
+      'Cache pattern invalidated (Memory)',
+      { pattern: fullPattern, count: memoryKeys.length },
+      'CacheService'
+    );
   }
 }
 

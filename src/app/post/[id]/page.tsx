@@ -4,12 +4,11 @@ import { FeedCommentSection } from '@/components/feed/FeedCommentSection';
 import { InteractionBar } from '@/components/interactions';
 import { PostCard } from '@/components/posts/PostCard';
 import { PageContainer } from '@/components/shared/PageContainer';
-import { WidgetSidebar } from '@/components/shared/WidgetSidebar';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { ArrowLeft, MessageCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
-import { BouncingLogo } from '@/components/shared/BouncingLogo';
+import { Skeleton } from '@/components/shared/Skeleton';
 
 interface PostPageProps {
   params: Promise<{ id: string }>;
@@ -23,25 +22,6 @@ export default function PostPage({ params }: PostPageProps) {
   // Function to open comment modal when comment button is clicked
   const handleCommentClick = () => {
     setIsCommentModalOpen(true);
-  };
-
-  // Function to update post interactions from store
-  const updatePostInteractions = () => {
-    if (post) {
-      const { postInteractions } = useInteractionStore.getState();
-      const storeData = postInteractions.get(postId);
-      
-      if (storeData) {
-        setPost((prev) => prev ? {
-          ...prev,
-          likeCount: storeData.likeCount,
-          commentCount: storeData.commentCount,
-          shareCount: storeData.shareCount,
-          isLiked: storeData.isLiked,
-          isShared: storeData.isShared,
-        } : null);
-      }
-    }
   };
 
   const [post, setPost] = useState<{
@@ -58,12 +38,22 @@ export default function PostPage({ params }: PostPageProps) {
     authorId: string;
     authorName: string;
     authorUsername?: string | null;
+    authorProfileImageUrl?: string | null;
     timestamp: string;
     likeCount: number;
     commentCount: number;
     shareCount: number;
     isLiked: boolean;
     isShared: boolean;
+    // Repost metadata
+    isRepost?: boolean;
+    originalPostId?: string | null;
+    originalAuthorId?: string | null;
+    originalAuthorName?: string | null;
+    originalAuthorUsername?: string | null;
+    originalAuthorProfileImageUrl?: string | null;
+    originalContent?: string | null;
+    quoteComment?: string | null;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +67,12 @@ export default function PostPage({ params }: PostPageProps) {
       const result = await response.json();
       
       const postData = result.data || result;
+
+      // If this is an article-type post, redirect to /article/[id]
+      if (postData.type === 'article' && postData.fullContent) {
+        router.replace(`/article/${postId}`);
+        return;
+      }
 
       const { postInteractions } = useInteractionStore.getState();
       const storeData = postInteractions.get(postId);
@@ -95,12 +91,22 @@ export default function PostPage({ params }: PostPageProps) {
         authorId: postData.authorId,
         authorName: postData.authorName,
         authorUsername: postData.authorUsername || null,
+        authorProfileImageUrl: postData.authorProfileImageUrl || null,
         timestamp: postData.timestamp,
         likeCount: storeData?.likeCount ?? postData.likeCount ?? 0,
         commentCount: storeData?.commentCount ?? postData.commentCount ?? 0,
         shareCount: storeData?.shareCount ?? postData.shareCount ?? 0,
         isLiked: storeData?.isLiked ?? postData.isLiked ?? false,
         isShared: storeData?.isShared ?? postData.isShared ?? false,
+        // Repost metadata
+        isRepost: postData.isRepost || false,
+        originalPostId: postData.originalPostId || null,
+        originalAuthorId: postData.originalAuthorId || null,
+        originalAuthorName: postData.originalAuthorName || null,
+        originalAuthorUsername: postData.originalAuthorUsername || null,
+        originalAuthorProfileImageUrl: postData.originalAuthorProfileImageUrl || null,
+        originalContent: postData.originalContent || null,
+        quoteComment: postData.quoteComment || null,
       });
       setIsLoading(false);
     };
@@ -108,17 +114,55 @@ export default function PostPage({ params }: PostPageProps) {
     loadPost();
   }, [postId]);
 
+  // Subscribe to interaction store changes and update post state
+  useEffect(() => {
+    const unsubscribe = useInteractionStore.subscribe((state) => {
+      const storeData = state.postInteractions.get(postId);
+      if (storeData) {
+        setPost((prev) => {
+          if (!prev) return null;
+          
+          // Only update if values actually changed to avoid unnecessary re-renders
+          if (
+            prev.likeCount === storeData.likeCount &&
+            prev.commentCount === storeData.commentCount &&
+            prev.shareCount === storeData.shareCount &&
+            prev.isLiked === storeData.isLiked &&
+            prev.isShared === storeData.isShared
+          ) {
+            return prev;
+          }
+          
+          return {
+            ...prev,
+            likeCount: storeData.likeCount,
+            commentCount: storeData.commentCount,
+            shareCount: storeData.shareCount,
+            isLiked: storeData.isLiked,
+            isShared: storeData.isShared,
+          };
+        });
+      }
+    });
+
+    return () => unsubscribe();
+  }, [postId]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <BouncingLogo size={32} />
+        <div className="space-y-4 w-full max-w-feed px-4 py-3">
+          <Skeleton className="h-8 w-3/4" />
+          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
       </div>
     );
   }
 
   if (error || !post) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen px-4 py-3">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-2">Post Not Found</h1>
           <p className="text-muted-foreground mb-4">{error || 'The post you are looking for does not exist.'}</p>
@@ -140,7 +184,7 @@ export default function PostPage({ params }: PostPageProps) {
         {/* Left: Post content area */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Desktop: Top bar with back button */}
-          <div className="sticky top-0 z-10 bg-background shadow-sm flex-shrink-0 border-b border-border">
+          <div className="sticky top-0 z-10 bg-background shadow-sm shrink-0 border-b border-border">
             <div className="px-6 py-4">
               <div className="flex items-center gap-4">
                 <button
@@ -159,11 +203,11 @@ export default function PostPage({ params }: PostPageProps) {
 
           {/* Post content */}
           <div className="flex-1 overflow-y-auto">
-            <div className="max-w-2xl mx-auto w-full">
+            <div className="max-w-feed mx-auto w-full">
               {/* Post */}
               <div className="border-b border-border">
-                {post.type === 'article' && post.fullContent ? (
-                  // Article detail view
+                {post.type === 'article' && post.fullContent && post.fullContent.length > 100 ? (
+                  // Article detail view - Only show if has substantial full content (> 100 chars)
                   <article className="px-4 sm:px-6 py-4 sm:py-5">
                     {/* Category badge */}
                     {post.category && (
@@ -198,8 +242,8 @@ export default function PostPage({ params }: PostPageProps) {
                     
                     {/* Bias warning */}
                     {post.biasScore !== null && post.biasScore !== undefined && Math.abs(post.biasScore) >= 0.3 && (
-                      <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg mb-6">
-                        <div className="flex items-start gap-2">
+                      <div className="px-4 py-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg mb-6">
+                        <div className="flex items-start gap-3">
                           <span className="text-yellow-500 text-lg">⚠️</span>
                           <div>
                             <p className="text-sm font-semibold text-yellow-500 mb-1">Biased Coverage</p>
@@ -254,26 +298,17 @@ export default function PostPage({ params }: PostPageProps) {
                 <FeedCommentSection
                   postId={postId}
                   postData={post}
-                  onCommentAdded={() => {
-                    // Update post interactions after comment is added
-                    setTimeout(() => {
-                      updatePostInteractions();
-                    }, 300);
-                  }}
                 />
               </div>
             </div>
           </div>
         </div>
-
-        {/* Right: Widget sidebar */}
-        <WidgetSidebar />
       </div>
 
       {/* Mobile/Tablet: Single column layout */}
       <div className="lg:hidden flex flex-col flex-1 overflow-hidden">
         {/* Mobile header */}
-        <div className="sticky top-0 z-10 bg-background border-b border-border flex-shrink-0">
+        <div className="sticky top-0 z-10 bg-background border-b border-border shrink-0">
           <div className="flex items-center gap-4 px-4 py-3">
             <button
               onClick={() => router.back()}
@@ -292,8 +327,8 @@ export default function PostPage({ params }: PostPageProps) {
         <div className="flex-1 overflow-y-auto">
           {/* Post */}
           <div className="border-b border-border">
-            {post.type === 'article' && post.fullContent ? (
-              // Article detail view
+            {post.type === 'article' && post.fullContent && post.fullContent.length > 100 ? (
+              // Article detail view - Only show if has substantial full content (> 100 chars)
               <article className="px-4 sm:px-6 py-4 sm:py-5">
                 {/* Category badge */}
                 {post.category && (
@@ -383,12 +418,6 @@ export default function PostPage({ params }: PostPageProps) {
             <FeedCommentSection
               postId={postId}
               postData={post}
-              onCommentAdded={() => {
-                // Update post interactions after comment is added
-                setTimeout(() => {
-                  updatePostInteractions();
-                }, 300);
-              }}
             />
           </div>
         </div>
@@ -400,13 +429,6 @@ export default function PostPage({ params }: PostPageProps) {
           postId={postId}
           postData={post}
           onClose={() => setIsCommentModalOpen(false)}
-          onCommentAdded={() => {
-            // Update post interactions after comment is added
-            // Note: modal is already closed by onClose callback
-            setTimeout(() => {
-              updatePostInteractions();
-            }, 300);
-          }}
         />
       )}
     </PageContainer>

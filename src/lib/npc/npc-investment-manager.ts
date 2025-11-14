@@ -11,6 +11,9 @@
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getReputationBreakdown } from '@/lib/reputation/reputation-service';
+import { generateSnowflakeId } from '@/lib/snowflake';
+import type { TradingDecision, ExecutionResult } from '@/types/market-decisions';
+import { TradeExecutionService } from '@/lib/services/trade-execution-service';
 
 export interface PortfolioPosition {
   id: string;
@@ -55,7 +58,7 @@ export class NPCInvestmentManager {
     const pool = await prisma.pool.findUnique({
       where: { id: poolId },
       include: {
-        positions: {
+        PoolPosition: {
           where: { closedAt: null }, // Open positions have null closedAt
         },
       },
@@ -65,7 +68,7 @@ export class NPCInvestmentManager {
       throw new Error(`Pool not found: ${poolId}`);
     }
 
-    const positions = pool.positions as unknown as PortfolioPosition[];
+    const positions = pool.PoolPosition as unknown as PortfolioPosition[];
     const availableBalance = parseFloat(pool.availableBalance.toString());
 
     // Calculate total invested capital (sum of all open position entry values)
@@ -211,6 +214,209 @@ export class NPCInvestmentManager {
   }
 
   /**
+   * Ensure each NPC pool has an initial baseline allocation
+   * Invests ~80% of available balance across aligned companies
+   */
+  static async executeBaselineInvestments(timestamp: Date = new Date()): Promise<ExecutionResult | null> {
+    const baselineDecisions = await this.buildBaselineDecisions();
+
+    if (baselineDecisions.length === 0) {
+      return null;
+    }
+
+    logger.info(
+      `Executing ${baselineDecisions.length} baseline NPC trades`,
+      { timestamp: timestamp.toISOString() },
+      'NPCInvestmentManager'
+    );
+
+    const tradeExecutionService = new TradeExecutionService();
+    const result = await tradeExecutionService.executeDecisionBatch(baselineDecisions);
+
+    logger.info(
+      'Baseline NPC investments completed',
+      {
+        trades: result.successfulTrades,
+        pools: new Set(baselineDecisions.map((d) => d.npcId)).size,
+      },
+      'NPCInvestmentManager'
+    );
+
+    return result;
+  }
+
+  /**
+   * Build baseline allocation decisions for NPC pools lacking exposure
+   */
+  private static async buildBaselineDecisions(): Promise<TradingDecision[]> {
+    const activePools = await prisma.pool.findMany({
+      where: { isActive: true },
+      include: {
+        PoolPosition: {
+          where: { closedAt: null },
+          select: { id: true },
+        },
+      },
+    });
+
+    if (activePools.length === 0) {
+      return [];
+    }
+
+    const actorIds = Array.from(new Set(activePools.map((pool) => pool.npcActorId)));
+
+    const organizationsPromise = prisma.organization.findMany({
+      where: { type: 'company' },
+      select: {
+        id: true,
+        name: true,
+        currentPrice: true,
+        initialPrice: true,
+      },
+    });
+
+    const relationships = await prisma.actorRelationship.findMany({
+      where: {
+        OR: [
+          { actor1Id: { in: actorIds } },
+          { actor2Id: { in: actorIds } },
+        ],
+      },
+      select: {
+        actor1Id: true,
+        actor2Id: true,
+        sentiment: true,
+        strength: true,
+      },
+    });
+
+    const actorIdSet = new Set(actorIds);
+    relationships.forEach((rel) => {
+      actorIdSet.add(rel.actor1Id);
+      actorIdSet.add(rel.actor2Id);
+    });
+
+    const actors = await prisma.actor.findMany({
+      where: { id: { in: Array.from(actorIdSet) } },
+      select: {
+        id: true,
+        name: true,
+        affiliations: true,
+      },
+    });
+
+    const organizations = await organizationsPromise;
+
+    const actorMap = new Map(actors.map((actor) => [actor.id, actor]));
+    const organizationMap = new Map(organizations.map((org) => [org.id, org]));
+    // Use organization ID directly as ticker for reliable lookups
+    const organizationTickerMap = new Map(
+      organizations.map((org) => [org.id, org.id])
+    );
+
+    const relationshipsByActor = new Map<string, Array<{ otherId: string; sentiment: number; strength: number }>>();
+    relationships.forEach((rel) => {
+      relationshipsByActor.set(rel.actor1Id, [
+        ...(relationshipsByActor.get(rel.actor1Id) || []),
+        { otherId: rel.actor2Id, sentiment: rel.sentiment, strength: rel.strength },
+      ]);
+      relationshipsByActor.set(rel.actor2Id, [
+        ...(relationshipsByActor.get(rel.actor2Id) || []),
+        { otherId: rel.actor1Id, sentiment: rel.sentiment, strength: rel.strength },
+      ]);
+    });
+
+    // Sort fallback organizations by current price (descending) to pick meaningful assets
+    const fallbackOrganizations = [...organizations].sort(
+      (a, b) => (b.currentPrice ?? b.initialPrice ?? 100) - (a.currentPrice ?? a.initialPrice ?? 100)
+    );
+
+    const baselineDecisions: TradingDecision[] = [];
+
+    for (const pool of activePools) {
+      // Skip pools that already hold positions
+      if (pool.PoolPosition.length > 0) {
+        continue;
+      }
+
+      const actor = actorMap.get(pool.npcActorId);
+      if (!actor) {
+        continue;
+      }
+
+      const availableBalance = parseFloat(pool.availableBalance.toString());
+      if (availableBalance <= 0) {
+        continue;
+      }
+
+      const investBudget = availableBalance * 0.8;
+      if (investBudget < 1) {
+        continue;
+      }
+
+      const targetOrgIds = new Set<string>();
+
+      (actor.affiliations || []).forEach((orgId) => {
+        if (organizationMap.has(orgId)) {
+          targetOrgIds.add(orgId);
+        }
+      });
+
+      const relatedActors = relationshipsByActor.get(actor.id) || [];
+      relatedActors
+        .filter((rel) => rel.sentiment >= 0.25 && rel.strength >= 0.4)
+        .forEach((rel) => {
+          const counterpart = actorMap.get(rel.otherId);
+          counterpart?.affiliations?.forEach((orgId) => {
+            if (organizationMap.has(orgId)) {
+              targetOrgIds.add(orgId);
+            }
+          });
+        });
+
+      if (targetOrgIds.size === 0) {
+        fallbackOrganizations.slice(0, 3).forEach((org) => targetOrgIds.add(org.id));
+      }
+
+      const targetTickers = Array.from(targetOrgIds)
+        .map((orgId) => organizationTickerMap.get(orgId))
+        .filter((ticker): ticker is string => Boolean(ticker))
+        .slice(0, 5);
+
+      if (targetTickers.length === 0) {
+        continue;
+      }
+
+      let remainingBudget = investBudget;
+
+      targetTickers.forEach((ticker, index) => {
+        const allocationsRemaining = targetTickers.length - index;
+        let allocation = remainingBudget / allocationsRemaining;
+        allocation = Number(allocation.toFixed(2));
+
+        if (allocation <= 0) {
+          return;
+        }
+
+        remainingBudget = Math.max(remainingBudget - allocation, 0);
+
+        baselineDecisions.push({
+          npcId: actor.id,
+          npcName: actor.name,
+          action: 'open_long',
+          marketType: 'perp',
+          ticker,
+          amount: allocation,
+          confidence: 0.9,
+          reasoning: 'Baseline allocation to aligned organizations',
+        });
+      });
+    }
+
+    return baselineDecisions;
+  }
+
+  /**
    * Generate de-risking actions to reduce portfolio risk
    */
   private static async generateDeRiskingActions(
@@ -314,6 +520,7 @@ export class NPCInvestmentManager {
         // Record the rebalance trade
         await prisma.nPCTrade.create({
           data: {
+            id: await generateSnowflakeId(),
             npcActorId: npcUserId,
             poolId,
             marketType: action.marketType,
@@ -330,12 +537,7 @@ export class NPCInvestmentManager {
       }
       // Add other action types (open, resize) as needed
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(
-        `Failed to execute rebalance action: ${errorMessage}`,
-        { error, action },
-        'NPCInvestmentManager'
-      );
+      logger.error('Error executing NPC action', { error, action });
       throw error;
     }
   }
@@ -347,7 +549,7 @@ export class NPCInvestmentManager {
     const activePools = await prisma.pool.findMany({
       where: { isActive: true },
       include: {
-        npcActor: {
+        Actor: {
           select: {
             id: true,
             name: true,
@@ -360,25 +562,16 @@ export class NPCInvestmentManager {
     logger.info(`Monitoring ${activePools.length} active NPC portfolios`, undefined, 'NPCInvestmentManager');
 
     for (const pool of activePools) {
-      if (!pool.npcActor) continue;
+      if (!pool.Actor) continue;
 
-      try {
-        // Determine strategy from actor personality
-        const strategy = this.determineStrategyFromPersonality(pool.npcActor.personality);
+      // Determine strategy from actor personality
+      const strategy = this.determineStrategyFromPersonality(pool.Actor.personality);
 
-        const actions = await this.monitorPortfolio(pool.id, pool.npcActor.id, strategy);
+      const actions = await this.monitorPortfolio(pool.id, pool.Actor.id, strategy);
 
-        // Execute rebalance actions
-        for (const action of actions) {
-          await this.executeRebalanceAction(pool.npcActor.id, pool.id, action);
-        }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        logger.error(
-          `Error monitoring portfolio for ${pool.npcActor.name}: ${errorMessage}`,
-          { error, poolId: pool.id },
-          'NPCInvestmentManager'
-        );
+      // Execute rebalance actions
+      for (const action of actions) {
+        await this.executeRebalanceAction(pool.Actor.id, pool.id, action);
       }
     }
   }
@@ -423,61 +616,50 @@ export class NPCInvestmentManager {
     npcUserId: string,
     baseAmount: number
   ): Promise<number> {
-    try {
-      // Get NPC's reputation breakdown
-      const reputation = await getReputationBreakdown(npcUserId);
+    // Get NPC's reputation breakdown
+    const reputation = await getReputationBreakdown(npcUserId);
 
-      if (!reputation) {
-        logger.warn(
-          `No reputation data for NPC ${npcUserId}, using base allocation`,
-          { npcUserId, baseAmount },
-          'NPCInvestmentManager'
-        );
-        return baseAmount;
-      }
-
-      const reputationScore = reputation.reputationScore;
-
-      // Calculate multiplier based on reputation tiers
-      let multiplier: number;
-
-      if (reputationScore < 40) {
-        // Low reputation: cautious allocation (50-75%)
-        multiplier = 0.5 + (reputationScore / 40) * 0.25;
-      } else if (reputationScore < 70) {
-        // Medium reputation: standard allocation (75-100%)
-        multiplier = 0.75 + ((reputationScore - 40) / 30) * 0.25;
-      } else {
-        // High reputation: confident allocation (100-150%)
-        multiplier = 1.0 + ((reputationScore - 70) / 30) * 0.5;
-      }
-
-      const adjustedAmount = baseAmount * multiplier;
-
-      logger.info(
-        `Reputation-adjusted allocation: ${baseAmount} → ${adjustedAmount.toFixed(2)} (score: ${reputationScore}, multiplier: ${multiplier.toFixed(2)}x)`,
-        {
-          npcUserId,
-          reputationScore,
-          multiplier,
-          baseAmount,
-          adjustedAmount,
-          trustLevel: reputation.trustLevel,
-        },
+    if (!reputation) {
+      logger.warn(
+        `No reputation data for NPC ${npcUserId}, using base allocation`,
+        { npcUserId, baseAmount },
         'NPCInvestmentManager'
       );
-
-      return adjustedAmount;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(
-        `Failed to calculate reputation-adjusted allocation: ${errorMessage}`,
-        { error, npcUserId, baseAmount },
-        'NPCInvestmentManager'
-      );
-      // Fallback to base amount on error
       return baseAmount;
     }
+
+    const reputationScore = reputation.reputationScore;
+
+    // Calculate multiplier based on reputation tiers
+    let multiplier: number;
+
+    if (reputationScore < 40) {
+      // Low reputation: cautious allocation (50-75%)
+      multiplier = 0.5 + (reputationScore / 40) * 0.25;
+    } else if (reputationScore < 70) {
+      // Medium reputation: standard allocation (75-100%)
+      multiplier = 0.75 + ((reputationScore - 40) / 30) * 0.25;
+    } else {
+      // High reputation: confident allocation (100-150%)
+      multiplier = 1.0 + ((reputationScore - 70) / 30) * 0.5;
+    }
+
+    const adjustedAmount = baseAmount * multiplier;
+
+    logger.info(
+      `Reputation-adjusted allocation: ${baseAmount} → ${adjustedAmount.toFixed(2)} (score: ${reputationScore}, multiplier: ${multiplier.toFixed(2)}x)`,
+      {
+        npcUserId,
+        reputationScore,
+        multiplier,
+        baseAmount,
+        adjustedAmount,
+        trustLevel: reputation.trustLevel,
+      },
+      'NPCInvestmentManager'
+    );
+
+    return adjustedAmount;
   }
 
   /**

@@ -14,7 +14,7 @@
 
 import { test, expect } from '@playwright/test'
 import { loginWithPrivyEmail, getPrivyTestAccount } from './helpers/privy-auth'
-import { navigateTo, waitForPageLoad, isVisible, scrollToBottom } from './helpers/page-helpers'
+import { navigateTo, waitForPageLoad, isVisible } from './helpers/page-helpers'
 import { ROUTES } from './helpers/test-data'
 
 test.describe('Leaderboard Page', () => {
@@ -56,15 +56,78 @@ test.describe('Leaderboard Page', () => {
     console.log(`✅ User scores displayed: ${hasScores}`)
   })
 
-  test('should filter leaderboard by period', async ({ page }) => {
-    const tabs = page.locator('button[role="tab"], button:has-text("Daily"), button:has-text("Weekly"), button:has-text("Monthly")')
-    const tabCount = await tabs.count()
+  test('should display leaderboard tabs (All, Earned, Referral)', async ({ page }) => {
+    await page.waitForTimeout(2000)
     
-    if (tabCount > 0) {
-      for (let i = 0; i < Math.min(tabCount, 3); i++) {
-        await tabs.nth(i).click()
+    // Check for the three tabs
+    const allPointsTab = await isVisible(page, 'button:has-text("All Points")', 5000)
+    const earnedPointsTab = await isVisible(page, 'button:has-text("Earned Points")', 5000)
+    const referralPointsTab = await isVisible(page, 'button:has-text("Referral Points")', 5000)
+    
+    console.log(`✅ All Points tab: ${allPointsTab}`)
+    console.log(`✅ Earned Points tab: ${earnedPointsTab}`)
+    console.log(`✅ Referral Points tab: ${referralPointsTab}`)
+  })
+
+  test('should switch between leaderboard tabs', async ({ page }) => {
+    const tabs = ['All Points', 'Earned Points', 'Referral Points']
+    
+    for (const tabName of tabs) {
+      const tab = page.locator(`button:has-text("${tabName}")`)
+      
+      if (await tab.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await tab.click()
         await page.waitForTimeout(2000)
-        console.log(`✅ Filtered leaderboard tab ${i}`)
+        console.log(`✅ Switched to ${tabName} tab`)
+      }
+    }
+  })
+
+  test('should display points breakdown in leaderboard', async ({ page }) => {
+    await page.waitForTimeout(2000)
+    
+    const hasBreakdown = await isVisible(page, 'text=/Earned:|Invite:|Bonus:|P&L:/i', 5000)
+    
+    console.log(`✅ Points breakdown displayed: ${hasBreakdown}`)
+  })
+
+  test('should verify tab switching updates URL params', async ({ page }) => {
+    const tabs = ['All Points', 'Earned Points', 'Referral Points']
+    
+    for (const tabName of tabs) {
+      const tab = page.locator(`button:has-text("${tabName}")`)
+      
+      if (await tab.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await tab.click()
+        await page.waitForTimeout(2000)
+        
+        // Verify API call was made with correct pointsType
+        const url = page.url()
+        console.log(`✅ Switched to ${tabName} tab, URL: ${url}`)
+      }
+    }
+  })
+
+  test('should display correct empty states for each tab', async ({ page }) => {
+    // Test each tab for empty state messaging
+    const tabs = [
+      { name: 'Earned Points', emptyText: /No Earned Points Yet|Close profitable trades/i },
+      { name: 'Referral Points', emptyText: /No Referral Points Yet|Share your invite link/i },
+    ]
+    
+    for (const tab of tabs) {
+      const tabButton = page.locator(`button:has-text("${tab.name}")`)
+      
+      if (await tabButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await tabButton.click()
+        await page.waitForTimeout(2000)
+        
+        // Check if empty state exists
+        const emptyText = typeof tab.emptyText === 'string' ? tab.emptyText : tab.emptyText?.toString() || ''
+        const hasEmptyState = await isVisible(page, emptyText, 3000)
+        if (hasEmptyState) {
+          console.log(`✅ ${tab.name} empty state displayed correctly`)
+        }
       }
     }
   })

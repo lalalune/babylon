@@ -1,43 +1,145 @@
 /**
  * Babylon Game World Generator
  * 
- * Generates complete game narratives with NPCs, events, and predetermined outcomes.
- * This is the WORLD that agents observe and bet on - it doesn't handle betting itself.
- * 
- * The game generates:
- * - Daily events and developments
- * - NPC conversations and actions
- * - Clues and information reveals
- * - News reports and rumors
- * - The final outcome
- * 
- * External agents observe this world and bet on prediction markets about the outcome.
- * 
  * @module engine/GameWorld
+ * 
+ * @description
+ * Generates complete narrative worlds with NPCs, events, and predetermined outcomes
+ * that agents observe and bet on. This is the "reality" of the game - agents don't
+ * participate in or influence this world, they only observe and predict outcomes.
+ * 
+ * **What This Generates:**
+ * - 30 days of narrative events and developments
+ * - NPC conversations and private discussions
+ * - Clues and information reveals (public and leaked)
+ * - News reports, rumors, and expert analysis
+ * - Social media feed posts and reactions
+ * - Final outcome revelation
+ * 
+ * **World vs Betting:**
+ * - GameWorld = what actually happens (predetermined narrative)
+ * - Agents = observers who bet on outcomes (don't affect world)
+ * - Feed = how agents learn about the world (filtered, biased)
+ * - Markets = where agents bet on predictions
+ * 
+ * **Generation Phases:**
+ * - **Early (Days 1-10)**: Rumors, leaks, initial reports
+ * - **Mid (Days 11-20)**: Meetings, analysis, developments
+ * - **Late (Days 21-30)**: Revelations, whistleblowers, final events
+ * 
+ * **LLM Integration:**
+ * - Optional LLM for rich content generation
+ * - Falls back to templates if LLM unavailable
+ * - Uses prompts from @/prompts for consistency
+ * 
+ * **Event Types:**
+ * - announcement, meeting, leak, development
+ * - scandal, rumor, deal, conflict, revelation
+ * 
+ * @see {@link GameEngine} - Production system (not used in GameEngine)
+ * @see {@link GameSimulator} - Uses similar patterns for autonomous simulation
+ * @see {@link FeedGenerator} - Converts events to social media posts
+ * 
+ * @example
+ * ```typescript
+ * const world = new GameWorld({ outcome: true }, llmClient);
+ * 
+ * world.on('feed:post', (post) => {
+ *   console.log(`${post.authorName}: ${post.content}`);
+ * });
+ * 
+ * const finalWorld = await world.generate();
+ * console.log(`Question: ${finalWorld.question}`);
+ * console.log(`Outcome: ${finalWorld.outcome ? 'YES' : 'NO'}`);
+ * console.log(`Events: ${finalWorld.events.length}`);
+ * console.log(`Timeline: ${finalWorld.timeline.length} days`);
+ * ```
  */
 
 import { daySummary, expertAnalysis, newsReport, npcConversation, renderPrompt, rumor } from '@/prompts';
 import type { JsonValue } from '@/types/common';
 import { EventEmitter } from 'events';
-import { v4 as uuid } from 'uuid';
+import { generateSnowflakeId } from '@/lib/snowflake';
 import type { BabylonLLMClient } from '../generator/llm/openai-client';
 import { FeedGenerator, type FeedEvent } from './FeedGenerator';
 
+/**
+ * GameWorld Event Types
+ */
+export interface GameWorldEvents {
+  'world:started': { data: { question: string; npcs: number } };
+  'day:begins': { data: { day: number } };
+  'npc:action': { npc: string; description: string };
+  'npc:conversation': { description: string };
+  'news:published': { npc: string; description: string };
+  'rumor:spread': { description: string };
+  'clue:revealed': { npc: string; description: string };
+  'development:occurred': { description: string };
+  'feed:post': FeedEvent;
+  'outcome:revealed': { data: { outcome: boolean } };
+  'event': { type: string; data: JsonValue };
+}
+
+/**
+ * World generation configuration
+ * 
+ * @interface WorldConfig
+ * 
+ * @property outcome - Predetermined outcome (true = success/YES, false = failure/NO)
+ * @property numNPCs - Number of NPCs in the world (default: 8)
+ * @property duration - Game duration in days (default: 30)
+ * @property verbosity - Content detail level (default: 'normal')
+ */
 export interface WorldConfig {
-  /** Predetermined outcome (true = success, false = failure) */
   outcome: boolean;
-  /** Number of NPCs in the world */
   numNPCs?: number;
-  /** Game duration in days */
   duration?: number;
-  /** How much information to generate */
   verbosity?: 'minimal' | 'normal' | 'detailed';
 }
 
 /**
- * WorldEvent - represents actual story events that occur in the game world
- * This is the canonical definition used throughout the engine
- * These are the events that actors see and react to in the social feed
+ * World Event - Actual story events that occur in the game
+ * 
+ * @interface WorldEvent
+ * 
+ * @description
+ * Canonical representation of events that happen in the game world. These are the
+ * "actual events" that actors observe and react to via the social feed. Each event
+ * can point toward a question outcome and has varying levels of visibility.
+ * 
+ * **This is THE WorldEvent:**
+ * - Used throughout entire engine (GameWorld, FeedGenerator, GameEngine)
+ * - Represents what "actually happened" (not just posts/reactions)
+ * - Feed posts are reactions TO these events
+ * 
+ * @property id - Unique event identifier
+ * @property day - Game day number (1-30) when event occurred
+ * @property type - Event category (determines impact and reactions)
+ * @property description - Event description (max 150 chars, dramatic and specific)
+ * @property actors - Actor IDs involved in this event
+ * @property visibility - Who can see this event
+ * @property pointsToward - Optional hint toward question outcome
+ * @property relatedQuestion - Optional prediction market question ID
+ * 
+ * **Event Types:**
+ * - `announcement`: Official public statements
+ * - `meeting`: Private meetings (may leak)
+ * - `leak`: Information leaked to media
+ * - `development`: Progress updates
+ * - `scandal`: Negative revelations
+ * - `rumor`: Unconfirmed reports
+ * - `deal`: Business transactions
+ * - `conflict`: Disputes or conflicts
+ * - `revelation`: Major discoveries
+ * - `development:occurred`: Internal development marker
+ * - `news:published`: News article published marker
+ * 
+ * **Visibility Levels:**
+ * - `public`: Everyone sees it
+ * - `leaked`: Media has it, public soon
+ * - `secret`: Only involved actors know
+ * - `private`: Small group knows
+ * - `group`: Group chat only
  */
 export interface WorldEvent {
   id: string;
@@ -136,22 +238,71 @@ export interface DayEvent {
 /**
  * Game World Generator
  * 
- * Creates autonomous game worlds with NPCs, events, and narratives.
- * External agents observe this world and make predictions.
+ * @class GameWorld
+ * @extends EventEmitter
+ * 
+ * @description
+ * Creates autonomous game worlds with NPCs, events, and narratives that agents
+ * observe and bet on. Generates complete 30-day story arcs with predetermined
+ * outcomes that unfold naturally through events and social interactions.
+ * 
+ * **Architecture:**
+ * - Extends EventEmitter for real-time event streaming
+ * - Uses FeedGenerator for social media simulation
+ * - Optional LLM for rich content (falls back to templates)
+ * - Deterministic outcome with organic information reveals
+ * 
+ * **Events Emitted:**
+ * - `world:started` - World generation begins
+ * - `day:begins` - New day starts
+ * - `npc:action` - NPC takes action
+ * - `npc:conversation` - NPCs converse
+ * - `news:published` - News article published
+ * - `rumor:spread` - Rumor circulates
+ * - `clue:revealed` - Information revealed
+ * - `development:occurred` - Development happens
+ * - `outcome:revealed` - Final outcome revealed
+ * - `world:ended` - Generation complete
+ * - `feed:post` - Social media post created
+ * 
+ * **NPC Roles:**
+ * - insider: Knows truth, high reliability
+ * - expert: Analytical, moderate reliability
+ * - journalist: Reports news, moderate reliability
+ * - whistleblower: Reveals secrets, high reliability
+ * - politician: Public statements, low reliability
+ * - deceiver: Spreads misinformation, very low reliability
+ * 
+ * @usage
+ * Used for testing and simulation. GameEngine uses different architecture.
  * 
  * @example
  * ```typescript
- * const world = new GameWorld({ outcome: true });
+ * const world = new GameWorld({ outcome: true, numNPCs: 10 }, llm);
  * 
- * world.on('npc:conversation', (event) => {
- *   console.log(`${event.npc}: "${event.data.dialogue}"`);
+ * world.on('feed:post', (post) => {
+ *   console.log(`@${post.authorName}: ${post.content}`);
  * });
  * 
- * const finalWorld = await world.generate();
- * // Complete 30-day narrative with all NPC actions
+ * world.on('day:begins', (event) => {
+ *   console.log(`--- Day ${event.data.day} ---`);
+ * });
+ * 
+ * const result = await world.generate();
+ * console.log(`Generated ${result.events.length} events over ${result.timeline.length} days`);
  * ```
  */
-export class GameWorld extends EventEmitter {
+
+/**
+ * Typed EventEmitter interface for GameWorld
+ */
+interface TypedGameWorldEmitter {
+  on<K extends keyof GameWorldEvents>(event: K, listener: (data: GameWorldEvents[K]) => void): this;
+  emit<K extends keyof GameWorldEvents>(event: K, data: GameWorldEvents[K]): boolean;
+  off<K extends keyof GameWorldEvents>(event: K, listener: (data: GameWorldEvents[K]) => void): this;
+}
+
+export class GameWorld extends EventEmitter implements TypedGameWorldEmitter {
   private config: Required<WorldConfig>;
   private events: WorldEvent[] = [];
   private currentDay = 0;
@@ -159,6 +310,25 @@ export class GameWorld extends EventEmitter {
   private feedGenerator: FeedGenerator;
   private llm?: BabylonLLMClient;
 
+  /**
+   * Create a new GameWorld generator
+   * 
+   * @param config - World configuration options
+   * @param llm - Optional LLM client for rich content generation
+   * 
+   * @description
+   * Initializes world generator with configuration. If LLM is provided, generates
+   * rich, contextual content. Otherwise falls back to template-based generation.
+   * 
+   * @example
+   * ```typescript
+   * // With LLM (rich content)
+   * const world = new GameWorld({ outcome: true }, llmClient);
+   * 
+   * // Without LLM (template-based)
+   * const world = new GameWorld({ outcome: false });
+   * ```
+   */
   constructor(config: WorldConfig, llm?: BabylonLLMClient) {
     super();
 
@@ -174,20 +344,81 @@ export class GameWorld extends EventEmitter {
   }
 
   /**
-   * Generate complete game world from day 1 to 30
+   * Generate complete game world simulation
    * 
-   * Returns full narrative with:
-   * - Daily events and developments
-   * - NPC conversations and actions
-   * - Clues and information reveals
-   * - News reports and rumors
-   * - Final outcome
+   * @returns Complete world state with 30-day timeline, events, and NPCs
+   * @throws Never throws - handles errors internally and uses fallbacks
    * 
-   * This is what agents observe - they don't participate in this world,
-   * they BET on what will happen.
+   * @description
+   * Generates a complete 30-day narrative world from start to finish. This is the
+   * "actual reality" that agents observe through the social feed and bet on.
+   * 
+   * **Generation Process:**
+   * 1. **Setup**
+   *    - Generate prediction question
+   *    - Create NPCs with roles and reliability
+   *    - Emit 'world:started' event
+   * 
+   * 2. **Daily Generation** (30 days)
+   *    - Generate phase-appropriate events (early/mid/late)
+   *    - Generate feed posts from events (via FeedGenerator)
+   *    - Generate group chat messages
+   *    - Generate day summary
+   *    - Calculate public sentiment
+   *    - Emit events for monitoring
+   * 
+   * 3. **Resolution**
+   *    - Emit 'outcome:revealed' event
+   *    - Finalize world state
+   * 
+   * **Event Generation:**
+   * - Uses LLM for rich, contextual content
+   * - Falls back to templates if LLM unavailable
+   * - Events become more specific toward outcome as days progress
+   * 
+   * **Feed Generation:**
+   * - NPCs react to events via FeedGenerator
+   * - Posts include news, reactions, analysis, conspiracy theories
+   * - Sentiment calculated from all posts
+   * 
+   * **What Agents See:**
+   * - Feed posts (filtered view of events)
+   * - Public events only (not secret meetings)
+   * - NPC statements (may be misleading)
+   * - News coverage (may be biased)
+   * 
+   * **What Agents DON'T See:**
+   * - Predetermined outcome
+   * - NPC reliability scores
+   * - Truth values of statements
+   * - Secret events
+   * 
+   * @usage
+   * Used for testing, simulation, and offline world generation.
+   * 
+   * @example
+   * ```typescript
+   * const world = new GameWorld({ outcome: true, numNPCs: 10 }, llm);
+   * 
+   * const state = await world.generate();
+   * 
+   * console.log(`Question: ${state.question}`);
+   * console.log(`Truth: ${state.outcome ? 'YES' : 'NO'}`);
+   * console.log(`NPCs: ${state.npcs.length}`);
+   * console.log(`Events: ${state.events.length}`);
+   * console.log(`Days: ${state.timeline.length}`);
+   * 
+   * // Analyze sentiment progression
+   * state.timeline.forEach(day => {
+   *   console.log(`Day ${day.day}: ${day.summary}`);
+   *   console.log(`  Sentiment: ${day.publicSentiment.toFixed(2)}`);
+   *   console.log(`  Events: ${day.events.length}`);
+   *   console.log(`  Posts: ${day.feedPosts?.length || 0}`);
+   * });
+   * ```
    */
   async generate(): Promise<WorldState> {
-    const worldId = uuid();
+    const worldId = await generateSnowflakeId();
     
     // 1. Create the scenario
     const question = this.generateQuestion();
@@ -494,7 +725,13 @@ export class GameWorld extends EventEmitter {
       truthContext
     });
 
-    const response = await this.llm.generateJSON<{ headline: string; report: string }>(prompt);
+    const rawResponse = await this.llm.generateJSON<{ headline: string; report: string } | { response: { headline: string; report: string } }>(prompt);
+    
+    // Handle XML structure
+    const response = 'response' in rawResponse && rawResponse.response
+      ? rawResponse.response
+      : rawResponse as { headline: string; report: string };
+    
     return `${response.headline}\n\n${response.report}`;
   }
 
@@ -518,7 +755,13 @@ export class GameWorld extends EventEmitter {
       outcomeHint
     });
 
-    const response = await this.llm.generateJSON<{ rumor: string }>(prompt);
+    const rawResponse = await this.llm.generateJSON<{ rumor: string } | { response: { rumor: string } }>(prompt);
+    
+    // Handle XML structure
+    const response = 'response' in rawResponse && rawResponse.response
+      ? rawResponse.response
+      : rawResponse as { rumor: string };
+    
     return response.rumor;
   }
 
@@ -538,7 +781,13 @@ export class GameWorld extends EventEmitter {
       recentEvents: events.slice(-2).map(e => e.description).join('; ')
     });
 
-    const response = await this.llm.generateJSON<{ conversation: string }>(prompt);
+    const rawResponse = await this.llm.generateJSON<{ conversation: string } | { response: { conversation: string } }>(prompt);
+    
+    // Handle XML structure
+    const response = 'response' in rawResponse && rawResponse.response
+      ? rawResponse.response
+      : rawResponse as { conversation: string };
+    
     return response.conversation;
   }
 
@@ -562,7 +811,13 @@ export class GameWorld extends EventEmitter {
       reliabilityContext
     });
 
-    const response = await this.llm.generateJSON<{ analysis: string }>(prompt);
+    const rawResponse = await this.llm.generateJSON<{ analysis: string } | { response: { analysis: string } }>(prompt);
+    
+    // Handle XML structure
+    const response = 'response' in rawResponse && rawResponse.response
+      ? rawResponse.response
+      : rawResponse as { analysis: string };
+    
     return `${expert.name}: ${response.analysis}`;
   }
 
@@ -582,7 +837,13 @@ export class GameWorld extends EventEmitter {
       outcome: this.config.outcome ? 'YES' : 'NO'
     });
 
-    const response = await this.llm.generateJSON<{ summary: string }>(prompt);
+    const rawResponse = await this.llm.generateJSON<{ summary: string } | { response: { summary: string } }>(prompt);
+    
+    // Handle XML structure
+    const response = 'response' in rawResponse && rawResponse.response
+      ? rawResponse.response
+      : rawResponse as { summary: string };
+    
     return response.summary;
   }
 

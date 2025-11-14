@@ -7,7 +7,8 @@
 
 import { prisma } from '@/lib/database-service';
 import { logger } from '@/lib/logger';
-import { readFileSync, existsSync } from 'fs';
+import { generateSnowflakeId } from '@/lib/snowflake';
+import { existsSync, readFileSync } from 'fs';
 import { RelationshipManager } from './RelationshipManager';
 
 export interface RelationshipData {
@@ -45,14 +46,24 @@ export class FollowInitializer {
     }
 
     // Load relationships from database
+    logger.info('Loading relationships from database...', undefined, 'FollowInitializer');
     const relationships = await prisma.actorRelationship.findMany();
 
     logger.info(`Found ${relationships.length} relationships to process`, { count: relationships.length }, 'FollowInitializer');
 
     // Create follows based on relationship type and sentiment
     let followsCreated = 0;
+    const total = relationships.length;
 
-    for (const rel of relationships) {
+    for (let i = 0; i < relationships.length; i++) {
+      const rel = relationships[i];
+      if (!rel) continue;
+      
+      // Log progress every 10 relationships
+      if (i > 0 && i % 10 === 0) {
+        logger.info(`Progress: ${i}/${total} relationships processed`, { progress: i, total }, 'FollowInitializer');
+      }
+      
       const shouldFollowEachOther = this.determineFollowDirection(
         rel.relationshipType,
         rel.sentiment,
@@ -70,9 +81,10 @@ export class FollowInitializer {
       }
     }
 
-    logger.info(`Created ${followsCreated} follow relationships`, { count: followsCreated }, 'FollowInitializer');
+    logger.info(`✅ Created ${followsCreated} follow relationships`, { count: followsCreated }, 'FollowInitializer');
 
     // Verify and fix actors with no followers
+    logger.info('Verifying all actors have followers...', undefined, 'FollowInitializer');
     await this.ensureMinimumFollowers(2);
   }
 
@@ -106,7 +118,16 @@ export class FollowInitializer {
   static async importRelationships(relationships: RelationshipData[]): Promise<void> {
     logger.info('Importing relationships to database...', undefined, 'FollowInitializer');
 
-    for (const rel of relationships) {
+    const total = relationships.length;
+    for (let i = 0; i < relationships.length; i++) {
+      const rel = relationships[i];
+      if (!rel) continue;
+      
+      // Log progress every 20 relationships
+      if (i > 0 && i % 20 === 0) {
+        logger.info(`Import progress: ${i}/${total}`, { progress: i, total }, 'FollowInitializer');
+      }
+      
       await prisma.actorRelationship.upsert({
         where: {
           actor1Id_actor2Id: {
@@ -116,6 +137,7 @@ export class FollowInitializer {
         },
         update: {},
         create: {
+          id: await generateSnowflakeId(),
           actor1Id: rel.actor1Id,
           actor2Id: rel.actor2Id,
           relationshipType: rel.relationshipType,
@@ -123,11 +145,12 @@ export class FollowInitializer {
           sentiment: rel.sentiment,
           history: rel.history,
           isPublic: true,
+          updatedAt: new Date(),
         },
       });
     }
 
-    logger.info(`Imported ${relationships.length} relationships`, { count: relationships.length }, 'FollowInitializer');
+    logger.info(`✅ Imported ${relationships.length} relationships`, { count: relationships.length }, 'FollowInitializer');
   }
 
   /**
@@ -137,8 +160,17 @@ export class FollowInitializer {
     logger.info('Creating follow relationships...', undefined, 'FollowInitializer');
 
     let followCount = 0;
+    const total = relationships.length;
 
-    for (const rel of relationships) {
+    for (let i = 0; i < relationships.length; i++) {
+      const rel = relationships[i];
+      if (!rel) continue;
+      
+      // Log progress every 20 relationships
+      if (i > 0 && i % 20 === 0) {
+        logger.info(`Follow creation progress: ${i}/${total}`, { progress: i, total }, 'FollowInitializer');
+      }
+      
       if (rel.actor1FollowsActor2) {
         await this.createFollow(
           rel.actor1Id,
@@ -158,7 +190,7 @@ export class FollowInitializer {
       }
     }
 
-    logger.info(`Created ${followCount} follow relationships`, { count: followCount }, 'FollowInitializer');
+    logger.info(`✅ Created ${followCount} follow relationships`, { count: followCount }, 'FollowInitializer');
   }
 
   /**
@@ -179,7 +211,8 @@ export class FollowInitializer {
       update: {
         isMutual,
       },
-      create: {
+        create: {
+          id: await generateSnowflakeId(),
         followerId,
         followingId,
         isMutual,
@@ -193,11 +226,11 @@ export class FollowInitializer {
   static async verifyFollowerCounts(): Promise<VerificationReport> {
     const actors = await prisma.actor.findMany({
       include: {
-        followedBy: true,
+        ActorFollow_ActorFollow_followingIdToActor: true,
       },
     });
 
-    const actorsWithoutFollowers = actors.filter(a => a.followedBy.length === 0);
+    const actorsWithoutFollowers = actors.filter(a => a.ActorFollow_ActorFollow_followingIdToActor.length === 0);
 
     // Calculate stats by tier
     const tierStats: Record<string, { counts: number[]; min: number; max: number; avg: number }> = {};
@@ -207,7 +240,7 @@ export class FollowInitializer {
       if (!tierStats[tier]) {
         tierStats[tier] = { counts: [], min: 0, max: 0, avg: 0 };
       }
-      tierStats[tier].counts.push(actor.followedBy.length);
+      tierStats[tier].counts.push(actor.ActorFollow_ActorFollow_followingIdToActor.length);
     });
 
     Object.keys(tierStats).forEach(tier => {
@@ -221,7 +254,7 @@ export class FollowInitializer {
     });
 
     const followerCountByTier: Record<string, { min: number; max: number; avg: number }> = {};
-    Object.keys(tierStats).forEach(tier => {
+    Object.keys(tierStats).forEach((tier) => {
       const stats = tierStats[tier];
       if (!stats) return;
       
@@ -245,10 +278,12 @@ export class FollowInitializer {
    * Ensure all actors have at least minimum followers
    */
   static async ensureMinimumFollowers(minFollowers: number): Promise<void> {
+    logger.info('Checking for actors with no followers...', undefined, 'FollowInitializer');
+    
     const actorsWithNoFollowers = await RelationshipManager.getActorsWithNoFollowers();
 
     if (actorsWithNoFollowers.length === 0) {
-      logger.info('All actors have followers', undefined, 'FollowInitializer');
+      logger.info('✅ All actors have followers', undefined, 'FollowInitializer');
       return;
     }
 
@@ -258,18 +293,33 @@ export class FollowInitializer {
     const allActors = await prisma.actor.findMany();
     const cTierActors = allActors.filter(a => a.tier === 'C_TIER');
 
+    if (cTierActors.length === 0) {
+      logger.warn('No C_TIER actors found to use as followers', undefined, 'FollowInitializer');
+      return;
+    }
+
+    let followsAdded = 0;
     for (const actor of actorsWithNoFollowers) {
+      logger.info(`Processing ${actor.name}...`, { actorId: actor.id }, 'FollowInitializer');
+      
       // Select random followers
       const randomFollowers = this.shuffleArray(cTierActors)
         .filter(f => f.id !== actor.id)
         .slice(0, minFollowers);
 
       for (const follower of randomFollowers) {
-        await this.createFollow(follower.id, actor.id, false);
+        try {
+          await this.createFollow(follower.id, actor.id, false);
+          followsAdded++;
+        } catch (error) {
+          logger.error(`Failed to create follow: ${follower.id} -> ${actor.id}`, { error }, 'FollowInitializer');
+        }
       }
 
-      logger.info(`Added ${randomFollowers.length} followers for ${actor.name}`, { actorName: actor.name, count: randomFollowers.length }, 'FollowInitializer');
+      logger.info(`✅ Added ${randomFollowers.length} followers for ${actor.name}`, { actorName: actor.name, count: randomFollowers.length }, 'FollowInitializer');
     }
+
+    logger.info(`Total follows added: ${followsAdded}`, { count: followsAdded }, 'FollowInitializer');
   }
 
   /**

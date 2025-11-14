@@ -6,8 +6,15 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Babylon Documentation",
-  description: "Documentation for Babylon prediction market platform with autonomous agents",
+  description: "Documentation for Babylon social conspiracy game",
   metadataBase: new URL(process.env.NEXT_PUBLIC_DOCS_URL || process.env.NEXT_PUBLIC_URL || 'http://localhost:3001'),
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    shortcut: '/favicon.svg',
+    apple: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({

@@ -1,0 +1,190 @@
+# Development Tools
+
+Development tools for local testing and debugging.
+
+## Primary Development Mode
+
+**Just use `bun run dev`** - This is the main way to run Babylon locally!
+
+```bash
+bun run dev
+```
+
+This starts:
+- Next.js development server on `http://localhost:3000`
+- Local cron simulator that calls `executeGameTick()` every 60 seconds
+- Hot module replacement for instant updates
+
+## How It Works
+
+The local cron simulator (`scripts/local-cron-simulator.ts`) mimics production behavior by calling the same `executeGameTick()` function that Vercel Cron uses in production.
+
+## What Runs During Development
+
+When you run `bun run dev`, it automatically starts:
+
+1. **Next.js Dev Server** (port 3000)
+2. **Local Cron Simulator** (`scripts/local-cron-simulator.ts`)
+
+The cron simulator calls `executeGameTick()` every 60 seconds, exactly like production Vercel Cron.
+
+### Output Example
+
+```bash
+$ bun run dev
+
+[Next.js] Starting server on http://localhost:3000
+[Cron] 🎮 Game tick started
+[Cron] ✅ Game tick completed { posts: 15, events: 3, markets: 5 }
+[Cron] Next tick in 60 seconds...
+```
+
+### Production vs Development
+
+| Environment | Mechanism | Function |
+|-------------|-----------|---------|
+| **Production** | Vercel Cron | `/api/cron/game-tick` → `executeGameTick()` |
+| **Development** | Local Cron Simulator | `executeGameTick()` |
+
+**Same function, different triggers!**
+
+## Features
+
+- **Automatic** - Runs automatically with `bun run dev`
+- **Duplicate Prevention** - Skips tick if previous still running
+- **Error Recovery** - Logs errors but doesn't crash
+- **Real-Time Stats** - Shows posts, events, markets updated
+- **Same as Production** - Uses exact same `executeGameTick()` function
+
+### Troubleshooting
+
+#### Tick Takes Too Long
+
+```bash
+Previous tick still running, skipping...
+```
+
+**Causes:**
+- Slow LLM API response
+- Database latency
+- Complex content generation
+
+**Solutions:**
+- Use Groq instead of OpenAI (faster)
+- Check database performance
+- Reduce posts per tick in config
+
+#### No Content Generated
+
+```bash
+Tick complete { tick: 1, posts: 0, events: 0 }
+```
+
+**Causes:**
+- No active game in database
+- Game engine not initialized
+- API key missing
+
+**Solutions:**
+```bash
+# Generate initial game
+bun run generate
+
+# Check database
+bun run db:status
+
+# Verify API keys
+echo $GROQ_API_KEY
+```
+
+## Architecture
+
+### Production (Vercel)
+```
+Vercel Cron (every 60s)
+  ↓
+/api/cron/game-tick
+  ↓
+executeGameTick()
+  ↓
+Database
+```
+
+### Development (Local)
+```
+bun run dev
+  ↓
+scripts/local-cron-simulator.ts
+  ↓
+executeGameTick()
+  ↓
+Database
+```
+
+**Key Point:** Same function (`executeGameTick()`) in both environments!
+
+## Development Workflow
+
+### Full Stack Development
+
+```bash
+# Terminal 1: Next.js + game ticker (automatic)
+bun run dev
+
+# Terminal 2: Agents (optional)
+bun run eliza:all
+```
+
+### Web-Only Mode
+
+If you're only working on frontend and don't need content generation:
+
+```bash
+bun run dev:web-only
+```
+
+### Testing Tick Function
+
+```bash
+# Just start dev server - tick runs automatically
+bun run dev
+```
+
+## Advanced Usage
+
+### Custom Tick Interval
+
+Edit `scripts/local-cron-simulator.ts`:
+
+```typescript
+// Change from 60000 to 30000 (30 seconds)
+const TICK_INTERVAL = 30000;
+```
+
+### Tick Logging
+
+Add custom logging in `src/lib/serverless-game-tick.ts`:
+
+```typescript
+export async function executeGameTick() {
+  const start = Date.now();
+  // ... tick logic ...
+  const duration = Date.now() - start;
+  
+  logger.info('Tick performance', { duration, posts, events });
+}
+```
+
+### Integration Testing
+
+```bash
+# Run with test database
+DATABASE_URL=test_db bun run dev
+```
+
+## Next Steps
+
+- [Local Development Guide →](/getting-started/local-development)
+- [Testing Guide →](/getting-started/testing)
+- [Deploy to Vercel →](/deployment/vercel)
+

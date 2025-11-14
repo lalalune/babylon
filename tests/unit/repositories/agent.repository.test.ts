@@ -5,8 +5,10 @@
 
 import { describe, test, expect } from 'bun:test'
 
-describe.skip('AgentRepository', () => {
-  test('AgentRepository stub exists', () => {
+describe('AgentRepository', () => {
+  test('AgentRepository stub exists (pending implementation)', () => {
+    // This is a placeholder for future AgentRepository implementation
+    // Test passes to confirm the test file structure is in place
     expect(true).toBe(true)
   })
 })

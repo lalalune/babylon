@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import "./ERC8004IdentityRegistry.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import {ERC8004IdentityRegistry} from "./ERC8004IdentityRegistry.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @title ERC8004ReputationSystem
 /// @notice Reputation system for AI agents
@@ -225,7 +225,8 @@ contract ERC8004ReputationSystem is Ownable {
         // Apply decay for inactive agents
         uint256 timeSinceUpdate = block.timestamp - rep.lastUpdated;
         if (timeSinceUpdate > DECAY_PERIOD) {
-            uint256 decayFactor = (timeSinceUpdate / DECAY_PERIOD) * 100; // 1% per period
+            // Multiply first to avoid precision loss (1% per period)
+            uint256 decayFactor = (timeSinceUpdate * 100) / DECAY_PERIOD;
             adjustedScore -= int256((uint256(adjustedScore) * decayFactor) / 10000);
         }
 

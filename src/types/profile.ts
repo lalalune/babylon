@@ -41,27 +41,6 @@ export interface UserProfileStats {
 }
 
 /**
- * Profile widget pool deposit (from API response)
- */
-export interface ProfileWidgetPoolDeposit {
-  id: string
-  poolId: string
-  poolName: string
-  npcActor: {
-    id: string
-    name: string
-    tier?: string
-    personality?: string
-  }
-  amount: number
-  shares: number
-  currentValue: number
-  unrealizedPnL: number
-  returnPercent: number
-  depositedAt: string
-}
-
-/**
  * Perp position from API response (/api/markets/positions/[userId])
  * This matches the actual API response structure
  */
@@ -79,4 +58,5 @@ export interface PerpPositionFromAPI {
   fundingPaid: number
   openedAt: string
 }
+
 

@@ -59,7 +59,7 @@ export default function GamePage() {
       <PageContainer className="flex flex-col items-center justify-center gap-4">
         <div className="text-lg text-destructive">⚠️ {error}</div>
         <p className="text-sm text-muted-foreground text-center max-w-md">
-          The continuous game engine may not be running. Start it with: <code className="bg-muted px-2 py-1 rounded">bun run daemon</code>
+          The game tick may not be running. Start with: <code className="bg-muted px-2 py-1 rounded">bun run dev</code>
         </p>
       </PageContainer>
     )
@@ -70,7 +70,7 @@ export default function GamePage() {
 
   return (
     <PageContainer className="overflow-y-auto pb-24 md:pb-4">
-      <div className="max-w-[600px] mx-auto px-4 pt-4 space-y-4">
+      <div className="max-w-feed mx-auto px-4 pt-4 space-y-4">
         {/* Engine Status Card */}
         <div className={cn(
           'bg-card border border-border rounded-2xl p-6',
@@ -183,7 +183,7 @@ export default function GamePage() {
               Prediction markets update in the <span className="text-foreground font-medium">Markets</span> tab.
             </p>
             <p className="text-xs mt-4 p-3 bg-muted rounded-lg">
-              <span className="font-medium">Start daemon:</span> <code>bun run daemon</code>
+              <span className="font-medium">Start development:</span> <code>bun run dev</code>
             </p>
           </div>
         </div>

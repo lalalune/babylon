@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useLoginModal } from '@/hooks/useLoginModal'
 import { ComingSoon } from '@/components/shared/ComingSoon'
 import { Suspense } from 'react'
-import { BouncingLogo } from '@/components/shared/BouncingLogo'
+import { Skeleton } from '@/components/shared/Skeleton'
 
 function HomePageContent() {
   const router = useRouter()
@@ -64,7 +64,10 @@ function HomePageContent() {
   if (isChecking) {
     return (
       <div className="flex items-center justify-center h-full">
-        <BouncingLogo size={48} />
+        <div className="space-y-3">
+          <Skeleton className="h-12 w-48" />
+          <Skeleton className="h-4 w-64" />
+        </div>
       </div>
     )
   }
@@ -77,7 +80,10 @@ function HomePageContent() {
   // Show loading while redirecting to feed
   return (
     <div className="flex items-center justify-center h-full">
-      <BouncingLogo size={48} />
+      <div className="space-y-3">
+        <Skeleton className="h-12 w-48" />
+        <Skeleton className="h-4 w-64" />
+      </div>
     </div>
   )
 }
@@ -86,7 +92,10 @@ export default function HomePage() {
   return (
     <Suspense fallback={
       <div className="flex items-center justify-center h-full">
-        <BouncingLogo size={48} />
+        <div className="space-y-3">
+          <Skeleton className="h-12 w-48" />
+          <Skeleton className="h-4 w-64" />
+        </div>
       </div>
     }>
       <HomePageContent />

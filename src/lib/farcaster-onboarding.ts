@@ -68,56 +68,42 @@ export async function openFarcasterOnboardingPopup(
         return
       }
 
-      try {
-        logger.info('Received Farcaster auth message', { fid: data.fid }, 'FarcasterOnboarding')
+      logger.info('Received Farcaster auth message', { fid: data.fid }, 'FarcasterOnboarding')
 
-        // Close popup
-        popup?.close()
+      popup?.close()
+      window.removeEventListener('message', handleMessage)
 
-        // Remove listener
-        window.removeEventListener('message', handleMessage)
-
-        // Verify signature via backend
-        const response = await fetch('/api/auth/onboarding/farcaster/callback', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            message: data.message,
-            signature: data.signature,
-            fid: data.fid,
-            username: data.username,
-            displayName: data.displayName,
-            pfpUrl: data.pfpUrl,
-            bio: data.bio,
-            state,
-          }),
-        })
-
-        if (!response.ok) {
-          const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-          throw new Error(error.error || 'Failed to verify Farcaster authentication')
-        }
-
-        await response.json()
-        
-        resolve({
+      const response = await fetch('/api/auth/onboarding/farcaster/callback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: data.message,
+          signature: data.signature,
           fid: data.fid,
           username: data.username,
           displayName: data.displayName,
           pfpUrl: data.pfpUrl,
           bio: data.bio,
-        })
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-        const errorStack = error instanceof Error ? error.stack : undefined
-        logger.error('Failed to process Farcaster auth', { 
-          error: errorMessage,
-          stack: errorStack 
-        }, 'FarcasterOnboarding')
-        reject(error)
+          state,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to verify Farcaster authentication')
       }
+
+      await response.json()
+      
+      resolve({
+        fid: data.fid,
+        username: data.username,
+        displayName: data.displayName,
+        pfpUrl: data.pfpUrl,
+        bio: data.bio,
+      })
     }
 
     // Listen for popup close without authentication
@@ -159,18 +145,13 @@ export async function openNeynarFarcasterAuth(
  * Fetch additional Farcaster profile data from Neynar API
  */
 export async function fetchFarcasterProfile(fid: number): Promise<FarcasterOnboardingProfile | null> {
-  try {
-    const response = await fetch(`/api/farcaster/profile/${fid}`)
-    
-    if (!response.ok) {
-      return null
-    }
-
-    const data = await response.json()
-    return data.profile
-  } catch (error) {
-    logger.error('Failed to fetch Farcaster profile', { fid, error }, 'FarcasterOnboarding')
+  const response = await fetch(`/api/farcaster/profile/${fid}`)
+  
+  if (!response.ok) {
     return null
   }
+
+  const data = await response.json()
+  return data.profile
 }
 

@@ -5,6 +5,7 @@ import { MessageCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { LikeButton } from './LikeButton';
 import { RepostButton } from './RepostButton';
+import { DeleteButton } from './DeleteButton';
 import { FeedCommentSection } from '@/components/feed/FeedCommentSection';
 import { useInteractionStore } from '@/stores/interactionStore';
 import { useAuth } from '@/hooks/useAuth';
@@ -70,7 +71,7 @@ export function InteractionBar({
       <div
         className={cn(
           className,
-          'flex items-center justify-between mt-2 w-full text-muted-foreground px-8',
+          'flex items-center justify-between mt-3 w-full text-muted-foreground gap-6',
         )}
       >
         {/* Comment button */}
@@ -100,6 +101,15 @@ export function InteractionBar({
             initialShared={isShared}
             size="sm"
             showCount
+            postData={postData ? {
+              id: postData.id,
+              content: postData.content,
+              authorId: postData.authorId,
+              authorName: postData.authorName,
+              authorUsername: postData.authorUsername,
+              authorProfileImageUrl: postData.authorProfileImageUrl,
+              timestamp: postData.timestamp,
+            } : undefined}
           />
         </div>
 
@@ -112,6 +122,15 @@ export function InteractionBar({
             initialCount={likeCount}
             size="sm"
             showCount
+          />
+        </div>
+
+        {/* Delete button (only visible to post author) */}
+        <div onClick={(e) => e.stopPropagation()}>
+          <DeleteButton
+            postId={postId}
+            postAuthorId={postData?.authorId || ''}
+            size="sm"
           />
         </div>
       </div>
@@ -135,10 +154,6 @@ export function InteractionBar({
             isShared: postData.isShared ?? false,
           }}
           onClose={() => setShowComments(false)}
-          onCommentAdded={() => {
-            // Comment count is automatically updated by the store's addComment method
-            // Note: modal is already closed by onClose callback
-          }}
         />
       )}
     </>

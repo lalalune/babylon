@@ -53,7 +53,7 @@ export class RelationshipManager {
         ],
       },
       include: {
-        actor1: {
+        Actor_ActorRelationship_actor1IdToActor: {
           select: {
             id: true,
             name: true,
@@ -61,7 +61,7 @@ export class RelationshipManager {
             domain: true,
           },
         },
-        actor2: {
+        Actor_ActorRelationship_actor2IdToActor: {
           select: {
             id: true,
             name: true,
@@ -129,7 +129,7 @@ export class RelationshipManager {
         followerId: actorId,
       },
       include: {
-        following: true,
+        Actor_ActorFollow_followingIdToActor: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -137,7 +137,7 @@ export class RelationshipManager {
     });
 
     return follows.map(f => ({
-      ...this.mapActorFromPrisma(f.following),
+      ...this.mapActorFromPrisma(f.Actor_ActorFollow_followingIdToActor),
       followedAt: f.createdAt,
     }));
   }
@@ -151,7 +151,7 @@ export class RelationshipManager {
         followingId: actorId,
       },
       include: {
-        follower: true,
+        Actor_ActorFollow_followerIdToActor: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -159,7 +159,7 @@ export class RelationshipManager {
     });
 
     return follows.map(f => ({
-      ...this.mapActorFromPrisma(f.follower),
+      ...this.mapActorFromPrisma(f.Actor_ActorFollow_followerIdToActor),
       followedAt: f.createdAt,
     }));
   }
@@ -209,13 +209,13 @@ export class RelationshipManager {
         ],
       },
       include: {
-        actor1: {
+        Actor_ActorRelationship_actor1IdToActor: {
           select: {
             id: true,
             name: true,
           },
         },
-        actor2: {
+        Actor_ActorRelationship_actor2IdToActor: {
           select: {
             id: true,
             name: true,
@@ -226,7 +226,7 @@ export class RelationshipManager {
 
     const relationshipData = relationships.map(rel => {
       const isActor1 = rel.actor1Id === actorId;
-      const otherActor = isActor1 ? rel.actor2 : rel.actor1;
+      const otherActor = isActor1 ? rel.Actor_ActorRelationship_actor2IdToActor : rel.Actor_ActorRelationship_actor1IdToActor;
 
       return {
         otherActorId: otherActor.id,
@@ -303,8 +303,8 @@ export class RelationshipManager {
     const query: Prisma.ActorRelationshipFindManyArgs = {
       where: whereClause,
       include: {
-        actor1: true,
-        actor2: true,
+        Actor_ActorRelationship_actor1IdToActor: true,
+        Actor_ActorRelationship_actor2IdToActor: true,
       },
       orderBy: [
         { strength: 'desc' },
@@ -383,11 +383,11 @@ export class RelationshipManager {
   static async getActorsWithNoFollowers(): Promise<Actor[]> {
     const actors = await prisma.actor.findMany({
       include: {
-        followedBy: true,
+        ActorFollow_ActorFollow_followingIdToActor: true,
       },
     });
 
-    const actorsWithNoFollowers = actors.filter(a => a.followedBy.length === 0);
+    const actorsWithNoFollowers = actors.filter(a => a.ActorFollow_ActorFollow_followingIdToActor.length === 0);
 
     return actorsWithNoFollowers.map(a => this.mapActorFromPrisma(a));
   }

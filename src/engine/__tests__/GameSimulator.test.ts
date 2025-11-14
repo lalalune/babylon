@@ -1,6 +1,40 @@
 /**
- * GameSimulator Tests
- * Tests autonomous game engine without server dependencies
+ * GameSimulator Test Suite
+ * 
+ * @module engine/__tests__/GameSimulator.test
+ * 
+ * @description
+ * Comprehensive test suite for the GameSimulator autonomous prediction market engine.
+ * Tests game simulation without any server dependencies, database connections, or
+ * external services.
+ * 
+ * **Test Coverage:**
+ * - Instantiation with various configurations
+ * - Complete 30-day game simulation
+ * - Event emission and logging
+ * - Predetermined outcome handling
+ * - Agent behavior and decision making
+ * - Market evolution and LMSR pricing
+ * - Winner calculation and reputation changes
+ * - Performance benchmarks
+ * 
+ * **Key Features Tested:**
+ * - Standalone operation (no database/server)
+ * - Fast execution (<2s per game)
+ * - Correct outcome alignment
+ * - Clue distribution system
+ * - Agent betting behavior
+ * - Market price discovery
+ * - Reputation system
+ * - Batch performance (10 games in <10s)
+ * 
+ * **Testing Approach:**
+ * - Unit tests for core functionality
+ * - Integration tests for complete game flow
+ * - Performance tests for batch execution
+ * - Behavioral tests for agent decisions
+ * 
+ * @see {@link GameSimulator} - Class under test
  */
 
 import { describe, test, expect, beforeEach } from 'bun:test';

@@ -58,10 +58,8 @@ if (isBuildTime) {
   })
   redisType = 'standard'
   
-  redisClient.connect().then(() => {
+  void redisClient.connect().then(() => {
     logger.info('Redis client initialized (Standard Redis Protocol)', undefined, 'Redis')
-  }).catch((err) => {
-    logger.error('Failed to connect to Redis', err, 'Redis')
   })
 } else {
   logger.info('Redis not configured - SSE will use local-only broadcasting', undefined, 'Redis')
@@ -130,23 +128,14 @@ export async function safePoll(channel: string, count: number = 10): Promise<str
  * Cleanup Redis connection on shutdown
  */
 export async function closeRedis(): Promise<void> {
-  // Prevent double-closing
   if (isClosing) return
   isClosing = true
 
   if (redis && redisType === 'standard') {
-    try {
-      const ioRedisClient = redis as IORedis
-      // Check if connection is still alive
-      if (ioRedisClient.status === 'ready' || ioRedisClient.status === 'connect') {
-        await ioRedisClient.quit()
-        logger.info('Redis connection closed', undefined, 'Redis')
-      }
-    } catch (err) {
-      // Ignore errors during cleanup (connection may already be closed)
-      if (err instanceof Error && !err.message.includes('Connection is closed')) {
-        logger.error('Error closing Redis connection', err, 'Redis')
-      }
+    const ioRedisClient = redis as IORedis
+    if (ioRedisClient.status === 'ready' || ioRedisClient.status === 'connect') {
+      await ioRedisClient.quit()
+      logger.info('Redis connection closed', undefined, 'Redis')
     }
   }
 }

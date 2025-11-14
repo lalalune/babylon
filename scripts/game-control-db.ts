@@ -14,112 +14,104 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 async function controlGame(action: 'start' | 'pause') {
-  try {
-    // Get or create the continuous game
-    let game = await prisma.game.findFirst({
-      where: { isContinuous: true },
+  // Get or create the continuous game
+  let game = await prisma.game.findFirst({
+    where: { isContinuous: true },
+  });
+
+  if (!game) {
+    // Create the game if it doesn't exist
+    game = await prisma.game.create({
+      data: {
+        id: 'continuous',
+        isContinuous: true,
+        isRunning: action === 'start',
+        currentDay: 1,
+        startedAt: action === 'start' ? new Date() : null,
+        updatedAt: new Date(),
+      },
     });
+    logger.info(`✅ Game created and ${action === 'start' ? 'started' : 'paused'}!`, { gameId: game.id }, 'Game Control');
+  } else {
+    // Update the existing game
+    const isRunning = action === 'start';
+    const updateData: {
+      isRunning: boolean;
+      startedAt?: Date;
+      pausedAt?: Date | null;
+    } = {
+      isRunning,
+    };
 
-    if (!game) {
-      // Create the game if it doesn't exist
-      game = await prisma.game.create({
-        data: {
-          isContinuous: true,
-          isRunning: action === 'start',
-          currentDay: 1,
-          startedAt: action === 'start' ? new Date() : null,
-        },
-      });
-      logger.info(`✅ Game created and ${action === 'start' ? 'started' : 'paused'}!`, { gameId: game.id }, 'Game Control');
+    if (action === 'start') {
+      updateData.startedAt = game.startedAt || new Date();
+      updateData.pausedAt = null;
     } else {
-      // Update the existing game
-      const isRunning = action === 'start';
-      const updateData: {
-        isRunning: boolean;
-        startedAt?: Date;
-        pausedAt?: Date | null;
-      } = {
-        isRunning,
-      };
-
-      if (action === 'start') {
-        updateData.startedAt = game.startedAt || new Date();
-        updateData.pausedAt = null;
-      } else {
-        updateData.pausedAt = new Date();
-      }
-
-      game = await prisma.game.update({
-        where: { id: game.id },
-        data: updateData,
-      });
-
-      logger.info(`✅ Game ${action === 'start' ? 'started' : 'paused'}!`, { 
-        gameId: game.id,
-        isRunning: game.isRunning,
-        currentDay: game.currentDay 
-      }, 'Game Control');
+      updateData.pausedAt = new Date();
     }
 
-    logger.info('Game Details:', {
-      id: game.id,
-      isRunning: game.isRunning,
-      currentDay: game.currentDay,
-      lastTickAt: game.lastTickAt?.toISOString() || 'Never',
-    }, 'Game Control');
+    game = await prisma.game.update({
+      where: { id: game.id },
+      data: updateData,
+    });
 
-  } catch (error) {
-    logger.error(`Error ${action}ing game:`, error, 'Game Control');
-    process.exit(1);
-  } finally {
-    await prisma.$disconnect();
+    logger.info(`✅ Game ${action === 'start' ? 'started' : 'paused'}!`, { 
+      gameId: game.id,
+      isRunning: game.isRunning,
+      currentDay: game.currentDay 
+    }, 'Game Control');
   }
+
+  logger.info('Game Details:', {
+    id: game.id,
+    isRunning: game.isRunning,
+    currentDay: game.currentDay,
+    lastTickAt: game.lastTickAt?.toISOString() || 'Never',
+  }, 'Game Control');
+
+  await prisma.$disconnect();
 }
 
 async function getStatus() {
-  try {
-    const game = await prisma.game.findFirst({
-      where: { isContinuous: true },
-    });
+  const game = await prisma.game.findFirst({
+    where: { isContinuous: true },
+  });
 
-    if (!game) {
-      logger.warn('⚠️  No game found. Use "bun run game:start" to create and start one.', undefined, 'Game Control');
-      return;
-    }
-
-    logger.info('', undefined, 'Game Control');
-    logger.info('═'.repeat(60), undefined, 'Game Control');
-    logger.info('📊 Game Status', undefined, 'Game Control');
-    logger.info('═'.repeat(60), undefined, 'Game Control');
-    logger.info(`   Status: ${game.isRunning ? '✅ RUNNING' : '⏸️  PAUSED'}`, undefined, 'Game Control');
-    logger.info(`   Current Day: ${game.currentDay}`, undefined, 'Game Control');
-    logger.info(`   Current Date: ${game.currentDate.toLocaleString()}`, undefined, 'Game Control');
-    logger.info(`   Active Questions: ${game.activeQuestions}`, undefined, 'Game Control');
-    logger.info(`   Speed: ${game.speed}ms between ticks`, undefined, 'Game Control');
-    logger.info(`   Last Tick: ${game.lastTickAt ? game.lastTickAt.toLocaleString() : 'Never'}`, undefined, 'Game Control');
-    
-    if (game.startedAt) {
-      logger.info(`   Started At: ${game.startedAt.toLocaleString()}`, undefined, 'Game Control');
-    }
-    
-    if (game.pausedAt) {
-      logger.info(`   Paused At: ${game.pausedAt.toLocaleString()}`, undefined, 'Game Control');
-    }
-    
-    logger.info('═'.repeat(60), undefined, 'Game Control');
-    logger.info('', undefined, 'Game Control');
-
-    if (!game.isRunning) {
-      logger.info('💡 To start the game, run: bun run game:start', undefined, 'Game Control');
-    } else {
-      logger.info('💡 To pause the game, run: bun run game:pause', undefined, 'Game Control');
-    }
-  } catch (error) {
-    logger.error('Error getting game status:', error, 'Game Control');
-    process.exit(1);
-  } finally {
+  if (!game) {
+    logger.warn('⚠️  No game found. Use "bun run game:start" to create and start one.', undefined, 'Game Control');
     await prisma.$disconnect();
+    return;
   }
+
+  logger.info('', undefined, 'Game Control');
+  logger.info('═'.repeat(60), undefined, 'Game Control');
+  logger.info('📊 Game Status', undefined, 'Game Control');
+  logger.info('═'.repeat(60), undefined, 'Game Control');
+  logger.info(`   Status: ${game.isRunning ? '✅ RUNNING' : '⏸️  PAUSED'}`, undefined, 'Game Control');
+  logger.info(`   Current Day: ${game.currentDay}`, undefined, 'Game Control');
+  logger.info(`   Current Date: ${game.currentDate.toLocaleString()}`, undefined, 'Game Control');
+  logger.info(`   Active Questions: ${game.activeQuestions}`, undefined, 'Game Control');
+  logger.info(`   Speed: ${game.speed}ms between ticks`, undefined, 'Game Control');
+  logger.info(`   Last Tick: ${game.lastTickAt ? game.lastTickAt.toLocaleString() : 'Never'}`, undefined, 'Game Control');
+  
+  if (game.startedAt) {
+    logger.info(`   Started At: ${game.startedAt.toLocaleString()}`, undefined, 'Game Control');
+  }
+  
+  if (game.pausedAt) {
+    logger.info(`   Paused At: ${game.pausedAt.toLocaleString()}`, undefined, 'Game Control');
+  }
+  
+  logger.info('═'.repeat(60), undefined, 'Game Control');
+  logger.info('', undefined, 'Game Control');
+
+  if (!game.isRunning) {
+    logger.info('💡 To start the game, run: bun run game:start', undefined, 'Game Control');
+  } else {
+    logger.info('💡 To pause the game, run: bun run game:pause', undefined, 'Game Control');
+  }
+  
+  await prisma.$disconnect();
 }
 
 async function main() {
@@ -150,7 +142,4 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  logger.error('Script failed:', error, 'Game Control');
-  process.exit(1);
-});
+main();

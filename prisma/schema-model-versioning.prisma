@@ -1,0 +1,73 @@
+// Model Versioning & Deployment Tracking
+// Add this to your schema.prisma
+
+model TrainedModel {
+  id              String   @id @default(cuid())
+  modelId         String   @unique
+  version         String   @index
+  baseModel       String
+  trainingBatch   String?
+  
+  // Storage
+  storagePath     String
+  wandbRunId      String?
+  wandbArtifactId String?
+  
+  // Performance metrics
+  accuracy        Float?
+  avgReward       Float?
+  evalMetrics     Json?    // JSON object with detailed metrics
+  
+  // Status
+  status          String   @default("training")  // training | ready | deployed | archived | failed
+  deployedAt      DateTime?
+  archivedAt      DateTime?
+  
+  // Usage tracking
+  agentsUsing     Int      @default(0)
+  totalInferences Int      @default(0)
+  
+  // Relations
+  deployments     ModelDeployment[]
+  
+  // Metadata
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([status])
+  @@index([version])
+  @@index([deployedAt])
+  @@map("trained_models")
+}
+
+model ModelDeployment {
+  id           String   @id @default(cuid())
+  modelId      String
+  agentId      String
+  
+  // Performance tracking
+  inferences   Int      @default(0)
+  avgLatency   Float?
+  errorRate    Float?
+  performanceMetrics Json?
+  
+  // Status
+  deployedAt   DateTime @default(now())
+  undeployedAt DateTime?
+  isActive     Boolean  @default(true)
+  
+  // Relations
+  model        TrainedModel @relation(fields: [modelId], references: [modelId])
+  agent        User         @relation("AgentModelDeployments", fields: [agentId], references: [id])
+  
+  @@index([modelId])
+  @@index([agentId])
+  @@index([isActive])
+  @@map("model_deployments")
+}
+
+// Add this relation to your User model:
+// modelDeployments ModelDeployment[] @relation("AgentModelDeployments")
+
+
+

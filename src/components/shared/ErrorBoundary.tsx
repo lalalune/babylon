@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger'
 import type { ReactNode } from 'react';
 import { Component } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import * as Sentry from '@sentry/nextjs';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -28,6 +29,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     logger.error('ErrorBoundary caught an error:', { error, errorInfo }, 'ErrorBoundary');
+    
+    // Capture error in Sentry
+    Sentry.withScope((scope) => {
+      scope.setContext('react', {
+        componentStack: errorInfo.componentStack,
+      });
+      Sentry.captureException(error);
+    });
     
     if (this.props.onError) {
       this.props.onError(error, errorInfo);

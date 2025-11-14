@@ -11,7 +11,7 @@ export default function PerpDetailLoading() {
             <Skeleton className="h-8 w-32 max-w-full" />
             <Skeleton className="h-4 w-48 max-w-full" />
           </div>
-          <div className="text-right space-y-2 flex-shrink-0">
+          <div className="text-right space-y-2 shrink-0">
             <Skeleton className="h-10 w-32" />
             <Skeleton className="h-4 w-24" />
           </div>

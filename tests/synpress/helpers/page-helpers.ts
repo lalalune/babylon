@@ -59,12 +59,8 @@ export async function fillInput(page: Page, selector: string, value: string): Pr
  * Check if an element is visible
  */
 export async function isVisible(page: Page, selector: string, timeout = 5000): Promise<boolean> {
-  try {
-    await page.waitForSelector(selector, { state: 'visible', timeout })
-    return true
-  } catch {
-    return false
-  }
+  await page.waitForSelector(selector, { state: 'visible', timeout })
+  return true
 }
 
 /**
@@ -72,7 +68,7 @@ export async function isVisible(page: Page, selector: string, timeout = 5000): P
  */
 export async function hasText(page: Page, text: string): Promise<boolean> {
   const element = page.locator(`text=${text}`).first()
-  return await element.isVisible({ timeout: 5000 }).catch(() => false)
+  return await element.isVisible({ timeout: 5000 })
 }
 
 /**
@@ -188,7 +184,7 @@ export async function waitForApiResponse(
 /**
  * Check for console errors
  */
-export async function checkForConsoleErrors(page: Page): Promise<string[]> {
+export function checkForConsoleErrors(page: Page): string[] {
   const errors: string[] = []
   
   page.on('console', (msg) => {

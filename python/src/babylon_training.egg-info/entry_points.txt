@@ -1,0 +1,4 @@
+[console_scripts]
+check-windows = scripts.check_windows:main
+run-migrations = scripts.run_migrations:main
+train-mmo = scripts.train_mmo:main

@@ -1,21 +1,91 @@
 /**
- * Article Generator
+ * Article Generator - Long-Form News Content with Organizational Bias
  * 
- * Generates long-form news articles from organizations (especially media)
- * with bias based on organizational alignments and relationships
+ * @module engine/ArticleGenerator
  * 
- * Key Features:
- * - Long-form investigative articles (500-1500 words)
- * - Organizational bias based on affiliations
- * - Insider information and scoops
- * - Slant/spin based on who the org likes or hates
- * - Multiple perspectives from different outlets on same events
+ * @description
+ * Generates realistic long-form news articles from media organizations with
+ * editorial bias based on organizational relationships and affiliations. Creates
+ * multi-perspective coverage of game events with different spins.
+ * 
+ * **Key Features:**
+ * - Long-form investigative articles (800-1500 words)
+ * - Organizational bias based on actor affiliations
+ * - Insider information and anonymous sources
+ * - Editorial slant/spin based on relationships
+ * - Multiple outlets covering same events differently
+ * - Realistic journalist bylines
+ * 
+ * **Bias System:**
+ * - **Protective Bias (+0.6)**: Downplays negative news about aligned actors
+ * - **Critical Bias (-0.6)**: Emphasizes negative news about opposing actors
+ * - **Neutral (0)**: Balanced coverage when no relationships
+ * 
+ * **Article Structure:**
+ * - Compelling headline that hints at angle
+ * - 2-3 sentence summary for listings
+ * - Full body with insider details, quotes, analysis
+ * - Category and tags for organization
+ * - Sentiment and slant metadata
+ * 
+ * **Coverage Strategy:**
+ * - 50-80% of news organizations cover each major event
+ * - Each outlet provides unique perspective
+ * - Bias creates natural disagreement in coverage
+ * - Insider quotes from affiliated journalists
+ * 
+ * @see {@link FeedGenerator} - Also generates short-form posts
+ * @see {@link GameEngine} - Uses ArticleGenerator for mixed content
+ * 
+ * @example
+ * ```typescript
+ * const generator = new ArticleGenerator(llmClient);
+ * 
+ * const articles = await generator.generateArticlesForEvent(
+ *   worldEvent,
+ *   newsOrganizations,
+ *   actors,
+ *   recentEvents
+ * );
+ * 
+ * // Each org has different take
+ * articles.forEach(article => {
+ *   console.log(`${article.authorOrgName}: ${article.title}`);
+ *   console.log(`Slant: ${article.slant}`);
+ *   console.log(`Bias: ${article.biasScore}`);
+ * });
+ * ```
  */
 
 import type { Actor, Organization, WorldEvent } from '@/shared/types';
 import type { BabylonLLMClient } from '../generator/llm/openai-client';
 import { generateSnowflakeId } from '@/lib/snowflake';
 
+/**
+ * Long-form news article with metadata
+ * 
+ * @interface Article
+ * 
+ * @property id - Unique snowflake ID
+ * @property title - Article headline
+ * @property summary - 2-3 sentence summary for listings
+ * @property content - Full article body (800-1500 words)
+ * @property authorOrgId - Publishing organization ID
+ * @property authorOrgName - Publishing organization name
+ * @property byline - Optional journalist byline
+ * @property bylineActorId - Optional journalist actor ID
+ * @property biasScore - Bias direction (-1 critical, 0 neutral, +1 protective)
+ * @property sentiment - Overall article sentiment
+ * @property slant - Description of editorial angle
+ * @property imageUrl - Optional hero image
+ * @property relatedEventId - Event this article covers
+ * @property relatedQuestion - Optional prediction market question ID
+ * @property relatedActorIds - Actors mentioned in article
+ * @property relatedOrgIds - Organizations mentioned in article
+ * @property category - Article category (e.g., 'tech', 'scandal', 'finance')
+ * @property tags - SEO/filtering tags
+ * @property publishedAt - Publication timestamp
+ */
 export interface Article {
   id: string;
   title: string;
@@ -25,7 +95,7 @@ export interface Article {
   authorOrgName: string;
   byline?: string;
   bylineActorId?: string;
-  biasScore?: number; // -1 to 1
+  biasScore?: number;
   sentiment?: 'positive' | 'negative' | 'neutral';
   slant?: string;
   imageUrl?: string;
@@ -48,16 +118,81 @@ interface ArticleGenerationContext {
   recentEvents: WorldEvent[]; // Context from recent events
 }
 
+/**
+ * Article Generator
+ * 
+ * @class ArticleGenerator
+ * 
+ * @description
+ * Generates biased long-form news articles using LLM. Each organization produces
+ * articles with different angles based on their relationships with actors involved.
+ * 
+ * **Generation Process:**
+ * 1. Identify news organizations to cover event (50-80% coverage)
+ * 2. For each organization:
+ *    - Determine bias based on actor affiliations
+ *    - Build context with bias instructions
+ *    - Generate article via LLM (800-1500 words)
+ *    - Add metadata (category, tags, sentiment)
+ * 
+ * **Bias Calculation:**
+ * - If event involves aligned actors → protective bias
+ * - If event involves opposing actors → critical bias
+ * - Otherwise → neutral coverage
+ * 
+ * @usage
+ * Instantiated by GameEngine for mixed content generation alongside short posts.
+ */
 export class ArticleGenerator {
   private llm: BabylonLLMClient;
 
+  /**
+   * Create a new ArticleGenerator
+   * 
+   * @param llm - Babylon LLM client for article generation
+   */
   constructor(llm: BabylonLLMClient) {
     this.llm = llm;
   }
 
   /**
    * Generate multiple articles about an event from different news organizations
-   * Each organization will have a different slant based on their alignments
+   * 
+   * @param event - World event to cover
+   * @param newsOrganizations - Available news organizations
+   * @param actors - All game actors
+   * @param recentEvents - Recent events for context
+   * @returns Array of articles with different perspectives
+   * 
+   * @description
+   * Each organization produces an article with unique bias and angle based on their
+   * relationships with actors involved in the event. Creates natural disagreement
+   * and multiple perspectives in news coverage.
+   * 
+   * **Coverage Selection:**
+   * - Random 50-80% of news organizations cover each event
+   * - Major events get more coverage
+   * - Each outlet provides unique perspective
+   * 
+   * **Bias Determination:**
+   * - Scans event.actors for affiliations
+   * - Protective bias if organization employs involved actors
+   * - Critical bias if organization opposes involved actors
+   * - Neutral if no strong relationships
+   * 
+   * @example
+   * ```typescript
+   * const articles = await generator.generateArticlesForEvent(
+   *   { id: 'evt-1', description: 'CEO resigns', actors: ['ceo-1'], ... },
+   *   [cnn, fox, nyt],
+   *   allActors,
+   *   recentEvents
+   * );
+   * 
+   * // CNN (employs CEO): "Visionary Leader Steps Down to Pursue New Ventures"
+   * // Fox (opposes CEO): "Embattled Executive Forced Out Amid Controversy"
+   * // NYT (neutral): "Tech CEO Announces Resignation After Tumultuous Quarter"
+   * ```
    */
   async generateArticlesForEvent(
     event: WorldEvent,
@@ -138,7 +273,7 @@ export class ArticleGenerator {
     // Build article prompt
     const prompt = await this.buildArticlePrompt(context, biasDirection);
 
-    // Generate article content
+    // Generate article content using kimi for high-quality content generation
     const response = await this.llm.generateJSON<{
       title: string;
       summary: string;
@@ -147,6 +282,16 @@ export class ArticleGenerator {
       sentiment: 'positive' | 'negative' | 'neutral';
       category: string;
       tags: string[];
+    } | { 
+      response: {
+        title: string;
+        summary: string;
+        content: string;
+        slant: string;
+        sentiment: 'positive' | 'negative' | 'neutral';
+        category: string;
+        tags: string[] | { tag: string[] };
+      }
     }>(
       prompt,
       { 
@@ -164,28 +309,72 @@ export class ArticleGenerator {
       { 
         temperature: 0.85,
         maxTokens: 2500,
+        model: 'moonshotai/kimi-k2-instruct-0905',
+        format: 'xml', // Use XML for robustness
       }
     );
+    
+    // Handle XML structure
+    const articleData = 'response' in response && response.response
+      ? response.response
+      : response as {
+          title: string;
+          summary: string;
+          content: string;
+          slant: string;
+          sentiment: 'positive' | 'negative' | 'neutral';
+          category: string;
+          tags: string[] | { tag: string[] };
+        };
+    
+    // Handle tags (could be array or {tag: [...]} from XML)
+    let tagsArray: string[];
+    if (Array.isArray(articleData.tags)) {
+      tagsArray = articleData.tags;
+    } else if (articleData.tags && typeof articleData.tags === 'object' && 'tag' in articleData.tags) {
+      const tagData = (articleData.tags as { tag: string[] }).tag;
+      tagsArray = Array.isArray(tagData) ? tagData : [tagData];
+    } else {
+      tagsArray = [];
+    }
+
+    // Handle slant (could be string or wrapped in object)
+    let slantString: string | undefined;
+    if (typeof articleData.slant === 'string') {
+      slantString = articleData.slant;
+    } else if (articleData.slant && typeof articleData.slant === 'object') {
+      // If slant is an object, try to extract the actual value or stringify it
+      if ('response' in articleData.slant && typeof (articleData.slant as Record<string, unknown>).response === 'object') {
+        // If there's a nested response object, it's malformed - extract title or summary as fallback
+        const nestedResponse = (articleData.slant as Record<string, unknown>).response as Record<string, unknown>;
+        slantString = (nestedResponse.slant as string) || (nestedResponse.title as string) || undefined;
+      } else {
+        // Try to extract a meaningful string representation
+        slantString = JSON.stringify(articleData.slant);
+      }
+    } else {
+      slantString = undefined;
+    }
 
     // Create article object
     const article: Article = {
-      id: generateSnowflakeId(),
-      title: response.title,
-      summary: response.summary,
-      content: response.content,
+      id: await generateSnowflakeId(),
+      title: articleData.title,
+      summary: articleData.summary,
+      content: articleData.content,
       authorOrgId: organization.id,
       authorOrgName: organization.name,
       byline: journalist?.name,
       bylineActorId: journalist?.id,
       biasScore,
-      sentiment: response.sentiment || 'neutral',
-      slant: response.slant,
+      sentiment: articleData.sentiment || 'neutral',
+      slant: slantString,
       relatedEventId: event.id,
       relatedQuestion: event.relatedQuestion || undefined,
       relatedActorIds: event.actors || [],
       relatedOrgIds: [organization.id],
-      category: response.category || this.categorizeEvent(event),
-      tags: response.tags || [],
+      category: articleData.category || this.categorizeEvent(event),
+      tags: tagsArray,
       publishedAt: new Date(),
     };
 
@@ -259,16 +448,21 @@ REQUIREMENTS:
 8. Create a compelling headline that hints at your angle
 9. Write a 2-3 sentence summary for listings
 
-FORMAT YOUR RESPONSE AS JSON:
-{
-  "title": "Compelling headline that hints at your angle",
-  "summary": "2-3 sentence summary for article listings",
-  "content": "Full long-form article (800-1500 words, use \\n\\n for paragraph breaks)",
-  "slant": "Brief description of your article's angle/bias (e.g., 'Critical of leadership decisions' or 'Sympathetic to company position')",
-  "sentiment": "positive" | "negative" | "neutral",
-  "category": "tech" | "politics" | "finance" | "scandal" | "business" | etc.,
-  "tags": ["relevant", "tags", "for", "article"]
-}`;
+FORMAT YOUR RESPONSE AS XML:
+<response>
+  <title>Compelling headline that hints at your angle</title>
+  <summary>2-3 sentence summary for article listings</summary>
+  <content>Full long-form article (800-1500 words, use \\n\\n for paragraph breaks)</content>
+  <slant>Brief description of your article's angle/bias (e.g., 'Critical of leadership decisions' or 'Sympathetic to company position')</slant>
+  <sentiment>positive | negative | neutral</sentiment>
+  <category>tech | politics | finance | scandal | business | etc.</category>
+  <tags>
+    <tag>relevant</tag>
+    <tag>tags</tag>
+    <tag>for</tag>
+    <tag>article</tag>
+  </tags>
+</response>`;
   }
 
   /**

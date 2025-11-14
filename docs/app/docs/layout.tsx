@@ -2,6 +2,10 @@ import { Footer, Layout, Navbar } from "nextra-theme-docs";
 import "nextra-theme-docs/style.css";
 import { getPageMap } from "nextra/page-map";
 import type { ReactNode } from "react";
+import Image from "next/image";
+
+// import logo_full.svg directly, its next.js
+import logo_full from "../logo_full.svg";
 
 const footer = <Footer>MIT {new Date().getFullYear()} © Babylon.</Footer>;
 
@@ -14,7 +18,7 @@ export default async function DocsLayout({
     <Layout
       navbar={
         <Navbar
-          logo={<span style={{ fontWeight: 700, fontSize: '1.25rem' }}>🏛️ Babylon Docs</span>}
+          logo={<Image src={logo_full} alt="Babylon Logo" width={160} height={38} />}
           projectLink="https://github.com/elizaos/babylon"
         />
       }

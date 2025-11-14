@@ -7,7 +7,6 @@ import { X, Home, TrendingUp, MessageCircle, Trophy, Gift, Bell, LogOut, Coins, 
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { useAuthStore } from '@/stores/authStore'
-import { useLoginModal } from '@/hooks/useLoginModal'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { Avatar } from '@/components/shared/Avatar'
 import { Suspense } from 'react'
@@ -15,10 +14,10 @@ import { Suspense } from 'react'
 function MobileHeaderContent() {
   const { authenticated, logout } = useAuth()
   const { user, setUser } = useAuthStore()
-  const { showLoginModal } = useLoginModal()
   const [showSideMenu, setShowSideMenu] = useState(false)
   const [pointsData, setPointsData] = useState<{ available: number; total: number } | null>(null)
   const [copiedReferral, setCopiedReferral] = useState(false)
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
@@ -39,23 +38,23 @@ function MobileHeaderContent() {
     const controller = new AbortController()
 
     const hydrateProfileImage = async () => {
-      try {
-        const response = await fetch(`/api/users/${encodeURIComponent(user.id)}/profile`, {
-          signal: controller.signal,
+      const response = await fetch(`/api/users/${encodeURIComponent(user.id)}/profile`, {
+        signal: controller.signal,
+      }).catch((error: Error) => {
+        if (error.name === 'AbortError') return null
+        throw error
+      })
+      
+      if (!response || !response.ok) return
+      const data = await response.json()
+      const profileUrl = data?.user?.profileImageUrl as string | undefined
+      const coverUrl = data?.user?.coverImageUrl as string | undefined
+      if (profileUrl || coverUrl) {
+        setUser({
+          ...user,
+          profileImageUrl: profileUrl ?? user.profileImageUrl,
+          coverImageUrl: coverUrl ?? user.coverImageUrl,
         })
-        if (!response.ok) return
-        const data = await response.json().catch(() => ({}))
-        const profileUrl = data?.user?.profileImageUrl as string | undefined
-        const coverUrl = data?.user?.coverImageUrl as string | undefined
-        if (profileUrl || coverUrl) {
-          setUser({
-            ...user,
-            profileImageUrl: profileUrl ?? user.profileImageUrl,
-            coverImageUrl: coverUrl ?? user.coverImageUrl,
-          })
-        }
-      } catch (error) {
-        if ((error as DOMException).name === 'AbortError') return
       }
     }
 
@@ -97,18 +96,47 @@ function MobileHeaderContent() {
     return () => clearInterval(interval)
   }, [authenticated, user?.id])
 
+  // Poll for unread notifications
+  useEffect(() => {
+    if (!authenticated || !user) {
+      setUnreadNotifications(0)
+      return
+    }
+
+    const fetchUnreadCount = async () => {
+      const token = typeof window !== 'undefined' ? window.__privyAccessToken : null
+      
+      if (!token) {
+        return
+      }
+
+      const response = await fetch('/api/notifications?unreadOnly=true&limit=1', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setUnreadNotifications(data.unreadCount || 0)
+      }
+    }
+
+    fetchUnreadCount()
+
+    // Refresh every 1 minute
+    const interval = setInterval(fetchUnreadCount, 60000) // 60 seconds = 1 minute
+    return () => clearInterval(interval)
+  }, [authenticated, user])
+
   const copyReferralCode = async () => {
     if (!user?.referralCode) return
     
-    try {
-      // Create full referral URL
-      const referralUrl = `${window.location.origin}?ref=${user.referralCode}`
-      await navigator.clipboard.writeText(referralUrl)
-      setCopiedReferral(true)
-      setTimeout(() => setCopiedReferral(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy referral code:', err)
-    }
+    // Create full referral URL
+    const referralUrl = `${window.location.origin}?ref=${user.referralCode}`
+    await navigator.clipboard.writeText(referralUrl)
+    setCopiedReferral(true)
+    setTimeout(() => setCopiedReferral(false), 2000)
   }
 
   // Render nothing if should be hidden (after all hooks)
@@ -165,8 +193,8 @@ function MobileHeaderContent() {
         )}
       >
         <div className="flex items-center justify-between h-14 px-4">
-          {/* Left: Profile Picture (when authenticated) or Login button */}
-          <div className="flex-shrink-0 w-8">
+          {/* Left: Profile Picture (when authenticated) */}
+          <div className="shrink-0 w-8">
             {authenticated && user ? (
               <button
                 onClick={() => setShowSideMenu(true)}
@@ -181,13 +209,6 @@ function MobileHeaderContent() {
                   src={user.profileImageUrl || undefined}
                   imageUrl={user.profileImageUrl || undefined}
                 />
-              </button>
-            ) : !authenticated ? (
-              <button
-                onClick={() => showLoginModal()}
-                className="px-3 py-1.5 text-xs font-medium rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-              >
-                Login
               </button>
             ) : (
               <div className="w-8" />
@@ -208,7 +229,7 @@ function MobileHeaderContent() {
           </div>
 
           {/* Right: Empty space for balance */}
-          <div className="flex-shrink-0 w-8" />
+          <div className="shrink-0 w-8" />
         </div>
       </header>
 
@@ -227,7 +248,7 @@ function MobileHeaderContent() {
             <Link 
               href="/profile"
               onClick={() => setShowSideMenu(false)}
-              className="flex items-center justify-between p-4 hover:bg-sidebar-accent transition-colors flex-shrink-0"
+              className="flex items-center justify-between p-4 hover:bg-sidebar-accent transition-colors shrink-0"
             >
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <Avatar 
@@ -237,7 +258,7 @@ function MobileHeaderContent() {
                   size="md"
                   src={user?.profileImageUrl || undefined}
                   imageUrl={user?.profileImageUrl || undefined}
-                  className="flex-shrink-0"
+                  className="shrink-0"
                 />
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-sm text-foreground truncate">
@@ -253,7 +274,7 @@ function MobileHeaderContent() {
                   e.preventDefault()
                   setShowSideMenu(false)
                 }}
-                className="p-2 hover:bg-muted transition-colors flex-shrink-0"
+                className="p-2 hover:bg-muted transition-colors shrink-0"
               >
                 <X size={20} style={{ color: '#0066FF' }} />
               </button>
@@ -261,10 +282,10 @@ function MobileHeaderContent() {
 
             {/* Points Display */}
             {pointsData && (
-              <div className="px-4 py-4 bg-muted/30 flex-shrink-0">
+              <div className="px-4 py-4 bg-muted/30 shrink-0">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#0066FF' }}>
-                    <Coins className="w-5 h-5 text-white" />
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#0066FF' }}>
+                    <Coins className="w-5 h-5 text-foreground" />
                   </div>
                   <div className="flex-1">
                     <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Balance</div>
@@ -280,19 +301,25 @@ function MobileHeaderContent() {
             <nav className="flex-1 overflow-y-auto min-h-0">
               {menuItems.map((item) => {
                 const Icon = item.icon
+                const hasNotifications = item.name === 'Notifications' && unreadNotifications > 0
                 return (
                   <Link
                     key={item.name}
                     href={item.href}
                     onClick={() => setShowSideMenu(false)}
                     className={cn(
-                      'flex items-center gap-4 px-4 py-3 transition-colors',
+                      'flex items-center gap-4 px-4 py-3 transition-colors relative',
                       item.active 
-                        ? 'bg-[#0066FF] text-white font-bold' 
+                        ? 'bg-[#0066FF] text-primary-foreground font-bold' 
                         : 'text-sidebar-foreground hover:bg-sidebar-accent font-semibold'
                     )}
                   >
-                    <Icon className="w-5 h-5" />
+                    <div className="relative">
+                      <Icon className="w-5 h-5" />
+                      {hasNotifications && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full ring-2 ring-sidebar" />
+                      )}
+                    </div>
                     <span className="text-base">{item.name}</span>
                   </Link>
                 )
@@ -300,7 +327,7 @@ function MobileHeaderContent() {
             </nav>
 
             {/* Bottom Section - Referral & Logout */}
-            <div className="flex-shrink-0 border-t border-border bg-sidebar pb-20">
+            <div className="shrink-0 border-t border-border bg-sidebar pb-20">
               {/* Referral Code Button */}
               {user?.referralCode && (
                 <button

@@ -37,26 +37,21 @@ interface OnChainReputation {
  * @returns On-chain reputation data
  */
 export async function getOnChainReputation(tokenId: number): Promise<OnChainReputation | null> {
-  try {
-    const reputation = (await publicClient.readContract({
-      address: REPUTATION_SYSTEM_ADDRESS,
-      abi: REPUTATION_SYSTEM_ABI,
-      functionName: 'getReputation',
-      args: [BigInt(tokenId)],
-    })) as [bigint, bigint, bigint, bigint, bigint, bigint, boolean]
+  const reputation = (await publicClient.readContract({
+    address: REPUTATION_SYSTEM_ADDRESS,
+    abi: REPUTATION_SYSTEM_ABI,
+    functionName: 'getReputation',
+    args: [BigInt(tokenId)],
+  })) as [bigint, bigint, bigint, bigint, bigint, bigint, boolean]
 
-    return {
-      totalBets: reputation[0],
-      winningBets: reputation[1],
-      totalVolume: reputation[2],
-      profitLoss: reputation[3],
-      accuracyScore: reputation[4],
-      trustScore: reputation[5],
-      isBanned: reputation[6],
-    }
-  } catch (error) {
-    logger.error('Failed to get on-chain reputation', { tokenId, error })
-    return null
+  return {
+    totalBets: reputation[0],
+    winningBets: reputation[1],
+    totalVolume: reputation[2],
+    profitLoss: reputation[3],
+    accuracyScore: reputation[4],
+    trustScore: reputation[5],
+    isBanned: reputation[6],
   }
 }
 
@@ -75,31 +70,26 @@ export async function submitOnChainFeedback(
   comment: string,
   walletClient: WalletClient
 ): Promise<string> {
-  try {
-    if (!walletClient.account) {
-      throw new Error('Wallet client must have an account')
-    }
-
-    // Convert 0-100 scale to -128 to 127 scale
-    // 0-100 → -128 to 127 (0 = -128, 50 = 0, 100 = 127)
-    const int8Rating = Math.floor((rating / 100) * 255 - 128)
-
-    const hash = await walletClient.writeContract({
-      chain: baseSepolia,
-      address: REPUTATION_SYSTEM_ADDRESS,
-      abi: REPUTATION_SYSTEM_ABI,
-      functionName: 'submitFeedback',
-      args: [BigInt(tokenId), int8Rating, comment],
-      account: walletClient.account,
-    })
-
-    logger.info('Submitted on-chain feedback', { tokenId, rating, hash })
-
-    return hash
-  } catch (error) {
-    logger.error('Failed to submit on-chain feedback', { tokenId, rating, error })
-    throw error
+  if (!walletClient.account) {
+    throw new Error('Wallet client must have an account')
   }
+
+  // Convert 0-100 scale to -128 to 127 scale
+  // 0-100 → -128 to 127 (0 = -128, 50 = 0, 100 = 127)
+  const int8Rating = Math.floor((rating / 100) * 255 - 128)
+
+  const hash = await walletClient.writeContract({
+    chain: baseSepolia,
+    address: REPUTATION_SYSTEM_ADDRESS,
+    abi: REPUTATION_SYSTEM_ABI,
+    functionName: 'submitFeedback',
+    args: [BigInt(tokenId), int8Rating, comment],
+    account: walletClient.account,
+  })
+
+  logger.info('Submitted on-chain feedback', { tokenId, rating, hash })
+
+  return hash
 }
 
 /**
@@ -115,27 +105,22 @@ export async function recordBet(
   amount: number,
   walletClient: WalletClient
 ): Promise<string> {
-  try {
-    if (!walletClient.account) {
-      throw new Error('Wallet client must have an account')
-    }
-
-    const hash = await walletClient.writeContract({
-      chain: baseSepolia,
-      address: REPUTATION_SYSTEM_ADDRESS,
-      abi: REPUTATION_SYSTEM_ABI,
-      functionName: 'recordBet',
-      args: [BigInt(tokenId), BigInt(amount)],
-      account: walletClient.account,
-    })
-
-    logger.info('Recorded bet on-chain', { tokenId, amount, hash })
-
-    return hash
-  } catch (error) {
-    logger.error('Failed to record bet on-chain', { tokenId, amount, error })
-    throw error
+  if (!walletClient.account) {
+    throw new Error('Wallet client must have an account')
   }
+
+  const hash = await walletClient.writeContract({
+    chain: baseSepolia,
+    address: REPUTATION_SYSTEM_ADDRESS,
+    abi: REPUTATION_SYSTEM_ABI,
+    functionName: 'recordBet',
+    args: [BigInt(tokenId), BigInt(amount)],
+    account: walletClient.account,
+  })
+
+  logger.info('Recorded bet on-chain', { tokenId, amount, hash })
+
+  return hash
 }
 
 /**
@@ -151,27 +136,22 @@ export async function recordWin(
   profit: number,
   walletClient: WalletClient
 ): Promise<string> {
-  try {
-    if (!walletClient.account) {
-      throw new Error('Wallet client must have an account')
-    }
-
-    const hash = await walletClient.writeContract({
-      chain: baseSepolia,
-      address: REPUTATION_SYSTEM_ADDRESS,
-      abi: REPUTATION_SYSTEM_ABI,
-      functionName: 'recordWin',
-      args: [BigInt(tokenId), BigInt(profit)],
-      account: walletClient.account,
-    })
-
-    logger.info('Recorded win on-chain', { tokenId, profit, hash })
-
-    return hash
-  } catch (error) {
-    logger.error('Failed to record win on-chain', { tokenId, profit, error })
-    throw error
+  if (!walletClient.account) {
+    throw new Error('Wallet client must have an account')
   }
+
+  const hash = await walletClient.writeContract({
+    chain: baseSepolia,
+    address: REPUTATION_SYSTEM_ADDRESS,
+    abi: REPUTATION_SYSTEM_ABI,
+    functionName: 'recordWin',
+    args: [BigInt(tokenId), BigInt(profit)],
+    account: walletClient.account,
+  })
+
+  logger.info('Recorded win on-chain', { tokenId, profit, hash })
+
+  return hash
 }
 
 /**
@@ -187,27 +167,22 @@ export async function recordLoss(
   loss: number,
   walletClient: WalletClient
 ): Promise<string> {
-  try {
-    if (!walletClient.account) {
-      throw new Error('Wallet client must have an account')
-    }
-
-    const hash = await walletClient.writeContract({
-      chain: baseSepolia,
-      address: REPUTATION_SYSTEM_ADDRESS,
-      abi: REPUTATION_SYSTEM_ABI,
-      functionName: 'recordLoss',
-      args: [BigInt(tokenId), BigInt(loss)],
-      account: walletClient.account,
-    })
-
-    logger.info('Recorded loss on-chain', { tokenId, loss, hash })
-
-    return hash
-  } catch (error) {
-    logger.error('Failed to record loss on-chain', { tokenId, loss, error })
-    throw error
+  if (!walletClient.account) {
+    throw new Error('Wallet client must have an account')
   }
+
+  const hash = await walletClient.writeContract({
+    chain: baseSepolia,
+    address: REPUTATION_SYSTEM_ADDRESS,
+    abi: REPUTATION_SYSTEM_ABI,
+    functionName: 'recordLoss',
+    args: [BigInt(tokenId), BigInt(loss)],
+    account: walletClient.account,
+  })
+
+  logger.info('Recorded loss on-chain', { tokenId, loss, hash })
+
+  return hash
 }
 
 /**
@@ -218,36 +193,31 @@ export async function recordLoss(
  * @returns Updated performance metrics
  */
 export async function syncOnChainReputation(userId: string, tokenId: number) {
-  try {
-    const onChainRep = await getOnChainReputation(tokenId)
+  const onChainRep = await getOnChainReputation(tokenId)
 
-    if (!onChainRep) {
-      throw new Error('Failed to fetch on-chain reputation')
-    }
-
-    // Update local database with on-chain data
-    const updated = await prisma.agentPerformanceMetrics.update({
-      where: { userId },
-      data: {
-        onChainReputationSync: true,
-        lastSyncedAt: new Date(),
-        onChainTrustScore: Number(onChainRep.trustScore),
-        onChainAccuracyScore: Number(onChainRep.accuracyScore),
-      },
-    })
-
-    logger.info('Synced on-chain reputation', {
-      userId,
-      tokenId,
-      trustScore: onChainRep.trustScore.toString(),
-      accuracyScore: onChainRep.accuracyScore.toString(),
-    })
-
-    return updated
-  } catch (error) {
-    logger.error('Failed to sync on-chain reputation', { userId, tokenId, error })
-    throw error
+  if (!onChainRep) {
+    throw new Error('Failed to fetch on-chain reputation')
   }
+
+  // Update local database with on-chain data
+  const updated = await prisma.agentPerformanceMetrics.update({
+    where: { userId },
+    data: {
+      onChainReputationSync: true,
+      lastSyncedAt: new Date(),
+      onChainTrustScore: Number(onChainRep.trustScore),
+      onChainAccuracyScore: Number(onChainRep.accuracyScore),
+    },
+  })
+
+  logger.info('Synced on-chain reputation', {
+    userId,
+    tokenId,
+    trustScore: onChainRep.trustScore.toString(),
+    accuracyScore: onChainRep.accuracyScore.toString(),
+  })
+
+  return updated
 }
 
 /**
@@ -257,19 +227,14 @@ export async function syncOnChainReputation(userId: string, tokenId: number) {
  * @returns Feedback count
  */
 export async function getOnChainFeedbackCount(tokenId: number): Promise<number> {
-  try {
-    const count = await publicClient.readContract({
-      address: REPUTATION_SYSTEM_ADDRESS,
-      abi: REPUTATION_SYSTEM_ABI,
-      functionName: 'getFeedbackCount',
-      args: [BigInt(tokenId)],
-    })
+  const count = await publicClient.readContract({
+    address: REPUTATION_SYSTEM_ADDRESS,
+    abi: REPUTATION_SYSTEM_ABI,
+    functionName: 'getFeedbackCount',
+    args: [BigInt(tokenId)],
+  })
 
-    return Number(count)
-  } catch (error) {
-    logger.error('Failed to get on-chain feedback count', { tokenId, error })
-    return 0
-  }
+  return Number(count)
 }
 
 /**
@@ -288,22 +253,17 @@ export async function getOnChainFeedback(
   comment: string
   timestamp: bigint
 } | null> {
-  try {
-    const feedback = (await publicClient.readContract({
-      address: REPUTATION_SYSTEM_ADDRESS,
-      abi: REPUTATION_SYSTEM_ABI,
-      functionName: 'getFeedback',
-      args: [BigInt(tokenId), BigInt(index)],
-    })) as [Address, number, string, bigint]
+  const feedback = (await publicClient.readContract({
+    address: REPUTATION_SYSTEM_ADDRESS,
+    abi: REPUTATION_SYSTEM_ABI,
+    functionName: 'getFeedback',
+    args: [BigInt(tokenId), BigInt(index)],
+  })) as [Address, number, string, bigint]
 
-    return {
-      from: feedback[0],
-      rating: Number(feedback[1]),
-      comment: feedback[2],
-      timestamp: feedback[3],
-    }
-  } catch (error) {
-    logger.error('Failed to get on-chain feedback', { tokenId, index, error })
-    return null
+  return {
+    from: feedback[0],
+    rating: Number(feedback[1]),
+    comment: feedback[2],
+    timestamp: feedback[3],
   }
 }

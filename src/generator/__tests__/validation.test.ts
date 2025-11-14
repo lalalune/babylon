@@ -12,7 +12,6 @@ import type { GeneratedGame } from '../GameGenerator';
 
 // Set timeout to 10 minutes for LLM-based generation
 // Retry loops when LLM returns invalid JSON can cause 6-7 minute runs
-// TODO: Optimize prompts in Phase 3 to reduce retries and improve reliability
 // This test validates game structure, not performance - timeout is acceptable
 setDefaultTimeout(600000);
 

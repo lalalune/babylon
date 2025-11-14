@@ -5,7 +5,6 @@ import { X as XIcon, Check, ExternalLink, Shield } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'sonner'
-import { BouncingLogo } from '@/components/shared/BouncingLogo'
 
 interface LinkSocialAccountsModalProps {
   isOpen: boolean
@@ -29,54 +28,50 @@ export function LinkSocialAccountsModal({ isOpen, onClose }: LinkSocialAccountsM
         
         setLinking('farcaster')
         
-        try {
-          const token = typeof window !== 'undefined' ? window.__privyAccessToken : null
-          const state = `${user?.id}:${Date.now()}:${Math.random().toString(36).substring(7)}`
-          
-          const response = await fetch('/api/auth/farcaster/callback', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify({
-              message: event.data.message,
-              signature: event.data.signature,
-              fid,
-              username,
-              displayName,
-              pfpUrl,
-              state,
-            }),
-          })
+        const token = typeof window !== 'undefined' ? window.__privyAccessToken : null
+        const state = `${user?.id}:${Date.now()}:${Math.random().toString(36).substring(7)}`
+        
+        const response = await fetch('/api/auth/farcaster/callback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            message: event.data.message,
+            signature: event.data.signature,
+            fid,
+            username,
+            displayName,
+            pfpUrl,
+            state,
+          }),
+        })
 
-          const data = await response.json()
+        const data = await response.json()
 
-          if (response.ok && data.success) {
-            if (user) {
-              setUser({
-                ...user,
-                hasFarcaster: true,
-                farcasterUsername: username,
-                reputationPoints: data.newTotal || user.reputationPoints,
-              })
-            }
-
-            if (data.pointsAwarded > 0) {
-              toast.success(`Farcaster linked! +${data.pointsAwarded} points awarded`)
-            } else {
-              toast.success('Farcaster account linked successfully!')
-            }
-
-            onClose()
-          } else {
-            throw new Error(data.error || 'Failed to link account')
+        if (response.ok && data.success) {
+          if (user) {
+            setUser({
+              ...user,
+              hasFarcaster: true,
+              farcasterUsername: username,
+              reputationPoints: data.newTotal || user.reputationPoints,
+            })
           }
-        } catch (error) {
-          toast.error(error instanceof Error ? error.message : 'Failed to link Farcaster')
-        } finally {
+
+          if (data.pointsAwarded > 0) {
+            toast.success(`Farcaster linked! +${data.pointsAwarded} points awarded`)
+          } else {
+            toast.success('Farcaster account linked successfully!')
+          }
+
+          onClose()
+        } else {
           setLinking(null)
+          throw new Error(data.error || 'Failed to link account')
         }
+        setLinking(null)
       }
     }
 
@@ -91,18 +86,13 @@ export function LinkSocialAccountsModal({ isOpen, onClose }: LinkSocialAccountsM
     
     setLinking('twitter')
 
-    try {
-      // Redirect to OAuth initiation endpoint
-      const initiateUrl = `/api/auth/twitter/initiate`
-      
-      // Store current URL to return to
-      sessionStorage.setItem('oauth_return_url', window.location.pathname)
-      
-      window.location.href = initiateUrl
-    } catch {
-      toast.error('Failed to initiate Twitter authentication')
-      setLinking(null)
-    }
+    // Redirect to OAuth initiation endpoint
+    const initiateUrl = `/api/auth/twitter/initiate`
+    
+    // Store current URL to return to
+    sessionStorage.setItem('oauth_return_url', window.location.pathname)
+    
+    window.location.href = initiateUrl
   }
 
   const handleFarcasterAuth = () => {
@@ -110,39 +100,34 @@ export function LinkSocialAccountsModal({ isOpen, onClose }: LinkSocialAccountsM
     
     setLinking('farcaster')
 
-    try {
-      // Open Farcaster Auth in popup
-      const state = `${user.id}:${Date.now()}:${Math.random().toString(36).substring(7)}`
-      const authUrl = `https://warpcast.com/~/sign-in-with-farcaster?channelToken=${state}`
-      
-      const width = 600
-      const height = 700
-      const left = (window.screen.width - width) / 2
-      const top = (window.screen.height - height) / 2
-      
-      const popup = window.open(
-        authUrl,
-        'farcaster-auth',
-        `width=${width},height=${height},left=${left},top=${top}`
-      )
+    // Open Farcaster Auth in popup
+    const state = `${user.id}:${Date.now()}:${Math.random().toString(36).substring(7)}`
+    const authUrl = `https://warpcast.com/~/sign-in-with-farcaster?channelToken=${state}`
+    
+    const width = 600
+    const height = 700
+    const left = (window.screen.width - width) / 2
+    const top = (window.screen.height - height) / 2
+    
+    const popup = window.open(
+      authUrl,
+      'farcaster-auth',
+      `width=${width},height=${height},left=${left},top=${top}`
+    )
 
-      if (!popup) {
-        toast.error('Please allow popups to connect Farcaster')
-        setLinking(null)
-        return
-      }
-
-      // Monitor popup
-      const checkPopup = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(checkPopup)
-          setLinking(null)
-        }
-      }, 1000)
-    } catch {
-      toast.error('Failed to initiate Farcaster authentication')
+    if (!popup) {
+      toast.error('Please allow popups to connect Farcaster')
       setLinking(null)
+      return
     }
+
+    // Monitor popup
+    const checkPopup = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(checkPopup)
+        setLinking(null)
+      }
+    }, 1000)
   }
 
   return (
@@ -195,7 +180,7 @@ export function LinkSocialAccountsModal({ isOpen, onClose }: LinkSocialAccountsM
             ) : (
               <div className="space-y-2">
                 <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-start gap-2">
-                  <Shield className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                  <Shield className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
                   <p className="text-xs text-muted-foreground">
                     You&apos;ll be redirected to Twitter to authorize access. We&apos;ll verify your account ownership.
                   </p>
@@ -205,14 +190,13 @@ export function LinkSocialAccountsModal({ isOpen, onClose }: LinkSocialAccountsM
                   disabled={linking === 'twitter'}
                   className={cn(
                     'w-full px-4 py-2 rounded-lg font-semibold transition-colors',
-                    'bg-[#0066FF] text-white hover:bg-[#2952d9]',
+                    'bg-[#0066FF] text-primary-foreground hover:bg-[#2952d9]',
                     'disabled:opacity-50 disabled:cursor-not-allowed',
                     'flex items-center justify-center gap-2'
                   )}
                 >
                   {linking === 'twitter' ? (
                     <>
-                      <BouncingLogo size={16} />
                       <span>Connecting...</span>
                     </>
                   ) : (
@@ -259,7 +243,7 @@ export function LinkSocialAccountsModal({ isOpen, onClose }: LinkSocialAccountsM
             ) : (
               <div className="space-y-2">
                 <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-start gap-2">
-                  <Shield className="w-4 h-4 text-purple-500 flex-shrink-0 mt-0.5" />
+                  <Shield className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" />
                   <p className="text-xs text-muted-foreground">
                     Sign in with Farcaster to verify your account. A popup will open for authentication.
                   </p>
@@ -269,14 +253,13 @@ export function LinkSocialAccountsModal({ isOpen, onClose }: LinkSocialAccountsM
                   disabled={linking === 'farcaster'}
                   className={cn(
                     'w-full px-4 py-2 rounded-lg font-semibold transition-colors',
-                    'bg-[#8A63D2] text-white hover:bg-[#7952c4]',
+                    'bg-[#8A63D2] text-foreground hover:bg-[#7952c4]',
                     'disabled:opacity-50 disabled:cursor-not-allowed',
                     'flex items-center justify-center gap-2'
                   )}
                 >
                   {linking === 'farcaster' ? (
                     <>
-                      <BouncingLogo size={16} />
                       <span>Connecting...</span>
                     </>
                   ) : (
@@ -293,7 +276,7 @@ export function LinkSocialAccountsModal({ isOpen, onClose }: LinkSocialAccountsM
           {/* Info */}
           <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
             <div className="flex items-start gap-2">
-              <Shield className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+              <Shield className="w-4 h-4 text-primary shrink-0 mt-0.5" />
               <p className="text-sm text-muted-foreground">
                 OAuth authentication verifies your account ownership and earns you reputation points!
               </p>

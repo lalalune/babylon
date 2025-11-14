@@ -140,6 +140,7 @@ test.describe('Navigation - Sidebar Links', () => {
       const linksToTest = Math.min(5, navLinks.length)
       for (let i = 0; i < linksToTest; i++) {
         const link = navLinks[i]
+        if (!link) continue
         const href = await link.getAttribute('href')
         if (href && !href.startsWith('#') && !href.startsWith('http')) {
           await link.click()

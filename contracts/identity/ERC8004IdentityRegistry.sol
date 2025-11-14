@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @title ERC8004IdentityRegistry
-/// @notice ERC-8004 compliant identity registry for AI agents
+/// @notice ERC-8004 compliant identity registry for AI agents on Base
 /// @dev Each agent gets a unique NFT representing their identity
+/// @dev Can optionally link to agent0 identity on Ethereum for cross-chain discovery
 contract ERC8004IdentityRegistry is ERC721, Ownable {
     struct AgentProfile {
         string name;
@@ -17,9 +18,16 @@ contract ERC8004IdentityRegistry is ERC721, Ownable {
         string metadata; // JSON metadata
     }
 
+    struct Agent0Link {
+        uint256 chainId; // Ethereum chainId (e.g., 11155111 for Sepolia)
+        uint256 tokenId; // agent0 token ID on Ethereum
+        bool verified; // Whether this link has been verified
+    }
+
     mapping(uint256 => AgentProfile) public profiles;
     mapping(address => uint256) public addressToTokenId;
     mapping(string => bool) public endpointTaken;
+    mapping(uint256 => Agent0Link) public agent0Links; // Base tokenId → agent0 identity
 
     uint256 private _nextTokenId = 1;
 
@@ -27,6 +35,8 @@ contract ERC8004IdentityRegistry is ERC721, Ownable {
     event AgentUpdated(uint256 indexed tokenId, string endpoint, bytes32 capabilitiesHash);
     event AgentDeactivated(uint256 indexed tokenId);
     event AgentReactivated(uint256 indexed tokenId);
+    event Agent0Linked(uint256 indexed tokenId, uint256 indexed agent0ChainId, uint256 indexed agent0TokenId);
+    event Agent0Unlinked(uint256 indexed tokenId);
 
     constructor() ERC721("BabylonAgent", "BAGENT") Ownable(msg.sender) {}
 
@@ -112,6 +122,61 @@ contract ERC8004IdentityRegistry is ERC721, Ownable {
 
         profiles[tokenId].isActive = true;
         emit AgentReactivated(tokenId);
+    }
+
+    /// @notice Link this agent to an agent0 identity on Ethereum
+    /// @param _agent0ChainId The chainId where agent0 is deployed (e.g., 11155111 for Sepolia)
+    /// @param _agent0TokenId The token ID of the agent0 identity
+    /// @dev This creates a cross-chain link for discovery and reputation aggregation
+    function linkAgent0Identity(
+        uint256 _agent0ChainId,
+        uint256 _agent0TokenId
+    ) external {
+        uint256 tokenId = addressToTokenId[msg.sender];
+        require(tokenId != 0, "Not registered");
+        require(ownerOf(tokenId) == msg.sender, "Not owner");
+        require(_agent0TokenId > 0, "Invalid agent0 token ID");
+
+        agent0Links[tokenId] = Agent0Link({
+            chainId: _agent0ChainId,
+            tokenId: _agent0TokenId,
+            verified: false // Can be verified by oracle/proof later
+        });
+
+        emit Agent0Linked(tokenId, _agent0ChainId, _agent0TokenId);
+    }
+
+    /// @notice Unlink agent0 identity
+    function unlinkAgent0Identity() external {
+        uint256 tokenId = addressToTokenId[msg.sender];
+        require(tokenId != 0, "Not registered");
+        require(ownerOf(tokenId) == msg.sender, "Not owner");
+        require(agent0Links[tokenId].tokenId != 0, "No agent0 link");
+
+        delete agent0Links[tokenId];
+        emit Agent0Unlinked(tokenId);
+    }
+
+    /// @notice Get agent0 link for a token
+    /// @return agent0Id The agent0 identity in format "chainId:tokenId", or empty if not linked
+    function getAgent0Link(uint256 _tokenId) external view returns (string memory agent0Id) {
+        Agent0Link storage link = agent0Links[_tokenId];
+
+        if (link.tokenId == 0) {
+            return "";
+        }
+
+        // Format as "chainId:tokenId" (e.g., "11155111:123")
+        return string(abi.encodePacked(
+            _uint2str(link.chainId),
+            ":",
+            _uint2str(link.tokenId)
+        ));
+    }
+
+    /// @notice Check if agent has a linked agent0 identity
+    function hasAgent0Link(uint256 _tokenId) external view returns (bool) {
+        return agent0Links[_tokenId].tokenId != 0;
     }
 
     /// @notice Get agent profile
@@ -203,6 +268,30 @@ contract ERC8004IdentityRegistry is ERC721, Ownable {
         }
         
         return result;
+    }
+
+    /// @notice Convert uint256 to string
+    /// @dev Helper for agent0 link formatting
+    function _uint2str(uint256 _i) internal pure returns (string memory) {
+        if (_i == 0) {
+            return "0";
+        }
+        uint256 j = _i;
+        uint256 len;
+        while (j != 0) {
+            len++;
+            j /= 10;
+        }
+        bytes memory bstr = new bytes(len);
+        uint256 k = len;
+        while (_i != 0) {
+            k = k - 1;
+            uint8 temp = (48 + uint8(_i - _i / 10 * 10));
+            bytes1 b1 = bytes1(temp);
+            bstr[k] = b1;
+            _i /= 10;
+        }
+        return string(bstr);
     }
 
     /// @notice Override transfer to update address mapping

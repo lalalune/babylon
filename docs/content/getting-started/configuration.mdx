@@ -18,9 +18,11 @@ DATABASE_URL="postgresql://user:password@localhost:5432/babylon"
 NEXT_PUBLIC_PRIVY_APP_ID="your_privy_app_id"
 PRIVY_APP_SECRET="your_privy_app_secret"
 
-# AI Provider (choose one or both)
-OPENAI_API_KEY="sk-..."
-GROQ_API_KEY="gsk_..."
+# AI Provider (fallback chain: wandb -> groq -> claude -> openai)
+WANDB_API_KEY="..."         # Primary - Weights & Biases inference API
+GROQ_API_KEY="gsk_..."      # Fast inference fallback
+ANTHROPIC_API_KEY="sk-..."  # Claude fallback
+OPENAI_API_KEY="sk-..."     # Final fallback
 ```
 
 ### Authentication Setup
@@ -124,7 +126,54 @@ BABYLON_AGENT_SECRET="generate_with_openssl_rand_hex_32"
 BABYLON_MAX_TRADE_SIZE="100"
 BABYLON_MAX_POSITION_SIZE="500"
 BABYLON_MIN_CONFIDENCE="0.6"
+
+# AI Model Configuration (optional - can also be set in admin)
+WANDB_MODEL="meta-llama/Llama-3.3-70B-Instruct"  # Specific wandb model to use
 ```
+
+#### AI Provider Setup
+
+Babylon supports multiple AI providers with automatic fallback:
+
+**1. Weights & Biases (Recommended)**
+- Fast inference with open-source models
+- Get API key: [https://wandb.ai/authorize](https://wandb.ai/authorize)
+- Configure specific model via Admin → AI Models tab
+
+**2. Groq (Fallback)**
+- Ultra-fast inference with llama models
+- Get API key: [https://console.groq.com](https://console.groq.com)
+
+**3. Claude (Fallback)**
+- Anthropic's Claude models
+- Get API key: [https://console.anthropic.com](https://console.anthropic.com)
+
+**4. OpenAI (Final Fallback)**
+- GPT models
+- Get API key: [https://platform.openai.com](https://platform.openai.com)
+
+The system will automatically use the first available provider in the order: wandb → groq → claude → openai.
+
+#### Sentry Error Tracking
+
+For error tracking and performance monitoring:
+
+```env
+# Sentry DSN (required for error tracking)
+NEXT_PUBLIC_SENTRY_DSN="https://your-dsn@sentry.io/project-id"
+SENTRY_DSN="https://your-dsn@sentry.io/project-id"
+
+# Source Map Upload (optional, for better stack traces)
+SENTRY_ORG="your-org"
+SENTRY_PROJECT="your-project"
+SENTRY_AUTH_TOKEN="your-auth-token"
+
+# Release Tracking (optional, set via CI/CD)
+NEXT_PUBLIC_SENTRY_RELEASE="1.0.0"
+SENTRY_RELEASE="1.0.0"
+```
+
+Get your DSN from [Sentry Project Settings](https://sentry.io/settings/projects/).
 
 ## Complete .env.local Example
 
@@ -193,6 +242,25 @@ BABYLON_AGENT_SECRET=""
 BABYLON_MAX_TRADE_SIZE="100"
 BABYLON_MAX_POSITION_SIZE="500"
 BABYLON_MIN_CONFIDENCE="0.6"
+
+# ============================================
+# SENTRY ERROR TRACKING (Optional)
+# ============================================
+# Sentry DSN for error tracking and performance monitoring
+# Get your DSN from https://sentry.io/settings/projects/
+NEXT_PUBLIC_SENTRY_DSN="https://your-dsn@sentry.io/project-id"
+SENTRY_DSN="https://your-dsn@sentry.io/project-id"
+
+# Source Map Upload (Optional - for better stack traces in production)
+# Get auth token from https://sentry.io/settings/account/api/auth-tokens/
+SENTRY_ORG="your-org"
+SENTRY_PROJECT="your-project"
+SENTRY_AUTH_TOKEN="your-auth-token"
+
+# Release Tracking (Optional - set via CI/CD or manually)
+# Format: version or git commit hash
+NEXT_PUBLIC_SENTRY_RELEASE=""
+SENTRY_RELEASE=""
 
 # ============================================
 # DEVELOPMENT

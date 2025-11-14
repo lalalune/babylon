@@ -12,9 +12,10 @@
  * - More total interactions (10+ quality replies)
  */
 
-import { notifyFollow } from './notification-service';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { generateSnowflakeId } from '@/lib/snowflake';
+import { notifyFollow } from './notification-service';
 
 
 export interface FollowingChance {
@@ -165,6 +166,7 @@ export class FollowingMechanics {
         followReason: reason,
       },
       create: {
+        id: await generateSnowflakeId(),
         userId,
         npcId,
         followReason: reason,

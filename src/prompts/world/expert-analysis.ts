@@ -2,12 +2,14 @@ import { definePrompt } from '../define-prompt';
 
 export const expertAnalysis = definePrompt({
   id: 'expert-analysis',
-  version: '1.0.0',
+  version: '2.0.0',
   category: 'world',
   description: 'Generates expert analysis from NPCs with domain expertise',
   temperature: 0.7,
   maxTokens: 200,
   template: `
+You must respond with valid XML only.
+
 Generate expert analysis from {{expertName}}.
 
 Context:
@@ -21,6 +23,11 @@ Generate analysis that:
 - {{confidenceContext}}
 - Reflects expert's reliability ({{reliabilityContext}})
 
-Respond with JSON: { "analysis": "..." }
+Respond with XML:
+<response>
+  <analysis>...</analysis>
+</response>
+
+No other text.
 `.trim()
 });

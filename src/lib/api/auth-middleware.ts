@@ -6,7 +6,7 @@
 
 import { verifyAgentSession } from '@/lib/auth/agent-auth';
 import { prisma } from '@/lib/database-service';
-import { logger } from '@/lib/logger';
+// import { logger } from '@/lib/logger';
 import { PrivyClient } from '@privy-io/server-auth';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -75,18 +75,13 @@ export interface AuthenticatedUser {
  * Checks both Authorization header and privy-token cookie
  */
 export async function authenticate(request: NextRequest): Promise<AuthenticatedUser> {
-  // Try Authorization header first
   const authHeader = request.headers.get('authorization');
   let token: string | undefined;
 
-  if (authHeader && authHeader.startsWith('Bearer ')) {
+  if (authHeader?.startsWith('Bearer ')) {
     token = authHeader.substring(7);
   } else {
-    // Fallback to privy-token cookie
-    const cookieToken = request.cookies.get('privy-token')?.value;
-    if (cookieToken) {
-      token = cookieToken;
-    }
+    token = request.cookies.get('privy-token')?.value;
   }
 
   if (!token) {
@@ -105,100 +100,82 @@ export async function authenticate(request: NextRequest): Promise<AuthenticatedU
     };
   }
 
-  // Fall back to Privy user authentication
-  try {
-    const privy = getPrivyClient();
-    const claims = await privy.verifyAuthToken(token);
+  const privy = getPrivyClient();
+  const claims = await privy.verifyAuthToken(token);
 
-    let dbUserId: string | undefined;
-    let walletAddress: string | undefined;
+  const dbUser = await prisma.user.findUnique({
+    where: { privyId: claims.userId },
+    select: { id: true, walletAddress: true },
+  });
 
-    try {
-      const dbUser = await prisma.user.findUnique({
-        where: { privyId: claims.userId },
-        select: { id: true, walletAddress: true },
-      });
+  return {
+    userId: dbUser?.id ?? claims.userId,
+    dbUserId: dbUser?.id,
+    privyId: claims.userId,
+    walletAddress: dbUser?.walletAddress ?? undefined,
+    email: undefined,
+    isAgent: false,
+  };
+}
 
-      if (dbUser) {
-        dbUserId = dbUser.id;
-        walletAddress = dbUser.walletAddress ?? undefined;
-      }
-    } catch (lookupError) {
-      logger.warn('Failed to resolve database user after Privy auth', { privyId: claims.userId, error: lookupError }, 'authenticate');
-    }
-
-    return {
-      userId: dbUserId ?? claims.userId,
-      dbUserId,
-      privyId: claims.userId,
-      walletAddress,
-      email: undefined,
-      isAgent: false,
-    };
-  } catch (error) {
-    // Handle specific authentication errors
-    const errorMessage = extractErrorMessage(error);
-    
-    // Check if it's a token expiration error and try the cookie as a fallback
-    if (errorMessage.includes('exp') || errorMessage.includes('expired') || errorMessage.includes('timestamp')) {
-      // If we used the Authorization header, try the cookie as a fallback
-      const cookieToken = request.cookies.get('privy-token')?.value;
-      if (authHeader && cookieToken && cookieToken !== token) {
-        try {
-          const privy = getPrivyClient();
-          const claims = await privy.verifyAuthToken(cookieToken);
-
-          let dbUserId: string | undefined;
-          let walletAddress: string | undefined;
-
-          try {
-            const dbUser = await prisma.user.findUnique({
-              where: { privyId: claims.userId },
-              select: { id: true, walletAddress: true },
-            });
-
-            if (dbUser) {
-              dbUserId = dbUser.id;
-              walletAddress = dbUser.walletAddress ?? undefined;
-            }
-          } catch (lookupError) {
-            logger.warn('Failed to resolve database user after Privy auth', { privyId: claims.userId, error: lookupError }, 'authenticate');
-          }
-
-          return {
-            userId: dbUserId ?? claims.userId,
-            dbUserId,
-            privyId: claims.userId,
-            walletAddress,
-            email: undefined,
-            isAgent: false,
-          };
-        } catch {
-          // Cookie token also failed, throw the original error
-        }
-      }
-      
-      const authError = new Error('Authentication token has expired. Please refresh your session.') as AuthenticationError;
-      authError.code = 'AUTH_FAILED';
-      throw authError;
-    }
-    
-    // Generic authentication failure
-    const authError = new Error('Authentication failed: ' + errorMessage) as AuthenticationError;
-    authError.code = 'AUTH_FAILED';
-    throw authError;
+/**
+ * Authenticate and require that the user has a database record
+ * Throws an error if the user hasn't completed onboarding
+ */
+export async function authenticateWithDbUser(request: NextRequest): Promise<AuthenticatedUser & { dbUserId: string }> {
+  const authUser = await authenticate(request);
+  
+  if (!authUser.dbUserId) {
+    const error = new Error('User profile not found. Please complete onboarding first.') as AuthenticationError;
+    error.code = 'AUTH_FAILED';
+    throw error;
   }
+  
+  return authUser as AuthenticatedUser & { dbUserId: string };
 }
 
 /**
  * Optional authentication - returns user if authenticated, null otherwise
  */
 export async function optionalAuth(request: NextRequest): Promise<AuthenticatedUser | null> {
-  try {
-    return await authenticate(request);
-  } catch {
+  const authHeader = request.headers.get('authorization');
+  let token: string | undefined;
+
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  } else {
+    token = request.cookies.get('privy-token')?.value;
+  }
+
+  if (!token) {
     return null;
   }
+
+  const agentSession = await verifyAgentSession(token);
+  if (agentSession) {
+    return {
+      userId: agentSession.agentId,
+      privyId: agentSession.agentId,
+      isAgent: true,
+    };
+  }
+
+  const privy = getPrivyClient();
+  const claims = await privy.verifyAuthToken(token);
+
+  const dbUser = await prisma.user.findUnique({
+    where: { privyId: claims.userId },
+    select: { id: true, walletAddress: true },
+  });
+
+  return {
+    userId: dbUser?.id ?? claims.userId,
+    dbUserId: dbUser?.id,
+    privyId: claims.userId,
+    walletAddress: dbUser?.walletAddress ?? undefined,
+    email: undefined,
+    isAgent: false,
+  };
 }
 
 /**
@@ -206,37 +183,31 @@ export async function optionalAuth(request: NextRequest): Promise<AuthenticatedU
  * Returns user if authenticated, null otherwise
  */
 export async function optionalAuthFromHeaders(headers: Headers): Promise<AuthenticatedUser | null> {
-  try {
-    const authHeader = headers.get('authorization');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return null;
-    }
-
-    const token = authHeader.substring(7);
-
-    // Try agent session authentication first (faster)
-    const agentSession = await verifyAgentSession(token);
-    if (agentSession) {
-      return {
-        userId: agentSession.agentId,
-        isAgent: true,
-      };
-    }
-
-    // Fall back to Privy user authentication
-    const privy = getPrivyClient();
-    const claims = await privy.verifyAuthToken(token);
-
-    return {
-      userId: claims.userId,
-      walletAddress: undefined,
-      email: undefined,
-      isAgent: false,
-    };
-  } catch {
+  const authHeader = headers.get('authorization');
+  
+  if (!authHeader?.startsWith('Bearer ')) {
     return null;
   }
+
+  const token = authHeader.substring(7);
+
+  const agentSession = await verifyAgentSession(token);
+  if (agentSession) {
+    return {
+      userId: agentSession.agentId,
+      isAgent: true,
+    };
+  }
+
+  const privy = getPrivyClient();
+  const claims = await privy.verifyAuthToken(token);
+
+  return {
+    userId: claims.userId,
+    walletAddress: undefined,
+    email: undefined,
+    isAgent: false,
+  };
 }
 
 /**

@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { UUIDSchema, UserIdSchema, PaginationSchema, createTrimmedStringSchema } from './common';
+import { SnowflakeIdSchema, UserIdSchema, PaginationSchema, createTrimmedStringSchema } from './common';
 
 /**
  * Chat message content schema
@@ -23,7 +23,7 @@ export const ChatMessageCreateSchema = z.object({
 export const ChatCreateSchema = z.object({
   name: createTrimmedStringSchema(1, 100).optional(),
   isGroup: z.boolean().optional().default(false),
-  participantIds: z.array(UUIDSchema).optional()
+  participantIds: z.array(SnowflakeIdSchema).optional()
 }).refine(
   (data) => !data.isGroup || data.name !== undefined,
   {
@@ -67,7 +67,7 @@ export const ChatMessageQuerySchema = PaginationSchema.extend({
 export const ChatMessageSchema = z.object({
   id: z.string(),
   content: z.string(),
-  senderId: UUIDSchema,
+  senderId: SnowflakeIdSchema,
   chatId: z.string(),
   createdAt: z.date()
 });
@@ -76,7 +76,7 @@ export const ChatMessageSchema = z.object({
  * Chat participant schema
  */
 export const ChatParticipantSchema = z.object({
-  id: UUIDSchema,
+  id: SnowflakeIdSchema,
   displayName: z.string(),
   username: z.string().optional(),
   profileImageUrl: z.string().optional()

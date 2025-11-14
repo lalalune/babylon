@@ -219,6 +219,15 @@ export interface FeedPost {
   shareCount?: number;
   isLiked?: boolean;
   isShared?: boolean;
+  // Repost metadata
+  isRepost?: boolean;
+  originalPostId?: string | null;
+  originalAuthorId?: string | null;
+  originalAuthorName?: string | null;
+  originalAuthorUsername?: string | null;
+  originalAuthorProfileImageUrl?: string | null;
+  originalContent?: string | null; // Original post content for quote posts
+  quoteComment?: string | null;
 }
 
 /**
@@ -315,11 +324,11 @@ export interface ElizaCharacter {
 export interface ActorData extends Actor {
   realName: string;
   username: string;
-  nickname: string;
-  aliases: string[];
-  quirks?: string[];
-  canPostFeed?: boolean;
-  canPostGroups?: boolean;
+  physicalDescription?: string; // For image generation only
+  profileBanner?: string; // For image generation only
+  originalFirstName: string; // For name replacement
+  originalLastName: string; // For name replacement
+  originalHandle: string; // For name replacement
 }
 
 /**

@@ -21,29 +21,21 @@ async function loadDeployments() {
   const deploymentsDir = path.join(process.cwd(), '../deployments');
   const deployments: DeploymentInfo[] = [];
   
-  try {
-    const networks = await fs.readdir(deploymentsDir);
+  const networks = await fs.readdir(deploymentsDir);
+  
+  for (const network of networks) {
+    const networkPath = path.join(deploymentsDir, network);
+    const stat = await fs.stat(networkPath);
     
-    for (const network of networks) {
-      const networkPath = path.join(deploymentsDir, network);
-      const stat = await fs.stat(networkPath);
-      
-      if (stat.isDirectory()) {
-        const latestPath = path.join(networkPath, 'latest.json');
-        try {
-          const content = await fs.readFile(latestPath, 'utf-8');
-          const data = JSON.parse(content);
-          deployments.push({
-            network: data.network || network,
-            ...data,
-          });
-        } catch {
-          console.warn(`  ⚠ Could not read ${latestPath}`);
-        }
-      }
+    if (stat.isDirectory()) {
+      const latestPath = path.join(networkPath, 'latest.json');
+      const content = await fs.readFile(latestPath, 'utf-8');
+      const data = JSON.parse(content);
+      deployments.push({
+        network: data.network || network,
+        ...data,
+      });
     }
-  } catch (error) {
-    console.error('Error reading deployments:', error);
   }
   
   return deployments;

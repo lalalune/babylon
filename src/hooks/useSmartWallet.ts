@@ -6,7 +6,7 @@ import type { Hex } from 'viem';
 
 import {
   WALLET_ERROR_MESSAGES,
-  getWalletErrorMessage,
+  // getWalletErrorMessage,
 } from '@/lib/wallet-utils';
 
 type SmartWalletTxInput = Parameters<
@@ -44,11 +44,7 @@ export function useSmartWallet(): UseSmartWalletResult {
         throw new Error(WALLET_ERROR_MESSAGES.NO_EMBEDDED_WALLET);
       }
 
-      try {
-        return await typedClient.sendTransaction(input, options);
-      } catch (error) {
-        throw new Error(getWalletErrorMessage(error));
-      }
+      return await typedClient.sendTransaction(input, options);
     },
     [typedClient, smartWalletAddress]
   );

@@ -1,36 +1,103 @@
 #!/usr/bin/env bun
 /**
- * Validate actors.json
- * - Ensures all actor affiliations reference valid organizations
- * - Checks for required fields
+ * @fileoverview Actor Data Validation CLI
+ * 
+ * Validates actor database integrity before game generation. Ensures all actor
+ * affiliations reference valid organizations to prevent orphaned references
+ * and maintain data consistency.
+ * 
+ * **Validation Checks:**
+ * 1. Schema validation (Zod schemas for actors and organizations)
+ * 2. Affiliation integrity (all affiliations must reference existing orgs)
+ * 3. Required field presence (realName, username)
+ * 4. Organization ID validity
+ * 
+ * **Exit Codes:**
+ * - 0: All validations passed
+ * - 1: Validation errors found (details printed to stderr)
+ * 
+ * **Data Source:**
+ * Reads from `public/data/actors.json` which contains:
+ * - Array of actor objects with affiliations
+ * - Array of organization objects
+ * 
+ * @module cli/validate-actors
+ * @category CLI - Validation
+ * 
+ * @example
+ * ```bash
+ * # Validate actors data
+ * bun run src/cli/validate-actors.ts
+ * 
+ * # Successful output:
+ * # Validating 50 actors against 25 organizations...
+ * # All actor affiliations are valid!
+ * # { actorsChecked: 50, organizationsVerified: 25, warnings: 0 }
+ * 
+ * # Failed output (exits with code 1):
+ * # VALIDATION ERRORS:
+ * # ❌ Actor1 has invalid affiliation: "nonexistent-org"
+ * # Found 1 error(s)
+ * ```
+ * 
+ * @see {@link generate-game.ts} which calls this validation internally
+ * @since v0.1.0
  */
 
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { logger } from '@/lib/logger';
+import { z } from 'zod';
 
-interface Actor {
-  id: string;
-  name: string;
-  realName?: string;
-  username?: string;
-  affiliations: string[];
-}
+const ActorSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  realName: z.string().optional(),
+  username: z.string().optional(),
+  affiliations: z.array(z.string()),
+});
 
-interface Organization {
-  id: string;
-  name: string;
-  type: string;
-}
+const OrganizationSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.string(),
+});
 
-interface ActorsData {
-  actors: Actor[];
-  organizations: Organization[];
-}
+const ActorsDataSchema = z.object({
+  actors: z.array(ActorSchema),
+  organizations: z.array(OrganizationSchema),
+});
 
+/**
+ * Main validation function that checks actor data integrity
+ * 
+ * Validates that all actor affiliations reference valid organization IDs
+ * and checks for missing required fields.
+ * 
+ * **Validation Process:**
+ * 1. Load actors.json from public/data/
+ * 2. Parse and validate with Zod schemas
+ * 3. Build set of valid organization IDs
+ * 4. Check each actor's affiliations
+ * 5. Check for missing realName/username (warnings only)
+ * 6. Exit with code 1 if any errors found
+ * 
+ * **Error Types:**
+ * - Hard Errors (exit 1): Invalid affiliation references
+ * - Warnings (continue): Missing optional fields
+ * 
+ * @throws {Error} Exits process with code 1 if validation fails
+ * @returns {void} Success (exit code 0) or error (exit code 1)
+ * @example
+ * ```typescript
+ * // Called automatically when script runs
+ * validateActors();
+ * // Checks all actors and exits with appropriate code
+ * ```
+ */
 function validateActors(): void {
   const actorsPath = join(process.cwd(), 'public', 'data', 'actors.json');
-  const data: ActorsData = JSON.parse(readFileSync(actorsPath, 'utf-8'));
+  const data = ActorsDataSchema.parse(JSON.parse(readFileSync(actorsPath, 'utf-8')));
 
   const { actors, organizations } = data;
   
@@ -53,11 +120,6 @@ function validateActors(): void {
     }
 
     // Check affiliations
-    if (!actor.affiliations || actor.affiliations.length === 0) {
-      // Some actors might not have affiliations (like independent actors)
-      continue;
-    }
-
     for (const affiliation of actor.affiliations) {
       if (!validOrgIds.has(affiliation)) {
         errors.push(

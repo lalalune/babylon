@@ -3,13 +3,15 @@
 import { CommentCard } from '@/components/interactions/CommentCard';
 import { CommentInput } from '@/components/interactions/CommentInput';
 import { PostCard } from '@/components/posts/PostCard';
-import { BouncingLogo } from '@/components/shared/BouncingLogo';
+import { Skeleton } from '@/components/shared/Skeleton';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { cn } from '@/lib/utils';
 import { useInteractionStore } from '@/stores/interactionStore';
 import type { CommentData, CommentWithReplies } from '@/types/interactions';
 import { MessageCircle, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/navigation';
 
 interface FeedCommentSectionProps {
   postId: string | null;
@@ -28,15 +30,15 @@ interface FeedCommentSectionProps {
     isShared: boolean;
   };
   onClose?: () => void;
-  onCommentAdded?: () => void;
 }
 
 export function FeedCommentSection({
   postId,
   postData,
   onClose,
-  onCommentAdded,
 }: FeedCommentSectionProps) {
+  const { user } = useAuth();
+  const router = useRouter();
   const [comments, setComments] = useState<CommentWithReplies[]>([]);
   const [post, setPost] = useState<{
     id: string;
@@ -113,6 +115,13 @@ export function FeedCommentSection({
     loadPostData();
   }, [postId, postData]);
 
+  // Update internal post state when postData prop changes
+  useEffect(() => {
+    if (postData) {
+      setPost(postData);
+    }
+  }, [postData]);
+
   // Load comments when postId changes
   useEffect(() => {
     if (postId) {
@@ -121,6 +130,13 @@ export function FeedCommentSection({
       setComments([]);
     }
   }, [postId, loadCommentsData]);
+
+  // Reload comments when comment count changes (e.g., from SSE updates)
+  useEffect(() => {
+    if (post?.commentCount !== undefined && postId) {
+      loadCommentsData();
+    }
+  }, [post?.commentCount, postId, loadCommentsData]);
 
   // Helper functions
   const removeCommentById = (
@@ -209,18 +225,60 @@ export function FeedCommentSection({
     await loadCommentsData();
   };
 
-  const sortedComments = [...comments].sort((a, b) => {
-    switch (sortBy) {
-      case 'newest':
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      case 'oldest':
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      case 'popular':
-        return b.likeCount - a.likeCount;
-      default:
-        return 0;
+  const handleTopLevelCommentSubmit = async (commentData: CommentData) => {
+    if (!postId) return;
+    
+    const optimisticComment: CommentWithReplies = {
+      id: commentData.id,
+      content: commentData.content,
+      createdAt: commentData.createdAt instanceof Date ? commentData.createdAt : new Date(commentData.createdAt),
+      updatedAt: commentData.updatedAt instanceof Date ? commentData.updatedAt : new Date(commentData.updatedAt),
+      userId: commentData.authorId,
+      userName: commentData.author?.displayName || commentData.author?.username || 'Unknown',
+      userUsername: commentData.author?.username || null,
+      userAvatar: commentData.author?.profileImageUrl || undefined,
+      parentCommentId: undefined,
+      parentCommentAuthorName: undefined,
+      likeCount: commentData._count?.reactions || 0,
+      isLiked: false,
+      replies: [],
+    };
+
+    setComments((prev) => [optimisticComment, ...prev]);
+    
+    // If it's a modal, close it and navigate to post page
+    if (onClose) {
+      // Close modal and navigate - the post page will load fresh data
+      onClose();
+      router.push(`/post/${postId}`);
     }
-  });
+    // If not modal (inline view on post page), the comment count change
+    // will trigger the useEffect that watches post.commentCount,
+    // which will automatically reload comments
+  };
+
+  const sortedComments = useMemo(() => {
+    return [...comments].sort((a, b) => {
+      // Always prioritize current user's comments at the top
+      const aIsCurrentUser = user && a.userId === user.id;
+      const bIsCurrentUser = user && b.userId === user.id;
+      
+      if (aIsCurrentUser && !bIsCurrentUser) return -1;
+      if (!aIsCurrentUser && bIsCurrentUser) return 1;
+      
+      // For non-user comments (or both are user comments), apply the selected sort
+      switch (sortBy) {
+        case 'newest':
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        case 'oldest':
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case 'popular':
+          return b.likeCount - a.likeCount;
+        default:
+          return 0;
+      }
+    });
+  }, [comments, user, sortBy]);
 
   if (!postId) {
     return null;
@@ -229,8 +287,10 @@ export function FeedCommentSection({
   if (isLoadingPost) {
     return (
       <div className="flex flex-col h-full w-full overflow-hidden bg-background items-center justify-center">
-        <BouncingLogo size={32} />
-        <p className="text-sm text-muted-foreground mt-4">Loading post...</p>
+        <div className="space-y-3 w-full max-w-md p-4">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-4 w-3/4" />
+        </div>
       </div>
     );
   }
@@ -264,7 +324,7 @@ export function FeedCommentSection({
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between gap-4 px-4 py-3 border-b border-border flex-shrink-0">
+            <div className="flex items-center justify-between gap-4 px-4 py-3 border-b border-border shrink-0">
               <button
                 type="button"
                 onClick={onClose}
@@ -309,26 +369,14 @@ export function FeedCommentSection({
                 <div className="ml-6 border-l-2 border-border h-4" />
               </div>
 
-              {/* Reply Input */}
+              {/* Comment Input */}
               <div className="px-4 pb-4">
                 <CommentInput
                   postId={postId}
-                  placeholder="Post your reply..."
-                  onSubmit={async (comment) => {
-                    // Only proceed if comment was successfully created
-                    if (!comment) return;
-                    
-                    // Close the modal immediately
-                    if (onClose) {
-                      onClose();
-                    }
-                    
-                    // Call onCommentAdded callback if provided (after closing)
-                    if (onCommentAdded) {
-                      onCommentAdded();
-                    }
-                  }}
+                  placeholder={`Reply to ${post.authorName}...`}
                   autoFocus
+                  onSubmit={handleTopLevelCommentSubmit}
+                  className="mt-2"
                 />
               </div>
             </div>
@@ -339,7 +387,7 @@ export function FeedCommentSection({
         <div className="flex flex-col w-full overflow-hidden bg-background relative">
           {/* Sort options */}
           {comments.length > 1 && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-background flex-shrink-0">
+            <div className="flex items-center gap-2 px-4 py-2 bg-background shrink-0">
               <span className="text-xs text-muted-foreground">Sort:</span>
               <div className="flex gap-1">
                 {(['newest', 'oldest', 'popular'] as const).map((option) => (
@@ -350,7 +398,7 @@ export function FeedCommentSection({
                     className={cn(
                       'px-2 py-0.5 rounded text-xs capitalize transition-colors',
                       sortBy === option
-                        ? 'bg-[#0066FF] text-white'
+                        ? 'bg-[#0066FF] text-primary-foreground'
                         : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                     )}
                   >
@@ -361,47 +409,14 @@ export function FeedCommentSection({
             </div>
           )}
 
-          {/* Comment input */}
-          <div className="px-4 py-3 bg-background flex-shrink-0">
-            <CommentInput
-              postId={postId}
-              placeholder="Post your reply..."
-              onSubmit={async (comment) => {
-                if (comment) {
-                  // Optimistically add comment to the list immediately
-                  const optimisticComment: CommentWithReplies = {
-                    id: comment.id,
-                    content: comment.content,
-                    createdAt: comment.createdAt instanceof Date ? comment.createdAt : new Date(comment.createdAt),
-                    updatedAt: comment.updatedAt instanceof Date ? comment.updatedAt : new Date(comment.updatedAt),
-                    userId: comment.authorId,
-                    userName: comment.author?.displayName || comment.author?.username || 'Unknown',
-                    userUsername: comment.author?.username || null,
-                    userAvatar: comment.author?.profileImageUrl || undefined,
-                    parentCommentId: comment.parentCommentId,
-                    likeCount: comment._count?.reactions || 0,
-                    isLiked: false,
-                    replies: [],
-                  };
-                  setComments((prev) => [optimisticComment, ...prev]);
-                }
-                // Small delay to ensure API has processed, then reload to get full data
-                await new Promise(resolve => setTimeout(resolve, 200));
-                await loadCommentsData();
-                
-                // Call onCommentAdded callback if provided
-                if (onCommentAdded) {
-                  onCommentAdded();
-                }
-              }}
-            />
-          </div>
-
           {/* Comments list */}
           <div className="flex-1 overflow-y-auto px-4 py-3">
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
-                <BouncingLogo size={24} />
+                <div className="space-y-3 w-full">
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-20 w-full" />
+                </div>
               </div>
             ) : sortedComments.length === 0 ? (
               <EmptyState

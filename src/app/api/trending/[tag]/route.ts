@@ -50,7 +50,7 @@ export async function GET(
     const enrichedPosts = await Promise.all(
       result.posts.map(async (post) => {
         // Get author info (could be User, Actor, or Organization)
-        const [user, actor, org, likeCount, commentCount, shareCount] = (authUser && authUser.userId)
+        const [user, actor, org, likeCount, commentCount, shareCount, userLike, userShare] = (authUser && authUser.userId)
           ? await asUser(authUser, async (db) => {
               return await Promise.all([
                 db.user.findUnique({
@@ -87,6 +87,14 @@ export async function GET(
                 }),
                 db.share.count({
                   where: { postId: post.id },
+                }),
+                db.reaction.findFirst({
+                  where: { postId: post.id, userId: authUser.userId, type: 'like' },
+                  select: { id: true },
+                }),
+                db.share.findFirst({
+                  where: { postId: post.id, userId: authUser.userId },
+                  select: { id: true },
                 }),
               ])
             })
@@ -127,6 +135,8 @@ export async function GET(
                 db.share.count({
                   where: { postId: post.id },
                 }),
+                null, // No user context for public requests
+                null, // No user context for public requests
               ])
             })
 
@@ -146,8 +156,8 @@ export async function GET(
           likeCount,
           commentCount,
           shareCount,
-          isLiked: false, // TODO: Check if current user liked this
-          isShared: false, // TODO: Check if current user shared this
+          isLiked: !!userLike,
+          isShared: !!userShare,
         }
       })
     )

@@ -56,120 +56,123 @@ export function ComingSoon() {
     if (!authenticated || !dbUser || !dbUser.id) return
 
     const setupWaitlist = async (userId: string) => {
-      try {
-        // Check if already on waitlist
-        const existingPosition = await fetchWaitlistPosition(userId)
-        if (existingPosition) {
-          // Already setup, just refresh data
-          return
-        }
+      // Check if already on waitlist
+      const existingPosition = await fetchWaitlistPosition(userId)
+      if (existingPosition) {
+        // Already setup, just refresh data
+        return
+      }
 
-        // Mark user as waitlisted (they completed onboarding)
-        const referralCode = searchParams.get('ref') || undefined
-        const response = await fetch('/api/waitlist/mark', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId,
-            referralCode,
-          }),
-        })
+      // Mark user as waitlisted (they completed onboarding)
+      const referralCode = searchParams.get('ref') || undefined
+      
+      logger.info('Marking user as waitlisted', { 
+        userId, 
+        hasReferralCode: !!referralCode,
+        referralCode 
+      }, 'ComingSoon')
 
-        if (!response.ok) {
-          throw new Error('Failed to mark as waitlisted')
-        }
+      const response = await fetch('/api/waitlist/mark', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          referralCode,
+        }),
+      })
 
-        // Fetch position data
-        await fetchWaitlistPosition(userId)
+      if (!response.ok) {
+        const errorText = await response.text()
+        logger.error('Failed to mark as waitlisted', { errorText }, 'ComingSoon')
+        throw new Error('Failed to mark as waitlisted')
+      }
 
-        // Award bonuses if available
-        const googleEmail = privyUser && 'google' in privyUser ? (privyUser as { google?: { email?: string } }).google?.email : undefined
-        const emailFromOAuth = privyUser?.email?.address || googleEmail
-        if (emailFromOAuth) {
-          await awardEmailBonus(userId, emailFromOAuth)
-        }
+      const result = await response.json()
+      logger.info('User marked as waitlisted', { 
+        position: result.waitlistPosition,
+        inviteCode: result.inviteCode 
+      }, 'ComingSoon')
 
-        const walletAddress = privyUser?.wallet?.address
-        if (walletAddress) {
-          await awardWalletBonus(userId, walletAddress)
-        }
-      } catch (error) {
-        logger.error('Error setting up waitlist', error, 'ComingSoon')
+      // Fetch position data to get complete info
+      await fetchWaitlistPosition(userId)
+
+      // Award bonuses if available
+      const googleEmail = privyUser && 'google' in privyUser ? (privyUser as { google?: { email?: string } }).google?.email : undefined
+      const emailFromOAuth = privyUser?.email?.address || googleEmail
+      if (emailFromOAuth) {
+        await awardEmailBonus(userId, emailFromOAuth)
+      }
+
+      const walletAddress = privyUser?.wallet?.address
+      if (walletAddress) {
+        await awardWalletBonus(userId, walletAddress)
       }
     }
 
     void setupWaitlist(dbUser.id)
-  }, [authenticated, dbUser?.id])
+  }, [authenticated, dbUser?.id, privyUser, searchParams])
 
   const fetchWaitlistPosition = async (userId: string): Promise<boolean> => {
-    try {
-      const [positionResponse, leaderboardResponse] = await Promise.all([
-        fetch(`/api/waitlist/position?userId=${userId}`),
-        fetch('/api/waitlist/leaderboard?limit=10'),
-      ])
+    const [positionResponse, leaderboardResponse] = await Promise.all([
+      fetch(`/api/waitlist/position?userId=${userId}`),
+      fetch('/api/waitlist/leaderboard?limit=10'),
+    ])
 
-      if (!positionResponse.ok) {
-        // User might not be on waitlist yet
-        return false
-      }
-
-      const data = await positionResponse.json()
-      
-      // Check if rank improved
-      if (previousRank !== null && data.leaderboardRank < previousRank) {
-        setShowRankImprovement(true)
-        setTimeout(() => setShowRankImprovement(false), 5000)
-      }
-      setPreviousRank(data.leaderboardRank)
-      
-      setWaitlistData(data)
-
-      // Fetch leaderboard
-      if (leaderboardResponse.ok) {
-        const leaderboardData = await leaderboardResponse.json()
-        setTopUsers(leaderboardData.leaderboard || [])
-      }
-
-      return true
-    } catch (error) {
-      logger.error('Error fetching waitlist position', error, 'ComingSoon')
+    if (!positionResponse.ok) {
+      // User might not be on waitlist yet
       return false
     }
+
+    const data = await positionResponse.json()
+    
+    // Log if invite code is missing for debugging
+    if (!data.inviteCode) {
+      logger.warn('Invite code missing in waitlist data', { userId }, 'ComingSoon')
+    }
+    
+    // Check if rank improved
+    if (previousRank !== null && data.leaderboardRank < previousRank) {
+      setShowRankImprovement(true)
+      setTimeout(() => setShowRankImprovement(false), 5000)
+    }
+    setPreviousRank(data.leaderboardRank)
+    
+    setWaitlistData(data)
+
+    // Fetch leaderboard
+    if (leaderboardResponse.ok) {
+      const leaderboardData = await leaderboardResponse.json()
+      setTopUsers(leaderboardData.leaderboard || [])
+    }
+
+    return true
   }
 
   const awardEmailBonus = async (userId: string, email: string) => {
-    try {
-      const response = await fetch('/api/waitlist/bonus/email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, email }),
-      })
-      if (response.ok) {
-        await fetchWaitlistPosition(userId)
-      }
-    } catch (error) {
-      logger.error('Error awarding email bonus', error, 'ComingSoon')
+    const response = await fetch('/api/waitlist/bonus/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, email }),
+    })
+    if (response.ok) {
+      await fetchWaitlistPosition(userId)
     }
   }
 
   const awardWalletBonus = async (userId: string, walletAddress: string) => {
-    try {
-      const response = await fetch('/api/waitlist/bonus/wallet', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, walletAddress }),
-      })
-      if (response.ok) {
-        await fetchWaitlistPosition(userId)
-      }
-    } catch (error) {
-      logger.error('Error awarding wallet bonus', error, 'ComingSoon')
+    const response = await fetch('/api/waitlist/bonus/wallet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, walletAddress }),
+    })
+    if (response.ok) {
+      await fetchWaitlistPosition(userId)
     }
   }
 
   const handleCopyInviteCode = useCallback(() => {
     if (waitlistData?.inviteCode) {
-      const inviteUrl = `${window.location.origin}/?ref=${waitlistData.inviteCode}&comingsoon=true`
+      const inviteUrl = `${window.location.origin}/?ref=${waitlistData.inviteCode}`
       navigator.clipboard.writeText(inviteUrl)
       setCopiedCode(true)
       setTimeout(() => setCopiedCode(false), 2000)
@@ -179,15 +182,10 @@ export function ComingSoon() {
   const handleAddEmail = async () => {
     if (!emailInput || !dbUser?.id) return
     setIsLoading(true)
-    try {
-      await awardEmailBonus(dbUser.id, emailInput)
-      setShowEmailModal(false)
-      setEmailInput('')
-    } catch (error) {
-      logger.error('Error adding email', error, 'ComingSoon')
-    } finally {
-      setIsLoading(false)
-    }
+    await awardEmailBonus(dbUser.id, emailInput)
+    setShowEmailModal(false)
+    setEmailInput('')
+    setIsLoading(false)
   }
 
   const handleJoinWaitlist = () => {
@@ -247,7 +245,7 @@ export function ComingSoon() {
             <button
               onClick={handleJoinWaitlist}
               disabled={isLoading}
-              className="px-12 py-5 bg-primary hover:bg-primary/90 text-white text-xl font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-12 py-5 bg-primary hover:bg-primary/90 text-foreground text-xl font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Loading...' : 'Join Waitlist'}
             </button>
@@ -258,17 +256,17 @@ export function ComingSoon() {
 
           {/* Features Preview */}
           <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 animate-fadeIn">
-            <div className="p-4 bg-card/50 rounded-lg border border-border/50 backdrop-blur-sm">
+            <div className="p-4 bg-card/50 rounded-2xl border border-border/50 backdrop-blur-sm">
               <div className="text-3xl mb-2">🎯</div>
               <h3 className="font-semibold mb-1 text-foreground">Prediction Markets</h3>
               <p className="text-sm text-muted-foreground">Trade on real-world events</p>
             </div>
-            <div className="p-4 bg-card/50 rounded-lg border border-border/50 backdrop-blur-sm">
+            <div className="p-4 bg-card/50 rounded-2xl border border-border/50 backdrop-blur-sm">
               <div className="text-3xl mb-2">🤖</div>
               <h3 className="font-semibold mb-1 text-foreground">AI Agents</h3>
               <p className="text-sm text-muted-foreground">Interact with autonomous NPCs</p>
             </div>
-            <div className="p-4 bg-card/50 rounded-lg border border-border/50 backdrop-blur-sm">
+            <div className="p-4 bg-card/50 rounded-2xl border border-border/50 backdrop-blur-sm">
               <div className="text-3xl mb-2">🎮</div>
               <h3 className="font-semibold mb-1 text-foreground">Gamified Trading</h3>
               <p className="text-sm text-muted-foreground">Earn rewards and build influence</p>
@@ -427,27 +425,35 @@ export function ComingSoon() {
               <br />
               <span className="font-bold text-green-500">More invites = Better position in line!</span>
             </p>
-            <div className="flex items-center gap-3 bg-sidebar/50 rounded-lg p-4">
-              <div className="flex-1 text-left font-mono text-sm break-all">
-                {window.location.origin}/?ref={waitlistData.inviteCode}&comingsoon=true
+            {waitlistData.inviteCode ? (
+              <div className="flex items-center gap-3 bg-sidebar/50 rounded-lg p-4">
+                <div className="flex-1 text-left font-mono text-sm break-all">
+                  {window.location.origin}/?ref={waitlistData.inviteCode}
+                </div>
+                <button
+                  onClick={handleCopyInviteCode}
+                  className="px-4 py-2 bg-primary hover:bg-primary/90 text-foreground rounded-lg transition-colors flex items-center gap-2 shrink-0"
+                >
+                  {copiedCode ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      Copy
+                    </>
+                  )}
+                </button>
               </div>
-              <button
-                onClick={handleCopyInviteCode}
-                className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors flex items-center gap-2 flex-shrink-0"
-              >
-                {copiedCode ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4" />
-                    Copy
-                  </>
-                )}
-              </button>
-            </div>
+            ) : (
+              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 text-center">
+                <div className="text-sm text-yellow-600">
+                  Generating your invite code...
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -534,7 +540,7 @@ export function ComingSoon() {
                         <div className="font-semibold flex items-center gap-2">
                           {topUser.displayName || topUser.username || 'Anonymous'}
                           {isCurrentUser && (
-                            <span className="px-2 py-0.5 text-xs bg-primary text-white rounded">
+                            <span className="px-2 py-0.5 text-xs bg-primary text-foreground rounded">
                               YOU
                             </span>
                           )}
@@ -565,7 +571,7 @@ export function ComingSoon() {
                     <div>
                       <div className="font-semibold flex items-center gap-2">
                         You
-                        <span className="px-2 py-0.5 text-xs bg-primary text-white rounded">
+                        <span className="px-2 py-0.5 text-xs bg-primary text-foreground rounded">
                           YOU
                         </span>
                       </div>
@@ -618,12 +624,12 @@ export function ComingSoon() {
               value={emailInput}
               onChange={(e) => setEmailInput(e.target.value)}
               placeholder="your.email@example.com"
-              className="w-full px-4 py-3 bg-sidebar border border-border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-4 py-3 bg-sidebar border border-border rounded-lg mb-4 focus:outline-none focus:border-border"
             />
             <button
               onClick={handleAddEmail}
               disabled={!emailInput || isLoading}
-              className="w-full px-4 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-4 py-3 bg-primary hover:bg-primary/90 text-foreground font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Adding...' : 'Add Email & Earn Points'}
             </button>

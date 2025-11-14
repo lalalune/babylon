@@ -66,6 +66,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         authorId: {
           in: favoritedUserIds,
         },
+        deletedAt: null, // Filter out deleted posts
       },
       orderBy: {
         createdAt: 'desc',
@@ -87,57 +88,68 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       },
     });
 
-    // Get interaction counts and user states for each post
-    const transformedPosts = await Promise.all(
-      postsToReturn.map(async (post) => {
-        const [likeCount, commentCount, shareCount, userLike, userShare] =
-          await Promise.all([
-            db.reaction.count({
-              where: { postId: post.id, type: 'like' },
-            }),
-            db.comment.count({
-              where: { postId: post.id },
-            }),
-            db.share.count({
-              where: { postId: post.id },
-            }),
-            db.reaction.findUnique({
-              where: {
-                postId_userId_type: {
-                  postId: post.id,
-                  userId: user.userId,
-                  type: 'like',
-                },
-              },
-            }),
-            db.share.findUnique({
-              where: {
-                userId_postId: {
-                  userId: user.userId,
-                  postId: post.id,
-                },
-              },
-            }),
-          ]);
-
-        return {
-          id: post.id,
-          content: post.content,
-          createdAt: post.createdAt,
-          timestamp: post.timestamp,
-          authorId: post.authorId,
-          gameId: post.gameId,
-          dayNumber: post.dayNumber,
-          interactions: {
-            likeCount,
-            commentCount,
-            shareCount,
-            isLiked: !!userLike,
-            isShared: !!userShare,
+    // Get interaction counts and user states - OPTIMIZED: Batch queries instead of N+1
+    const postIds = postsToReturn.map(p => p.id);
+    
+    // Execute all queries in parallel (5 queries total instead of 5N)
+    const [allReactions, allComments, allShares, userReactions, userShares] =
+      await Promise.all([
+        db.reaction.groupBy({
+          by: ['postId'],
+          where: { postId: { in: postIds }, type: 'like' },
+          _count: { postId: true },
+        }),
+        db.comment.groupBy({
+          by: ['postId'],
+          where: { postId: { in: postIds } },
+          _count: { postId: true },
+        }),
+        db.share.groupBy({
+          by: ['postId'],
+          where: { postId: { in: postIds } },
+          _count: { postId: true },
+        }),
+        db.reaction.findMany({
+          where: {
+            postId: { in: postIds },
+            userId: user.userId,
+            type: 'like',
           },
-        };
-      })
-    );
+          select: { postId: true },
+        }),
+        db.share.findMany({
+          where: {
+            postId: { in: postIds },
+            userId: user.userId,
+          },
+          select: { postId: true },
+        }),
+      ]);
+
+    // Create lookup maps for O(1) access
+    const reactionMap = new Map(allReactions.map(r => [r.postId, r._count.postId]));
+    const commentMap = new Map(allComments.map(c => [c.postId, c._count.postId]));
+    const shareMap = new Map(allShares.map(s => [s.postId, s._count.postId]));
+    const userReactionSet = new Set(userReactions.map(r => r.postId));
+    const userShareSet = new Set(userShares.map(s => s.postId));
+
+    // Transform posts synchronously using lookup maps
+    const transformedPosts = postsToReturn.map((post) => ({
+      id: post.id,
+      content: post.content,
+      createdAt: post.createdAt,
+      timestamp: post.timestamp,
+      authorId: post.authorId,
+      gameId: post.gameId,
+      dayNumber: post.dayNumber,
+      interactions: {
+        likeCount: reactionMap.get(post.id) ?? 0,
+        commentCount: commentMap.get(post.id) ?? 0,
+        shareCount: shareMap.get(post.id) ?? 0,
+        isLiked: userReactionSet.has(post.id),
+        isShared: userShareSet.has(post.id),
+      },
+    }));
 
     return { posts: transformedPosts, totalCount, hasMore };
   });

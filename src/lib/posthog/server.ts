@@ -45,20 +45,16 @@ export const trackServerEvent = async (
   const client = getPostHogServerClient()
   if (!client) return
 
-  try {
-    client.capture({
-      distinctId,
-      event,
-      properties: {
-        ...properties,
-        $lib: 'posthog-node',
-        environment: process.env.NODE_ENV,
-        timestamp: new Date().toISOString(),
-      },
-    })
-  } catch (error) {
-    console.error('PostHog server tracking error:', error)
-  }
+  client.capture({
+    distinctId,
+    event,
+    properties: {
+      ...properties,
+      $lib: 'posthog-node',
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString(),
+    },
+  })
 }
 
 /**
@@ -71,14 +67,10 @@ export const identifyServerUser = async (
   const client = getPostHogServerClient()
   if (!client) return
 
-  try {
-    client.identify({
-      distinctId,
-      properties,
-    })
-  } catch (error) {
-    console.error('PostHog server identify error:', error)
-  }
+  client.identify({
+    distinctId,
+    properties,
+  })
 }
 
 /**
@@ -97,28 +89,23 @@ export const trackServerError = async (
   const client = getPostHogServerClient()
   if (!client) return
 
-  try {
-    // Extract endpoint, method, statusCode from context
-    const { endpoint, method, statusCode, ...otherContext } = context
-    
-    client.capture({
-      distinctId: distinctId || 'anonymous',
-      event: '$exception',
-      properties: {
-        $exception_type: error.name || 'Error',
-        $exception_message: error.message,
-        $exception_stack: error.stack,
-        endpoint,
-        method,
-        statusCode,
-        ...otherContext,
-        environment: process.env.NODE_ENV,
-        timestamp: new Date().toISOString(),
-      },
-    })
-  } catch (trackError) {
-    console.error('PostHog server error tracking failed:', trackError)
-  }
+  const { endpoint, method, statusCode, ...otherContext } = context
+  
+  client.capture({
+    distinctId: distinctId || 'anonymous',
+    event: '$exception',
+    properties: {
+      $exception_type: error.name || 'Error',
+      $exception_message: error.message,
+      $exception_stack: error.stack,
+      endpoint,
+      method,
+      statusCode,
+      ...otherContext,
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString(),
+    },
+  })
 }
 
 /**
@@ -128,11 +115,7 @@ export const flushPostHog = async () => {
   const client = getPostHogServerClient()
   if (!client) return
 
-  try {
-    await client.flush()
-  } catch (error) {
-    console.error('PostHog flush error:', error)
-  }
+  await client.flush()
 }
 
 /**
@@ -140,12 +123,8 @@ export const flushPostHog = async () => {
  */
 export const shutdownPostHog = async () => {
   if (posthogClient) {
-    try {
-      await posthogClient.shutdown()
-      posthogClient = null
-    } catch (error) {
-      console.error('PostHog shutdown error:', error)
-    }
+    await posthogClient.shutdown()
+    posthogClient = null
   }
 }
 

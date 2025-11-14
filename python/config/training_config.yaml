@@ -1,0 +1,92 @@
+# Continuous RL Training Configuration
+
+# Environment settings
+environment:
+  local:
+    enabled: true
+    data_collection_interval_minutes: 60  # Hourly windows
+    min_agents_per_window: 3  # Minimum for local testing
+    training_frequency_windows: 2  # Train every 2 windows locally
+    model_size: "small"  # qwen2.5-0.5b-instruct
+    batch_size: 4
+    gradient_accumulation_steps: 2
+    max_concurrent_training: 1
+    
+  coreweave:
+    enabled: false
+    data_collection_interval_minutes: 60
+    min_agents_per_window: 5  # More agents in production
+    training_frequency_windows: 1  # Train every window
+    model_size: "large"  # qwen2.5-7b-instruct or qwen2.5-14b-instruct
+    batch_size: 16
+    gradient_accumulation_steps: 4
+    max_concurrent_training: 2
+    gpu_type: "A100"
+    gpu_count: 4
+
+# Data collection settings
+data_collection:
+  window_duration_hours: 1
+  trajectory_min_actions: 5  # Minimum actions per trajectory
+  include_market_outcomes: true
+  market_outcome_delay_minutes: 5  # Wait 5min after window for final prices
+  
+# RULER settings
+ruler:
+  model: "openpipe:ruler-2025-01-15"  # OpenPipe RULER model
+  temperature: 0.7
+  max_tokens: 1000
+  context_max_tokens: 4000
+  batch_size: 5  # Judge 5 agents at once
+  include_ground_truth: true
+  
+# GRPO training settings
+grpo:
+  learning_rate: 1e-6
+  warmup_steps: 10
+  max_grad_norm: 1.0
+  kl_penalty: 0.05
+  gamma: 0.99
+  iterations_per_window: 10
+  checkpoint_frequency: 5  # Save every 5 windows
+  
+# Model deployment settings
+deployment:
+  local:
+    endpoint: "http://localhost:8000/v1/chat/completions"
+    deployment_delay_seconds: 30
+    health_check_retries: 5
+    
+  coreweave:
+    endpoint_template: "https://babylon-rl-{version}.coreweave.cloud/v1/chat/completions"
+    deployment_strategy: "blue-green"  # blue-green or canary
+    canary_percentage: 10
+    health_check_retries: 10
+    rollback_on_failure: true
+    
+# Storage settings
+storage:
+  checkpoints_dir: "./checkpoints"
+  logs_dir: "./logs"
+  metrics_dir: "./metrics"
+  coreweave_s3_bucket: "babylon-rl-training"
+  
+# Monitoring settings
+monitoring:
+  enable_wandb: true
+  wandb_project: "babylon-rl-continuous"
+  log_frequency_steps: 10
+  save_trajectory_samples: true
+  alert_on_failure: true
+  alert_webhook: "${DISCORD_WEBHOOK_URL}"
+  
+# Cron settings
+cron:
+  data_collection: "0 * * * *"  # Every hour at :00
+  ruler_scoring: "5 * * * *"    # Every hour at :05 (5min after window)
+  training: "10 * * * *"        # Every hour at :10
+  deployment: "30 * * * *"      # Every hour at :30
+  cleanup: "0 3 * * *"          # Daily at 3am
+
+
+

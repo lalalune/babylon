@@ -1,37 +1,105 @@
 #!/usr/bin/env bun
 
+
+
 /**
- * Babylon CLI - Smart Game Generator
+ * @fileoverview Babylon Smart Game Generator CLI
  * 
- * Generates contiguous 30-day prediction market games with persistent history.
- * Automatically manages genesis and game continuity.
+ * Generates complete 30-day prediction market games with persistent historical context.
+ * This is the primary tool for creating new game scenarios, questions, actors, and timelines.
  * 
- * Flow:
- * 1. Check for genesis.json, generate if missing
- * 2. Look for previous games in games/ folder
- * 3. Load last 2-3 games as context
- * 4. Generate next game 30 days after the last
- * 5. Save to games/ with timestamp and update latest.json
+ * **Core Features:**
+ * - Automatic genesis game generation if none exists
+ * - Contextual game generation using previous game history
+ * - Intelligent scenario and question creation
+ * - Actor validation and affiliation checking
+ * - Database persistence with metadata tracking
+ * - Retry logic with exponential backoff for API failures
  * 
- * Requirements:
- * - GROQ_API_KEY or OPENAI_API_KEY environment variable must be set
- * - Never falls back to mock/template generation
- * - Retries on failures with exponential backoff
+ * **Generation Flow:**
+ * 1. Check database for genesis game, generate if missing
+ * 2. Load previous games from database as context (last 2-3 games)
+ * 3. Calculate next start date (30 days after last game)
+ * 4. Generate complete game with scenarios, questions, and timeline
+ * 5. Save game metadata to database
+ * 6. Display summary with scenarios, questions, and statistics
  * 
- * Usage:
- *   bun run generate              (smart generation with history)
- *   bun run generate --verbose    (show detailed output)
+ * **Requirements:**
+ * - `GROQ_API_KEY` or `OPENAI_API_KEY` environment variable must be set
+ * - Database must be accessible and migrated
+ * - Actors data must be validated (use `validate-actors` CLI first)
+ * - Never falls back to mock/template generation (always uses LLM)
+ * 
+ * **Output:**
+ * - Game metadata saved to database
+ * - Console output with scenarios, questions, and statistics
+ * - Verbose mode shows additional details about actors and history
+ * 
+ * @module cli/generate-game
+ * @category CLI - Game Generation
+ * 
+ * @example
+ * ```bash
+ * # Generate next game with default settings
+ * bun run generate
+ * 
+ * # Generate with detailed logging
+ * bun run generate --verbose
+ * 
+ * # Generate with verbose output
+ * bun run generate -v
+ * ```
+ * 
+ * @see {@link GameGenerator} for game generation logic
+ * @see {@link ../generator/GameGenerator.ts} for implementation details
+ * @since v0.1.0
  */
 
-import { GameGenerator, type GameHistory, type GeneratedGame } from '../generator/GameGenerator';
+import { GameGenerator, type GameHistory } from '../generator/GameGenerator';
 import type { ChatMessage } from '@/shared/types';
 import { logger } from '@/lib/logger';
 import { db } from '@/lib/database-service';
+import { generateSnowflakeId } from '@/lib/snowflake';
 
+// Commented out unused schema - types defined inline where needed
+// const GameFileSchema = z.object({
+//   timestamp: z.date(),
+//   game: z.any(),
+//   history: z.any().optional(),
+// });
+
+/**
+ * Represents a game file with timestamp and game data
+ * @interface GameFile
+ * @property {Date} timestamp - When the game was created
+ * @property {GeneratedGame} game - The game data object
+ * @property {GameHistory} [history] - Optional game history for context
+ */
+// Removed unused GameFile interface - see git history to restore if needed
+
+/**
+ * Command-line options for the game generator
+ * @interface CLIOptions
+ * @property {boolean} [verbose] - Enable verbose logging output
+ */
 interface CLIOptions {
   verbose?: boolean;
 }
 
+/**
+ * Parses command-line arguments into typed options
+ * 
+ * **Supported Arguments:**
+ * - `--verbose` or `-v`: Enable detailed logging
+ * 
+ * @returns {CLIOptions} Parsed command-line options
+ * @example
+ * ```typescript
+ * // Called internally when script runs with:
+ * // bun run generate --verbose
+ * const options = parseArgs(); // { verbose: true }
+ * ```
+ */
 function parseArgs(): CLIOptions {
   const args = process.argv.slice(2);
   const options: CLIOptions = {};
@@ -45,41 +113,88 @@ function parseArgs(): CLIOptions {
   return options;
 }
 
-interface GameFile {
-  timestamp: Date;
-  game: GeneratedGame;
-  history?: GameHistory;
-}
-
 /**
- * Load previous games from database
- * Returns last N games sorted by timestamp (most recent first)
+ * Generate minimal game history from database records
+ * 
+ * Since full game data isn't stored in database, we reconstruct a minimal
+ * but valid GameHistory from posts and questions for LLM context.
  */
-async function loadPreviousGames(_maxGames = 3): Promise<GameFile[]> {
-  // Load games from database
-  const dbGames = await db.getAllGames();
-  
-  if (dbGames.length === 0) {
-    return [];
-  }
+async function generateMinimalGameHistory(gameId: string, gameNumber: number): Promise<GameHistory> {
+  // Get posts from this game
+  const posts = await db.prisma.post.findMany({
+    where: {
+      gameId,
+      deletedAt: null
+    },
+    select: {
+      id: true,
+      content: true,
+      authorId: true,
+      timestamp: true,
+      dayNumber: true
+    },
+    orderBy: {
+      timestamp: 'desc'
+    },
+    take: 100 // Sample of posts for context
+  });
 
-  // Convert to GameFile format
-  const gameFiles: GameFile[] = [];
-  
-  // Note: Game model doesn't store full game data anymore (just metadata)
-  // This function would need to reconstruct game data from posts/events
-  // For now, return empty array or load from files
-  logger.warn('Loading games from database not fully implemented - use file-based games instead', undefined, 'CLI');
-  
-  // Return empty array for now
-  // TODO: Reconstruct game data from database posts/events if needed
+  // Get questions from this game period
+  // Note: In the current schema, questions don't have direct gameId field
+  // For now, create minimal history without question data
+  const questions: Array<{ id: string; text: string; outcome: boolean | null; status: string }> = [];
 
-  // Return empty for now (game data loading not implemented)
-  return gameFiles;
+  // Generate summary from post content
+  const topPosts = posts.slice(0, 10);
+  const summary = `Game ${gameNumber} featured ${questions.length} questions and ${posts.length} posts over 30 days.`;
+  
+  // Extract key outcomes
+  const keyOutcomes: Array<{ questionText: string; outcome: boolean; explanation: string }> = questions
+    .filter(q => q.status === 'RESOLVED' && q.outcome !== null)
+    .map(q => ({
+      questionText: q.text,
+      outcome: q.outcome as boolean,
+      explanation: 'Historical outcome from completed game' // Historical data is always certain
+    }));
+
+  // Generate highlights from top posts
+  const highlights = topPosts.map(p => 
+    p.content.length > 100 ? p.content.substring(0, 100) + '...' : p.content
+  );
+
+  // Generate top moments from posts with high engagement
+  const topMoments = highlights.slice(0, 5);
+
+  return {
+    gameNumber,
+    completedAt: new Date().toISOString(),
+    summary,
+    keyOutcomes,
+    highlights,
+    topMoments
+  };
 }
 
 /**
- * Validate actors data from database before generating game
+ * Validates actor affiliations against organizations in the database
+ * 
+ * Ensures all actor affiliations reference valid organization IDs to prevent
+ * orphaned references and maintain data integrity during game generation.
+ * 
+ * **Validation Checks:**
+ * - All actor affiliations must reference existing organizations
+ * - Missing or invalid affiliations will cause the script to exit with error
+ * 
+ * @throws {Error} Exits with code 1 if validation fails
+ * @returns {Promise<void>} Resolves if validation passes
+ * @example
+ * ```typescript
+ * // Called internally before game generation
+ * await validateActorsData();
+ * // Will exit process if any actors have invalid affiliations
+ * ```
+ * 
+ * @see {@link validate-actors.ts} for standalone validation script
  */
 async function validateActorsData(): Promise<void> {
   const actors = await db.getAllActors();
@@ -108,6 +223,62 @@ async function validateActorsData(): Promise<void> {
   }
 }
 
+/**
+ * Main execution function for the game generator CLI
+ * 
+ * Orchestrates the complete game generation workflow:
+ * 1. Validates API keys (GROQ or OpenAI required)
+ * 2. Validates actor data integrity
+ * 3. Checks for/generates genesis game if needed
+ * 4. Loads previous game context from database
+ * 5. Generates new 30-day game with LLM
+ * 6. Saves game metadata to database
+ * 7. Displays comprehensive summary
+ * 
+ * **Environment Variables Required:**
+ * - `GROQ_API_KEY` (preferred for fast inference) OR
+ * - `OPENAI_API_KEY` (fallback option)
+ * 
+ * **Database Requirements:**
+ * - Prisma migrations must be applied
+ * - Database connection must be available
+ * 
+ * **Process Flow:**
+ * - STEP 0: Check/generate genesis game
+ * - STEP 1: Load previous games for context
+ * - STEP 2: Generate new game with LLM
+ * - STEP 3: Save to database
+ * 
+ * @throws {Error} Exits with code 1 if API keys missing or validation fails
+ * @returns {Promise<void>} Exits with code 0 on successful generation
+ * 
+ * @example
+ * ```bash
+ * # Set API key
+ * export GROQ_API_KEY=your_key_here
+ * 
+ * # Run generator
+ * bun run generate
+ * 
+ * # Expected output:
+ * # BABYLON GAME GENERATOR
+ * # ==========================
+ * # Validating actors from database...
+ * # Actors validated
+ * # Using Groq (fast inference)
+ * # STEP 0: Checking for genesis game in database...
+ * # STEP 1: Loading previous games...
+ * # STEP 2: Generating Game #2...
+ * # Game generation complete!
+ * # Duration: 45.3s
+ * # Total events: 450
+ * # Total feed posts: 750
+ * # SCENARIOS & QUESTIONS:
+ * # [scenario details]
+ * # STEP 3: Saving game to database...
+ * # Ready for next game!
+ * ```
+ */
 async function main() {
   const options = parseArgs();
   
@@ -156,10 +327,12 @@ async function main() {
     // Note: Full game data saved to genesis.json file, not database
     await db.prisma.game.create({
       data: {
+        id: await generateSnowflakeId(),
         isContinuous: false,
         isRunning: false,
         currentDate: new Date(),
         speed: 60000,
+        updatedAt: new Date(),
       },
     });
     
@@ -172,80 +345,46 @@ async function main() {
 
   // STEP 1: Load Previous Games
   logger.info('STEP 1: Loading previous games...', undefined, 'CLI');
-  const previousGames = await loadPreviousGames(3);
   
   const history: GameHistory[] = [];
   let nextStartDate: string;
   let gameNumber = 1;
 
-  if (previousGames.length > 0) {
-    logger.info(`Found ${previousGames.length} previous game(s):`, undefined, 'CLI');
+  if (existingGames.length > 0) {
+    logger.info(`Found ${existingGames.length} previous game(s):`, undefined, 'CLI');
     
-    // Load or generate history for each previous game
-    const tempGenerator = new GameGenerator();
-    for (let i = previousGames.length - 1; i >= 0; i--) {
-      const gameFile = previousGames[i];
-      if (!gameFile) {
-        logger.warn(`Game at index ${i} is undefined, skipping`, undefined, 'CLI');
-        continue;
-      }
+    // Load game histories from database GameConfig
+    // Game histories are stored as JSON in GameConfig table with keys like 'game-history-{gameId}'
+    for (let i = Math.max(0, existingGames.length - 2); i < existingGames.length; i++) {
+      const gameData = existingGames[i];
+      if (!gameData) continue;
 
-      // Use existing history if available, otherwise generate it
-      let gameHistory: GameHistory;
-      if (gameFile.history) {
-        gameHistory = gameFile.history;
+      // Try to load stored game history from GameConfig
+      const historyConfig = await db.prisma.gameConfig.findUnique({
+        where: { key: `game-history-${gameData.id}` }
+      });
+
+      if (historyConfig && historyConfig.value) {
+        // Use stored history if available
+        const storedHistory = historyConfig.value as unknown as GameHistory;
+        history.push(storedHistory);
+        logger.info(`Loaded stored history for game ${gameData.id}`, undefined, 'CLI');
       } else {
-        gameHistory = tempGenerator.createGameHistory(gameFile.game);
-        // If no game number exists, infer it from position
-        if (!gameHistory.gameNumber) {
-          gameHistory.gameNumber = previousGames.length - i;
-        }
+        // Generate minimal history from database records if no stored history
+        const minimalHistory = await generateMinimalGameHistory(gameData.id, i + 1);
+        history.push(minimalHistory);
+        logger.info(`Generated minimal history for game ${gameData.id}`, undefined, 'CLI');
       }
-
-      history.push(gameHistory);
-      const firstQuestion = gameFile.game.setup.questions[0];
-      const questionPreview = firstQuestion ? firstQuestion.text.slice(0, 50) : 'No question';
-      logger.info(`Game #${gameHistory.gameNumber} - ${questionPreview}...`, undefined, 'CLI');
     }
 
-    // Calculate next start date: Get last game's last day, add 1 day
-    const lastGameFile = previousGames[0];
-    if (!lastGameFile) {
-      throw new Error('Previous games array is not empty but first element is undefined');
-    }
+    // Calculate next start date
+    const lastGame = existingGames[0]!;
+    const lastDate = new Date(lastGame.currentDate);
+    const nextDate = new Date(lastDate);
+    nextDate.setDate(nextDate.getDate() + 30); // 30 days after last game start
+    nextStartDate = nextDate.toISOString().split('T')[0]!;
 
-    const lastGame = lastGameFile.game; // Most recent game
-    const lastDayData = lastGame.timeline[lastGame.timeline.length - 1];
-
-    if (lastDayData && lastDayData.feedPosts && lastDayData.feedPosts.length > 0) {
-      const lastDayPost = lastDayData.feedPosts[0];
-      if (lastDayPost) {
-        const lastDate = new Date(lastDayPost.timestamp);
-        const nextDate = new Date(lastDate);
-        nextDate.setDate(nextDate.getDate() + 1); // Next day after last game
-        nextStartDate = nextDate.toISOString().split('T')[0]!;
-      } else {
-        // Fallback: assume 30 days per game, calculate next month
-        const lastGameStart = new Date(lastGame.generatedAt);
-        const nextMonth = new Date(lastGameStart);
-        nextMonth.setMonth(lastGameStart.getMonth() + 1);
-        nextMonth.setDate(1);
-        nextStartDate = nextMonth.toISOString().split('T')[0]!;
-      }
-    } else {
-      // Fallback: assume 30 days per game, calculate next month
-      const lastGameStart = new Date(lastGame.generatedAt);
-      const nextMonth = new Date(lastGameStart);
-      nextMonth.setMonth(lastGameStart.getMonth() + 1);
-      nextMonth.setDate(1);
-      nextStartDate = nextMonth.toISOString().split('T')[0]!;
-    }
-
-    const lastHistoryEntry = history[history.length - 1];
-    if (!lastHistoryEntry) {
-      throw new Error('History array should not be empty after processing previous games');
-    }
-    gameNumber = lastHistoryEntry.gameNumber + 1;
+    gameNumber = existingGames.length + 1;
     
     logger.info(`Next game will be #${gameNumber} starting ${nextStartDate}`, undefined, 'CLI');
   } else {
@@ -311,14 +450,34 @@ async function main() {
   // Note: Game is now stored in database (posts, events, actors)
   const savedGame = await db.prisma.game.create({
     data: {
+      id: await generateSnowflakeId(),
       isContinuous: false,
       isRunning: false,
       currentDate: new Date(nextStartDate),
       speed: 60000,
+      updatedAt: new Date(),
     },
   });
   
   logger.info(`Saved game to database (ID: ${savedGame.id})`, undefined, 'CLI');
+
+  // Save game history for future reference
+  await db.prisma.gameConfig.upsert({
+    where: { key: `game-history-${savedGame.id}` },
+    update: { 
+      value: gameHistory as never,
+      updatedAt: new Date()
+    },
+    create: {
+      id: await generateSnowflakeId(),
+      key: `game-history-${savedGame.id}`,
+      value: gameHistory as never,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+  });
+
+  logger.info('Saved game history for future context', undefined, 'CLI');
 
   // Show summary
   if (options.verbose) {

@@ -1,8 +1,143 @@
 /**
- * Registry API Route
- *
- * Fetches all registered users/agents from the database
- * Supports filtering and sorting
+ * User Registry API
+ * 
+ * @description
+ * Public registry of all registered users and agents on the Babylon platform.
+ * Provides comprehensive user listings with filtering, sorting, pagination,
+ * and optional on-chain verification filtering. Includes reputation scores
+ * and activity statistics.
+ * 
+ * **Features:**
+ * - Public user directory
+ * - On-chain verification filtering
+ * - Flexible sorting (by reputation, PnL, creation date)
+ * - Pagination support
+ * - Activity statistics (positions, comments, reactions)
+ * - On-chain reputation scores (when applicable)
+ * - RLS-compatible (respects user visibility settings)
+ * 
+ * **Use Cases:**
+ * - User discovery and networking
+ * - Reputation leaderboards
+ * - On-chain verification lookup
+ * - Community member browsing
+ * - Agent/user directory
+ * 
+ * @openapi
+ * /api/registry:
+ *   get:
+ *     tags:
+ *       - Registry
+ *     summary: Get user registry
+ *     description: Returns paginated list of all registered users/agents with filtering and sorting options
+ *     parameters:
+ *       - in: query
+ *         name: onChainOnly
+ *         schema:
+ *           type: boolean
+ *         description: Filter for only on-chain registered users
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [createdAt, reputationPoints, lifetimePnL, username]
+ *         description: Sort field
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Sort order
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 100
+ *         description: Results per page
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *           default: 0
+ *         description: Pagination offset
+ *     responses:
+ *       200:
+ *         description: User registry
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 users:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       username:
+ *                         type: string
+ *                       displayName:
+ *                         type: string
+ *                       bio:
+ *                         type: string
+ *                       profileImageUrl:
+ *                         type: string
+ *                       walletAddress:
+ *                         type: string
+ *                       onChainRegistered:
+ *                         type: boolean
+ *                       nftTokenId:
+ *                         type: string
+ *                       virtualBalance:
+ *                         type: string
+ *                       lifetimePnL:
+ *                         type: string
+ *                       reputation:
+ *                         type: number
+ *                         nullable: true
+ *                       stats:
+ *                         type: object
+ *                         properties:
+ *                           positions:
+ *                             type: integer
+ *                           comments:
+ *                             type: integer
+ *                           reactions:
+ *                             type: integer
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     offset:
+ *                       type: integer
+ *                     hasMore:
+ *                       type: boolean
+ * 
+ * @example
+ * ```typescript
+ * // Get all users
+ * const response = await fetch('/api/registry?limit=50&sortBy=reputationPoints');
+ * const { users, pagination } = await response.json();
+ * 
+ * // Get only on-chain users
+ * const onChainUsers = await fetch('/api/registry?onChainOnly=true&sortBy=lifetimePnL');
+ * 
+ * // Display top traders
+ * users.forEach(user => {
+ *   console.log(`${user.displayName}: ${user.lifetimePnL} PnL, Rep: ${user.reputation}`);
+ * });
+ * ```
+ * 
+ * @see {@link /lib/services/reputation-service} Reputation service
+ * @see {@link /lib/db/context} RLS context
  */
 
 import type { NextRequest } from 'next/server'
@@ -65,9 +200,9 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         // Include relationship counts
         _count: {
           select: {
-            positions: true,
-            comments: true,
-            reactions: true,
+            Position: true,
+            Comment: true,
+            Reaction: true,
           },
         },
       },
@@ -106,9 +241,9 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         lifetimePnL: user.lifetimePnL.toString(),
         reputation,
         stats: {
-          positions: user._count.positions,
-          comments: user._count.comments,
-          reactions: user._count.reactions,
+          positions: user._count.Position,
+          comments: user._count.Comment,
+          reactions: user._count.Reaction,
         },
       }
     })

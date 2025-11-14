@@ -5,17 +5,17 @@
  * to provide unified reputation scores.
  */
 
-import type { RegistryClient } from '@/a2a/blockchain/registry-client'
+import type { RegistryClient } from '@/lib/a2a/blockchain/registry-client'
 import { SubgraphClient } from './SubgraphClient'
-import type { AgentReputation } from '@/a2a/types'
+import type { AgentReputation } from '@/types/a2a'
 import { logger } from '@/lib/logger'
 import type { IReputationBridge, AggregatedReputation } from './types'
 
 export class ReputationBridge implements IReputationBridge {
-  private erc8004Registry: RegistryClient | null
+  private erc8004Registry?: RegistryClient
   private subgraphClient: SubgraphClient
   
-  constructor(erc8004Registry: RegistryClient | null = null) {
+  constructor(erc8004Registry?: RegistryClient) {
     this.erc8004Registry = erc8004Registry
     this.subgraphClient = new SubgraphClient()
   }

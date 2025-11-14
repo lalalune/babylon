@@ -141,26 +141,66 @@ test.describe('Authentication Flow', () => {
     await page.screenshot({ path: 'test-results/screenshots/01-post-onboarding.png' })
   })
 
-  test('should successfully logout', async ({ page }) => {
+  test('should successfully logout and clear all state', async ({ page }) => {
     const testAccount = getPrivyTestAccount()
     
     // Login first
     await loginWithPrivyEmail(page, testAccount)
     expect(await isAuthenticated(page)).toBe(true)
     
+    // Check that localStorage has auth data before logout
+    const authDataBeforeLogout = await page.evaluate(() => {
+      return {
+        babylonAuth: localStorage.getItem('babylon-auth'),
+        privyKeys: Object.keys(localStorage).filter(key => 
+          key.startsWith('privy:') || key.startsWith('privy-')
+        ),
+      }
+    })
+    
+    console.log('📊 Auth state before logout:', {
+      hasBabylonAuth: !!authDataBeforeLogout.babylonAuth,
+      privyKeyCount: authDataBeforeLogout.privyKeys.length
+    })
+    
     // Logout
     await logoutFromPrivy(page)
     
-    // Wait a bit
-    await page.waitForTimeout(2000)
+    // Wait for logout to complete
+    await page.waitForTimeout(3000)
     
-    // Verify logged out
-    const stillAuthenticated = await isAuthenticated(page)
+    // Verify localStorage is cleared
+    const authDataAfterLogout = await page.evaluate(() => {
+      return {
+        babylonAuth: localStorage.getItem('babylon-auth'),
+        privyKeys: Object.keys(localStorage).filter(key => 
+          key.startsWith('privy:') || key.startsWith('privy-')
+        ),
+        sessionPrivyKeys: Object.keys(sessionStorage).filter(key =>
+          key.startsWith('privy:') || key.startsWith('privy-')
+        ),
+      }
+    })
     
+    console.log('📊 Auth state after logout:', {
+      hasBabylonAuth: !!authDataAfterLogout.babylonAuth,
+      privyKeyCount: authDataAfterLogout.privyKeys.length,
+      sessionPrivyKeyCount: authDataAfterLogout.sessionPrivyKeys.length
+    })
+    
+    // Take screenshot
     await page.screenshot({ path: 'test-results/screenshots/01-logged-out.png' })
     
-    // Note: This might still be true if logout didn't work, but we're testing the flow
-    console.log(`✅ Logout completed (authenticated: ${stillAuthenticated})`)
+    // Verify user is no longer authenticated
+    const stillAuthenticated = await isAuthenticated(page)
+    expect(stillAuthenticated).toBe(false)
+    
+    // Verify all auth storage is cleared
+    expect(authDataAfterLogout.babylonAuth).toBeNull()
+    expect(authDataAfterLogout.privyKeys.length).toBe(0)
+    expect(authDataAfterLogout.sessionPrivyKeys.length).toBe(0)
+    
+    console.log('✅ Logout successful - all auth state cleared')
   })
 
   test('should show embedded wallet creation', async ({ page }) => {
@@ -174,6 +214,47 @@ test.describe('Authentication Flow', () => {
     expect(await isAuthenticated(page)).toBe(true)
     
     console.log('✅ Embedded wallet handling validated')
+  })
+
+  test('should be able to re-login after logout', async ({ page }) => {
+    const testAccount = getPrivyTestAccount()
+    
+    // Login first time
+    await loginWithPrivyEmail(page, testAccount)
+    expect(await isAuthenticated(page)).toBe(true)
+    console.log('✅ First login successful')
+    
+    // Logout
+    await logoutFromPrivy(page)
+    await page.waitForTimeout(2000)
+    
+    // Verify logged out
+    expect(await isAuthenticated(page)).toBe(false)
+    console.log('✅ Logout successful')
+    
+    // Login again
+    await loginWithPrivyEmail(page, testAccount)
+    await page.waitForTimeout(2000)
+    
+    // Verify re-authentication worked
+    const reAuthenticated = await isAuthenticated(page)
+    expect(reAuthenticated).toBe(true)
+    
+    // Verify localStorage has fresh auth data
+    const authData = await page.evaluate(() => {
+      const babylonAuth = localStorage.getItem('babylon-auth')
+      return {
+        hasBabylonAuth: !!babylonAuth,
+        babylonAuthParsed: babylonAuth ? JSON.parse(babylonAuth) : null,
+      }
+    })
+    
+    expect(authData.hasBabylonAuth).toBe(true)
+    expect(authData.babylonAuthParsed?.state?.user).toBeDefined()
+    
+    await page.screenshot({ path: 'test-results/screenshots/01-re-login-successful.png' })
+    
+    console.log('✅ Re-login after logout successful - no anonymous state issues')
   })
 })
 

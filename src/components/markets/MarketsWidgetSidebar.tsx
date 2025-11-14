@@ -27,9 +27,9 @@ interface MarketsWidgetSidebarProps {
 
 export function MarketsWidgetSidebar({ onMarketClick }: MarketsWidgetSidebarProps) {
   return (
-    <div className="hidden xl:flex flex-col w-96 flex-shrink-0 overflow-y-auto bg-sidebar p-4 gap-4">
+    <div className="hidden xl:flex flex-col w-96 shrink-0 overflow-y-auto bg-sidebar p-4 gap-4">
       {/* Top: Market Overview */}
-      <div className="flex-shrink-0">
+      <div className="shrink-0">
         <MarketOverviewPanel />
       </div>
 

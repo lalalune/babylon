@@ -6,7 +6,7 @@
 import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server'
 import { authenticate } from '@/lib/api/auth-middleware'
-import { X402Manager } from '@/a2a/payments/x402-manager'
+import { X402Manager } from '@/lib/a2a/payments/x402-manager'
 import { logger } from '@/lib/logger'
 import { trackServerEvent } from '@/lib/posthog/server'
 
@@ -25,101 +25,57 @@ interface CreatePaymentBody {
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    // Authenticate user
-    const authUser = await authenticate(req)
-    const userId = authUser.dbUserId
-    
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'User not found in database' },
-        { status: 401 }
-      )
-    }
+  const authUser = await authenticate(req)
+  const userId = authUser.dbUserId!
 
-    const body: CreatePaymentBody = await req.json()
-    const { amountUSD, fromAddress } = body
+  const body: CreatePaymentBody = await req.json()
+  const { amountUSD, fromAddress } = body
 
-    // Validate input
-    if (!amountUSD || amountUSD < 1) {
-      return NextResponse.json(
-        { error: 'Minimum purchase is $1' },
-        { status: 400 }
-      )
-    }
+  const pointsAmount = Math.floor(amountUSD * 100)
 
-    if (amountUSD > 1000) {
-      return NextResponse.json(
-        { error: 'Maximum purchase is $1000' },
-        { status: 400 }
-      )
-    }
+  const ethEquivalent = amountUSD * 0.001
+  const amountInWei = (ethEquivalent * 1_000_000_000_000_000_000).toString()
 
-    if (!fromAddress) {
-      return NextResponse.json(
-        { error: 'Wallet address is required' },
-        { status: 400 }
-      )
-    }
-
-    // Calculate points (100 points per $1)
-    const pointsAmount = Math.floor(amountUSD * 100)
-
-    // Create payment request
-    // Note: For x402, we need to convert USD to wei (assuming USDC or similar stablecoin)
-    // For simplicity, we'll use a 1:1 conversion with 6 decimals (USDC standard)
-    const amountInWei = (amountUSD * 1_000_000).toString() // 6 decimals for USDC
-
-    const paymentRequest = x402Manager.createPaymentRequest(
-      fromAddress,
-      PAYMENT_RECEIVER,
-      amountInWei,
-      'points_purchase',
-      {
-        userId,
-        amountUSD,
-        pointsAmount,
-      }
-    )
-
-    logger.info(
-      `Created payment request for ${pointsAmount} points ($${amountUSD})`,
-      { 
-        userId, 
-        requestId: paymentRequest.requestId,
-        amountUSD,
-        pointsAmount 
-      },
-      'PointsPurchase'
-    )
-
-    // Track points purchase initiated
-    trackServerEvent(userId, 'points_purchase_initiated', {
+  const paymentRequest = await x402Manager.createPaymentRequest(
+    fromAddress,
+    PAYMENT_RECEIVER,
+    amountInWei,
+    'points_purchase',
+    {
+      userId,
       amountUSD,
       pointsAmount,
-      requestId: paymentRequest.requestId,
-    }).catch((error) => {
-      logger.warn('Failed to track points_purchase_initiated event', { error });
-    });
+    }
+  )
 
-    return NextResponse.json({
-      success: true,
-      paymentRequest: {
-        requestId: paymentRequest.requestId,
-        amount: paymentRequest.amount,
-        from: paymentRequest.from,
-        to: paymentRequest.to,
-        expiresAt: paymentRequest.expiresAt,
-        pointsAmount,
-        amountUSD,
-      },
-    })
-  } catch (error) {
-    logger.error('Failed to create payment request', error, 'PointsPurchase')
-    return NextResponse.json(
-      { error: 'Failed to create payment request' },
-      { status: 500 }
-    )
-  }
+  logger.info(
+    `Created payment request for ${pointsAmount} points ($${amountUSD})`,
+    { 
+      userId, 
+      requestId: paymentRequest.requestId,
+      amountUSD,
+      pointsAmount 
+    },
+    'PointsPurchase'
+  )
+
+  trackServerEvent(userId, 'points_purchase_initiated', {
+    amountUSD,
+    pointsAmount,
+    requestId: paymentRequest.requestId,
+  })
+
+  return NextResponse.json({
+    success: true,
+    paymentRequest: {
+      requestId: paymentRequest.requestId,
+      amount: paymentRequest.amount,
+      from: paymentRequest.from,
+      to: paymentRequest.to,
+      expiresAt: paymentRequest.expiresAt,
+      pointsAmount,
+      amountUSD,
+    },
+  })
 }
 

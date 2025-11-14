@@ -134,7 +134,7 @@ describe('Message Quality for DMs', () => {
     errors: string[]
   }
 
-  function validateMessageQuality(content: string, contextType: 'dm' | 'groupchat'): QualityResult {
+  function validateMessageQuality(content: string, _contextType: 'dm' | 'groupchat'): QualityResult {
     const errors: string[] = []
     const trimmed = content.trim()
 
@@ -260,4 +260,5 @@ describe('DM Chat Type Detection', () => {
     expect(detectChatType(groupChat)).toBe('group')
   })
 })
+
 

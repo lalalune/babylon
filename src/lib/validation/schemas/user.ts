@@ -7,7 +7,7 @@ import {
   EmailSchema,
   WalletAddressSchema,
   UsernameSchema,
-  UUIDSchema,
+  SnowflakeIdSchema,
   createTrimmedStringSchema,
   URLSchema,
   PaginationSchema
@@ -118,14 +118,14 @@ export const UserQuerySchema = z.object({
  * Follow/unfollow schema
  */
 export const FollowUserSchema = z.object({
-  targetUserId: UUIDSchema
+  targetUserId: SnowflakeIdSchema
 });
 
 /**
  * Favorite user schema
  */
 export const FavoriteUserSchema = z.object({
-  targetUserId: UUIDSchema
+  targetUserId: SnowflakeIdSchema
 });
 
 /**
@@ -182,7 +182,7 @@ export const UpdateWalletSchema = z.object({
  * User response schema (for API responses)
  */
 export const UserResponseSchema = z.object({
-  id: UUIDSchema,
+  id: SnowflakeIdSchema,
   walletAddress: WalletAddressSchema.nullable(),
   username: z.string().nullable(),
   displayName: z.string().nullable(),

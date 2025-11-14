@@ -52,20 +52,15 @@ export function ReputationBreakdown({
   useEffect(() => {
     const fetchBreakdown = async () => {
       setLoading(true)
-      try {
-        const response = await fetch(
-          `/api/reputation/breakdown/${encodeURIComponent(userId)}`
-        )
-        const data = await response.json()
+      const response = await fetch(
+        `/api/reputation/breakdown/${encodeURIComponent(userId)}`
+      )
+      const data = await response.json()
 
-        if (data.success) {
-          setBreakdown(data)
-        }
-      } catch (error) {
-        console.error('Failed to fetch reputation breakdown:', error)
-      } finally {
-        setLoading(false)
+      if (data.success) {
+        setBreakdown(data)
       }
+      setLoading(false)
     }
 
     fetchBreakdown()

@@ -48,56 +48,49 @@ export async function trackExternalShare(
     return DEFAULT_RESULT
   }
 
-  try {
-    const response = await fetch(`/api/users/${encodeURIComponent(userId)}/share`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        platform,
-        contentType,
-        contentId,
-        url,
-      }),
-    })
+  const response = await fetch(`/api/users/${encodeURIComponent(userId)}/share`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      platform,
+      contentType,
+      contentId,
+      url,
+    }),
+  })
 
-    if (!response.ok) {
-      const errorPayload = await response.json().catch(() => ({}))
-      logger.warn(
-        'Failed to track external share',
-        { platform, status: response.status, error: errorPayload?.error },
-        'trackExternalShare',
-      )
-      return DEFAULT_RESULT
-    }
-
-    const data = await response.json()
-    const pointsAwarded = Number(data?.points?.awarded ?? 0)
-    const alreadyAwarded = Boolean(data?.points?.alreadyAwarded)
-    const shareActionId = data?.shareAction?.id ?? null
-
-    if (pointsAwarded > 0) {
-      logger.info(
-        `Awarded ${pointsAwarded} points for ${platform} share`,
-        { platform, pointsAwarded },
-        'trackExternalShare',
-      )
-    }
-
-    return {
-      shareActionId,
-      pointsAwarded,
-      alreadyAwarded,
-    }
-  } catch (error) {
-    logger.error(
-      'Unexpected error while tracking external share',
-      { platform, error },
+  if (!response.ok) {
+    const errorPayload = await response.json()
+    logger.warn(
+      'Failed to track external share',
+      { platform, status: response.status, error: errorPayload?.error },
       'trackExternalShare',
     )
     return DEFAULT_RESULT
   }
+
+  const data = await response.json()
+  const pointsAwarded = Number(data?.points?.awarded ?? 0)
+  const alreadyAwarded = Boolean(data?.points?.alreadyAwarded)
+  const shareActionId = data?.shareAction?.id ?? null
+
+  if (pointsAwarded > 0) {
+    logger.info(
+      `Awarded ${pointsAwarded} points for ${platform} share`,
+      { platform, pointsAwarded },
+      'trackExternalShare',
+    )
+  }
+
+  return {
+    shareActionId,
+    pointsAwarded,
+    alreadyAwarded,
+  }
 }
+
+
 

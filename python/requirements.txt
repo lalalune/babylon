@@ -1,0 +1,29 @@
+# Babylon RL Training with ART ServerlessBackend
+
+# Core ART framework
+openpipe-art>=0.5.0
+
+# Database
+asyncpg>=0.29.0
+psycopg2-binary>=2.9.9
+
+# HTTP client
+httpx>=0.26.0
+
+# OpenAI client (for inference)
+openai>=1.0.0
+
+# Monitoring (W&B is included with openpipe-art)
+# wandb is a dependency of openpipe-art
+
+# Configuration
+pyyaml>=6.0.1
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# Utilities
+tqdm>=4.66.0

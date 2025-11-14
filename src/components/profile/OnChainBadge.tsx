@@ -37,7 +37,7 @@ export function OnChainBadge({
         <ShieldCheck 
           className={cn(
             sizeClasses[size],
-            "text-green-500 flex-shrink-0"
+            "text-green-500 shrink-0"
           )}
           fill="currentColor"
         />
@@ -72,7 +72,7 @@ export function OnChainBadge({
       <Shield 
         className={cn(
           sizeClasses[size],
-          "text-muted-foreground/50 flex-shrink-0"
+          "text-muted-foreground/50 shrink-0"
         )}
       />
       {showLabel && (

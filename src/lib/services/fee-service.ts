@@ -4,10 +4,11 @@
  * Manages trading fees and referral fee distribution
  */
 
+import { FEE_CONFIG, type FeeType } from '@/lib/config/fees'
 import { prisma } from '@/lib/database-service'
 import { logger } from '@/lib/logger'
+import { generateSnowflakeId } from '@/lib/snowflake'
 import { Prisma } from '@prisma/client'
-import { FEE_CONFIG, type FeeType } from '@/lib/config/fees'
 
 // Force TypeScript server reload after Prisma regeneration
 
@@ -107,6 +108,7 @@ export class FeeService {
       // Create trading fee record
       await tx.tradingFee.create({
         data: {
+          id: await generateSnowflakeId(),
           userId,
           tradeType,
           tradeId: tradeId || null,
@@ -201,6 +203,7 @@ export class FeeService {
     // Create balance transaction
     await tx.balanceTransaction.create({
       data: {
+        id: await generateSnowflakeId(),
         userId: referrerId,
         type: FEE_CONFIG.TRANSACTION_TYPES.REFERRAL_FEE_EARNED,
         amount: new Prisma.Decimal(feeAmount),
@@ -258,7 +261,7 @@ export class FeeService {
       where: whereClause,
       select: {
         userId: true,
-        user: {
+        User_TradingFee_userIdToUser: {
           select: {
             id: true,
             username: true,
@@ -318,7 +321,7 @@ export class FeeService {
         tradeType: true,
         referrerFee: true,
         userId: true,
-        user: {
+        User_TradingFee_userIdToUser: {
           select: {
             username: true,
           },
@@ -340,7 +343,7 @@ export class FeeService {
         tradeType: fee.tradeType,
         feeAmount: Number(fee.referrerFee),
         traderId: fee.userId,
-        traderUsername: fee.user.username,
+        traderUsername: fee.User_TradingFee_userIdToUser.username,
         createdAt: fee.createdAt,
       })),
     }

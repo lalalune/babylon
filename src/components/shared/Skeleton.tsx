@@ -23,7 +23,7 @@ export function PostCardSkeleton() {
       {/* Avatar + Header */}
       <div className="flex items-start gap-3 sm:gap-4 w-full mb-2">
         {/* Avatar */}
-        <Skeleton className="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex-shrink-0" />
+        <Skeleton className="w-12 h-12 sm:w-14 sm:h-14 rounded-full shrink-0" />
         
         {/* Header */}
         <div className="flex-1 min-w-0 space-y-2">
@@ -32,7 +32,7 @@ export function PostCardSkeleton() {
               <Skeleton className="h-5 w-32 sm:w-40 max-w-full" />
               <Skeleton className="h-4 w-24 sm:w-32 max-w-full" />
             </div>
-            <Skeleton className="h-4 w-16 flex-shrink-0" />
+            <Skeleton className="h-4 w-16 shrink-0" />
           </div>
         </div>
       </div>
@@ -74,7 +74,7 @@ export function MarketCardSkeleton() {
           <Skeleton className="h-5 w-20 max-w-full" />
           <Skeleton className="h-3 w-32 max-w-full" />
         </div>
-        <div className="text-right space-y-2 flex-shrink-0">
+        <div className="text-right space-y-2 shrink-0">
           <Skeleton className="h-5 w-16" />
           <Skeleton className="h-3 w-12" />
         </div>
@@ -104,7 +104,7 @@ export function ChatListItemSkeleton() {
   return (
     <div className="p-4">
       <div className="flex items-center gap-3">
-        <Skeleton className="w-10 h-10 rounded-full flex-shrink-0" />
+        <Skeleton className="w-10 h-10 rounded-full shrink-0" />
         <div className="flex-1 min-w-0 space-y-2">
           <Skeleton className="h-4 w-32 max-w-full" />
           <Skeleton className="h-3 w-48 max-w-full" />
@@ -129,7 +129,7 @@ export function ChatListSkeleton({ count = 8 }: { count?: number }) {
 export function ChatMessageSkeleton({ isCurrentUser = false }: { isCurrentUser?: boolean }) {
   return (
     <div className={cn('flex gap-3', isCurrentUser ? 'justify-end' : 'items-start')}>
-      {!isCurrentUser && <Skeleton className="w-10 h-10 rounded-full flex-shrink-0" />}
+      {!isCurrentUser && <Skeleton className="w-10 h-10 rounded-full shrink-0" />}
       <div className={cn('max-w-[70%] min-w-0 space-y-2', isCurrentUser ? 'items-end' : 'items-start')}>
         <Skeleton className="h-3 w-24 max-w-full" />
         <Skeleton className={cn('h-20 rounded-2xl max-w-full', isCurrentUser ? 'w-36 sm:w-48' : 'w-40 sm:w-56')} />
@@ -158,7 +158,7 @@ export function ProfileHeaderSkeleton() {
       
       {/* Avatar and Info */}
       <div className="flex items-start gap-3 sm:gap-4 mb-4">
-        <Skeleton className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full flex-shrink-0" />
+        <Skeleton className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full shrink-0" />
         <div className="flex-1 min-w-0 space-y-2 sm:space-y-3">
           <Skeleton className="h-5 sm:h-6 w-32 sm:w-40 max-w-full" />
           <Skeleton className="h-4 w-24 sm:w-32 max-w-full" />
@@ -199,13 +199,13 @@ export function LeaderboardItemSkeleton() {
   return (
     <div className="p-3 sm:p-4">
       <div className="flex items-center gap-2 sm:gap-4">
-        <Skeleton className="w-8 h-8 rounded flex-shrink-0" />
-        <Skeleton className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex-shrink-0" />
+        <Skeleton className="w-8 h-8 rounded shrink-0" />
+        <Skeleton className="w-10 h-10 sm:w-12 sm:h-12 rounded-full shrink-0" />
         <div className="flex-1 min-w-0 space-y-2">
           <Skeleton className="h-4 w-24 sm:w-32 max-w-full" />
           <Skeleton className="h-3 w-20 sm:w-24 max-w-full" />
         </div>
-        <div className="text-right space-y-2 flex-shrink-0">
+        <div className="text-right space-y-2 shrink-0">
           <Skeleton className="h-4 sm:h-5 w-16 sm:w-20" />
           <Skeleton className="h-3 w-10 sm:w-12" />
         </div>
@@ -228,7 +228,7 @@ export function LeaderboardSkeleton({ count = 10 }: { count?: number }) {
 // Widget Panel Skeleton
 export function WidgetPanelSkeleton() {
   return (
-    <div className="bg-card/50 backdrop-blur rounded-lg p-4 border border-border">
+    <div className="bg-card/50 backdrop-blur rounded-2xl p-4 border border-border">
       <Skeleton className="h-5 w-32 max-w-full mb-3" />
       <div className="space-y-2">
         {Array.from({ length: 4 }).map((_, i) => (
@@ -249,11 +249,11 @@ export function PredictionCardSkeleton() {
       <Skeleton className="h-4 w-full" />
       <Skeleton className="h-4 w-3/4 max-w-full" />
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex gap-2 sm:gap-3 flex-shrink-0">
+        <div className="flex gap-2 sm:gap-3 shrink-0">
           <Skeleton className="h-3 w-10 sm:w-12" />
           <Skeleton className="h-3 w-10 sm:w-12" />
         </div>
-        <div className="flex gap-2 flex-shrink-0">
+        <div className="flex gap-2 shrink-0">
           <Skeleton className="h-3 w-14 sm:w-16" />
           <Skeleton className="h-3 w-14 sm:w-16" />
         </div>
@@ -271,7 +271,7 @@ export function PoolCardSkeleton() {
           <Skeleton className="h-4 w-32 max-w-full" />
           <Skeleton className="h-3 w-24 max-w-full" />
         </div>
-        <Skeleton className="h-6 w-16 flex-shrink-0" />
+        <Skeleton className="h-6 w-16 shrink-0" />
       </div>
       <div className="flex gap-2 sm:gap-3 flex-wrap">
         <Skeleton className="h-3 w-16 sm:w-20" />
@@ -284,7 +284,7 @@ export function PoolCardSkeleton() {
 // Stats Card Skeleton
 export function StatsCardSkeleton() {
   return (
-    <div className="bg-card/50 backdrop-blur rounded-lg p-4 sm:p-6 border border-border">
+    <div className="bg-card/50 backdrop-blur rounded-2xl p-4 sm:p-6 border border-border">
       <Skeleton className="h-4 w-24 max-w-full mb-2" />
       <Skeleton className="h-6 sm:h-8 w-28 sm:w-32 max-w-full mb-1" />
       <Skeleton className="h-3 w-20 max-w-full" />
@@ -310,7 +310,7 @@ export function NotificationItemSkeleton() {
   return (
     <div className="p-4 border-b border-border/5">
       <div className="flex gap-3">
-        <Skeleton className="w-10 h-10 rounded-full flex-shrink-0" />
+        <Skeleton className="w-10 h-10 rounded-full shrink-0" />
         <div className="flex-1 min-w-0 space-y-2">
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-3 w-3/4 max-w-full" />

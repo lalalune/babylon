@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { Bell, CheckCheck } from 'lucide-react'
+import { Bell } from 'lucide-react'
 import { PageContainer } from '@/components/shared/PageContainer'
 import { Avatar } from '@/components/shared/Avatar'
 import { cn } from '@/lib/utils'
@@ -10,6 +10,8 @@ import { useAuth } from '@/hooks/useAuth'
 import { toast } from 'sonner'
 import { usePullToRefresh } from '@/hooks/usePullToRefresh'
 import { PullToRefreshIndicator } from '@/components/shared/PullToRefreshIndicator'
+import { GroupInviteCard } from '@/components/groups/GroupInviteCard'
+import { useRouter } from 'next/navigation'
 
 interface Notification {
   id: string
@@ -23,23 +25,35 @@ interface Notification {
   } | null
   postId: string | null
   commentId: string | null
+  groupId: string | null
+  inviteId: string | null
   message: string
   read: boolean
   createdAt: string
 }
 
+interface GroupInvite {
+  inviteId: string
+  groupId: string
+  groupName: string
+  groupDescription: string | null
+  memberCount: number
+  invitedAt: string
+}
+
 export default function NotificationsPage() {
-  const { authenticated, user } = useAuth()
+  const { authenticated, user, getAccessToken } = useAuth()
+  const router = useRouter()
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [groupInvites, setGroupInvites] = useState<GroupInvite[]>([])
   const [loading, setLoading] = useState(true)
   const [unreadCount, setUnreadCount] = useState(0)
-  const [markingAsRead, setMarkingAsRead] = useState(false)
 
   const fetchNotifications = useCallback(async (showLoading = true, silent = false) => {
     if (showLoading) {
       setLoading(true)
     }
-    const token = typeof window !== 'undefined' ? window.__privyAccessToken : null
+    const token = await getAccessToken()
 
     if (!token) {
       if (showLoading) {
@@ -48,29 +62,43 @@ export default function NotificationsPage() {
       return
     }
 
-    const response = await fetch('/api/notifications?limit=100', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    })
+    const [notifResponse, invitesResponse] = await Promise.all([
+      fetch('/api/notifications?limit=100', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      }),
+      fetch('/api/groups/invites', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      }),
+    ])
 
-    if (response.ok) {
-      const data = await response.json()
+    if (notifResponse.ok) {
+      const data = await notifResponse.json()
       setNotifications(data.notifications || [])
       setUnreadCount(data.unreadCount || 0)
-      if (!silent) {
-        toast.success('Notifications refreshed')
-      }
     } else {
-      console.error('Failed to fetch notifications:', response.statusText)
+      console.error('Failed to fetch notifications:', notifResponse.statusText)
       if (!silent) {
         toast.error('Failed to refresh notifications')
       }
     }
+
+    if (invitesResponse.ok) {
+      const data = await invitesResponse.json()
+      setGroupInvites(data.invites || [])
+    }
+
+    if (!silent && notifResponse.ok) {
+      toast.success('Notifications refreshed')
+    }
+
     if (showLoading) {
       setLoading(false)
     }
-  }, [])
+  }, [getAccessToken])
 
   const handleRefresh = useCallback(async () => {
     await fetchNotifications(false, false) // Show loading via pull-to-refresh indicator, show toast on complete
@@ -93,23 +121,35 @@ export default function NotificationsPage() {
 
     fetchNotifications(true, true) // Initial load: show loading, but silent (no toast)
 
-    // Poll for new notifications every 30 seconds when page is visible
+    // Poll for new notifications every 1 minute when page is visible
     // Use silent refresh (no loading indicator) for polling
     const interval = setInterval(() => {
       // Only refresh if page is visible (not in background tab)
       if (document.visibilityState === 'visible') {
         fetchNotifications(false, true) // Silent refresh, no loading indicator, no toast
       }
-    }, 30000)
+    }, 60000) // 60 seconds = 1 minute
 
     return () => clearInterval(interval)
   }, [authenticated, user, fetchNotifications])
 
-  const markAsRead = async (notificationId: string) => {
-    const token = typeof window !== 'undefined' ? window.__privyAccessToken : null
+  const markAsRead = useCallback(async (notificationId: string, isAlreadyRead: boolean) => {
+    // Skip if already marked as read
+    if (isAlreadyRead) {
+      return
+    }
+    
+    const token = await getAccessToken()
 
     if (!token) return
 
+    // Update local state optimistically first
+    setNotifications(prev =>
+      prev.map(n => (n.id === notificationId ? { ...n, read: true } : n))
+    )
+    setUnreadCount(prev => Math.max(0, prev - 1))
+
+    // Then make the API call
     const response = await fetch('/api/notifications', {
       method: 'PATCH',
       headers: {
@@ -121,48 +161,71 @@ export default function NotificationsPage() {
       }),
     })
 
-    if (response.ok) {
-      // Update local state optimistically
-      setNotifications(prev =>
-        prev.map(n => (n.id === notificationId ? { ...n, read: true } : n))
-      )
-      setUnreadCount(prev => Math.max(0, prev - 1))
-    } else {
+    if (!response.ok) {
       console.error('Failed to mark notification as read:', response.statusText)
+      // Revert optimistic update on error
+      setNotifications(prev =>
+        prev.map(n => (n.id === notificationId ? { ...n, read: false } : n))
+      )
+      setUnreadCount(prev => prev + 1)
     }
-  }
+  }, [getAccessToken])
 
-  const markAllAsRead = async () => {
-    setMarkingAsRead(true)
-    const token = typeof window !== 'undefined' ? window.__privyAccessToken : null
+  // Intersection Observer - marks notifications as read after viewing for 3 seconds
+  useEffect(() => {
+    if (!authenticated || notifications.length === 0) return
 
-    if (!token) {
-      setMarkingAsRead(false)
-      return
-    }
+    const timers = new Map<string, NodeJS.Timeout>()
+    
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const notificationId = entry.target.getAttribute('data-notification-id')
+          if (!notificationId) return
 
-    const response = await fetch('/api/notifications', {
-      method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
+          const notification = notifications.find(n => n.id === notificationId)
+          if (!notification || notification.read) return
+
+          if (entry.isIntersecting) {
+            // Clear any existing timer first (in case notification re-enters viewport)
+            const existingTimer = timers.get(notificationId)
+            if (existingTimer) {
+              clearTimeout(existingTimer)
+            }
+            
+            // Start a timer when notification becomes visible
+            const timer = setTimeout(() => {
+              markAsRead(notificationId, false)
+            }, 3000) // 3 seconds delay
+            
+            timers.set(notificationId, timer)
+          } else {
+            // Cancel timer if notification leaves viewport before 3 seconds
+            const timer = timers.get(notificationId)
+            if (timer) {
+              clearTimeout(timer)
+              timers.delete(notificationId)
+            }
+          }
+        })
       },
-      body: JSON.stringify({
-        markAllAsRead: true,
-      }),
-    })
+      {
+        threshold: 0.5, // At least 50% of notification must be visible
+        rootMargin: '-50px' // Adds margin to trigger when fully in view
+      }
+    )
 
-    if (response.ok) {
-      // Update local state optimistically
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })))
-      setUnreadCount(0)
-      toast.success('All notifications marked as read')
-    } else {
-      const errorData = await response.json().catch(() => ({ message: 'Unknown error' }))
-      toast.error(errorData.message || 'Failed to mark all as read')
+    // Observe all notification elements
+    const notificationElements = document.querySelectorAll('[data-notification-id]')
+    notificationElements.forEach((el) => observer.observe(el))
+
+    // Cleanup
+    return () => {
+      observer.disconnect()
+      timers.forEach((timer) => clearTimeout(timer))
+      timers.clear()
     }
-    setMarkingAsRead(false)
-  }
+  }, [notifications, authenticated, markAsRead])
 
   const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString)
@@ -201,22 +264,44 @@ export default function NotificationsPage() {
   }
 
   const getNotificationLink = (notification: Notification) => {
-    // System notifications redirect based on their content
-    if (notification.type === 'system') {
-      if (notification.message.includes('profile')) {
-        return '/settings'
-      }
-      return '/feed'
+    // Group chat invite - go to chat
+    if (notification.type === 'system' && notification.message.includes('invited you to')) {
+      // Extract chat ID from the message or notification data
+      // For now, go to chats page where they can see their invitations
+      return '/chats'
     }
-    if (notification.postId) {
-      return `/feed#post-${notification.postId}`
+    
+    // DM or group chat message - go to the specific chat
+    if (notification.type === 'system' && (notification.message.includes('Message') || notification.message.includes('message'))) {
+      return '/chats'
     }
-    if (notification.commentId) {
-      return `/feed#comment-${notification.commentId}`
+    
+    // Profile completion - go to settings
+    if (notification.type === 'system' && notification.message.includes('profile')) {
+      return '/settings'
     }
-    if (notification.actorId) {
+    
+    // Follow notification - go to the follower's profile
+    if (notification.type === 'follow' && notification.actorId) {
       return `/profile/${notification.actorId}`
     }
+    
+    // Comment or reaction on post - go to the post detail page
+    if ((notification.type === 'comment' || notification.type === 'reaction' || notification.type === 'reply') && notification.postId) {
+      return `/post/${notification.postId}`
+    }
+    
+    // Share notification - go to the post
+    if (notification.type === 'share' && notification.postId) {
+      return `/post/${notification.postId}`
+    }
+    
+    // Mention - go to the post if available
+    if (notification.type === 'mention' && notification.postId) {
+      return `/post/${notification.postId}`
+    }
+    
+    // Default: go to feed
     return '/feed'
   }
 
@@ -245,29 +330,12 @@ export default function NotificationsPage() {
     <PageContainer noPadding className="flex flex-col">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="px-4 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold">Notifications</h1>
-            {unreadCount > 0 && (
-              <p className="text-sm text-muted-foreground">
-                {unreadCount} unread
-              </p>
-            )}
-          </div>
+        <div className="px-4 py-3">
+          <h1 className="text-xl font-bold">Notifications</h1>
           {unreadCount > 0 && (
-            <button
-              onClick={markAllAsRead}
-              disabled={markingAsRead}
-              className={cn(
-                'flex items-center gap-2 px-4 py-2 text-sm font-semibold',
-                'bg-transparent hover:bg-muted/50',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
-                'transition-colors'
-              )}
-            >
-              <CheckCheck className="w-4 h-4" />
-              <span>Mark all as read</span>
-            </button>
+            <p className="text-sm text-muted-foreground">
+              {unreadCount} unread
+            </p>
           )}
         </div>
       </div>
@@ -295,16 +363,46 @@ export default function NotificationsPage() {
             </p>
           </div>
         ) : (
-          <div className="max-w-[600px] mx-auto">
+          <div className="max-w-feed mx-auto space-y-4">
+            {/* Group Invites Section */}
+            {groupInvites.length > 0 && (
+              <div className="px-4 space-y-3">
+                <h3 className="text-sm font-semibold text-muted-foreground">Pending Group Invites</h3>
+                {groupInvites.map((invite) => (
+                  <GroupInviteCard
+                    key={invite.inviteId}
+                    inviteId={invite.inviteId}
+                    groupId={invite.groupId}
+                    groupName={invite.groupName}
+                    groupDescription={invite.groupDescription}
+                    memberCount={invite.memberCount}
+                    invitedAt={invite.invitedAt}
+                    onAccepted={(_groupId, chatId) => {
+                      // Refresh invites list
+                      fetchNotifications(false, true)
+                      toast.success('Joined group!')
+                      // Navigate to chat if available
+                      if (chatId) {
+                        router.push(`/chats?chat=${chatId}`)
+                      }
+                    }}
+                    onDeclined={() => {
+                      // Refresh invites list
+                      fetchNotifications(false, true)
+                      toast.success('Invite declined')
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Regular Notifications */}
             {notifications.map((notification) => (
               <Link
                 key={notification.id}
                 href={getNotificationLink(notification)}
-                onClick={() => {
-                  if (!notification.read) {
-                    markAsRead(notification.id)
-                  }
-                }}
+                onClick={() => markAsRead(notification.id, notification.read)}
+                data-notification-id={notification.id}
                 className={cn(
                   'block px-4 py-4 border-b border-border',
                   'hover:bg-muted/30 transition-colors',
@@ -314,7 +412,7 @@ export default function NotificationsPage() {
                 <div className="flex items-start gap-3">
                   {/* Unread Indicator - moved to left */}
                   {!notification.read && (
-                    <div className="w-2 h-2 bg-primary rounded-full flex-shrink-0 mt-2" />
+                    <div className="w-2 h-2 bg-primary rounded-full shrink-0 mt-2" />
                   )}
                   
                   {/* Actor Avatar */}
@@ -323,11 +421,11 @@ export default function NotificationsPage() {
                       id={notification.actor.id}
                       name={notification.actor.displayName}
                       size="md"
-                      className="flex-shrink-0"
+                      className="shrink-0"
                     />
                   ) : (
                     <div className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0",
+                      "w-10 h-10 rounded-full flex items-center justify-center shrink-0",
                       notification.type === 'system' ? "bg-primary/10" : "bg-muted"
                     )}>
                       {notification.type === 'system' ? (
@@ -340,7 +438,7 @@ export default function NotificationsPage() {
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start gap-2">
+                    <div className="flex items-start gap-3">
                       <div className="flex-1">
                         {notification.type === 'system' ? (
                           <p className="text-foreground leading-relaxed">
@@ -348,13 +446,22 @@ export default function NotificationsPage() {
                           </p>
                         ) : (
                           <p className="text-foreground leading-relaxed">
-                            <span className="font-semibold">
-                              {notification.actor?.displayName || 'Someone'}
-                            </span>
-                            {' '}
-                            <span className="text-muted-foreground">
-                              {getNotificationIcon(notification.type)} {notification.message}
-                            </span>
+                            {notification.type !== 'system' ? (
+                              <>
+                                <span className="font-semibold">
+                                  {notification.actor?.displayName || 'Someone'}
+                                </span>
+                                {' '}
+                                <span className="text-muted-foreground">
+                                  {getNotificationIcon(notification.type)}{' '}
+                                  {notification.message.replace(notification.actor?.displayName || '', '').replace(/^:\s*/, '')}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-muted-foreground">
+                                {getNotificationIcon(notification.type)} {notification.message}
+                              </span>
+                            )}
                           </p>
                         )}
                         <time className="text-sm text-muted-foreground mt-1 block">
@@ -372,4 +479,3 @@ export default function NotificationsPage() {
     </PageContainer>
   )
 }
-

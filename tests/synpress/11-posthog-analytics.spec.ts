@@ -10,25 +10,7 @@
  */
 
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
-import { setupPrivyAuth, checkPrivyAuth } from './helpers/privy-auth';
-
-// PostHog test helpers
-const waitForPostHogInit = async (page: Page) => {
-  // Wait for PostHog to initialize
-  await page.waitForFunction(() => {
-    return typeof window !== 'undefined' && 
-           (window as Window & { posthog?: { __loaded?: boolean } }).posthog?.__loaded === true;
-  }, { timeout: 10000 });
-};
-
-const getPostHogEvents = async (page: Page): Promise<string[]> => {
-  // Get captured events from PostHog instance
-  return await page.evaluate(() => {
-    const ph = (window as Window & { posthog?: { _events?: Array<{ event: string }> } }).posthog;
-    if (!ph || !ph._events) return [];
-    return ph._events.map((e: { event: string }) => e.event);
-  });
-};
+// import { setupPrivyAuth, checkPrivyAuth } from './helpers/privy-auth'; // Unused
 
 const mockPostHogCapture = async (page: Page) => {
   // Mock PostHog to capture events for testing
@@ -109,7 +91,7 @@ test.describe('PostHog Analytics Integration', () => {
 
     // Check if pageview was tracked
     const events = await getCapturedEvents(page);
-    const pageviewEvent = events.find(e => e.event === '$pageview');
+    // const pageviewEvent = events.find(e => e.event === '$pageview'); // Unused
     
     // PostHog should capture pageviews
     expect(events.length).toBeGreaterThan(0);

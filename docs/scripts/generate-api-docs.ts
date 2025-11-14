@@ -139,7 +139,7 @@ async function generateOpenAPISpec(routes: ApiRoute[]) {
     info: {
       title: 'Babylon API',
       version: '1.0.0',
-      description: 'Complete API documentation for Babylon prediction market platform',
+      description: 'Complete API documentation for Babylon social conspiracy game',
       contact: {
         name: 'Babylon Team',
         url: 'https://babylon.market',

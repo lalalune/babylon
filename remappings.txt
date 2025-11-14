@@ -1,3 +1,4 @@
-@openzeppelin/=node_modules/@openzeppelin/
+@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
 @chainlink/=node_modules/@chainlink/
+@prb/math/=node_modules/@prb/math/
 forge-std/=lib/forge-std/src/

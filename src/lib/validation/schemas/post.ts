@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { UUIDSchema, UserIdSchema, createTrimmedStringSchema, PaginationSchema } from './common';
+import { SnowflakeIdSchema, UserIdSchema, createTrimmedStringSchema, PaginationSchema } from './common';
 
 /**
  * Post ID parameter schema
@@ -19,12 +19,12 @@ export const PostIdParamSchema = z.object({
  */
 export const CreatePostSchema = z.object({
   content: createTrimmedStringSchema(1, 5000),
-  marketId: UUIDSchema.optional(),
+  marketId: SnowflakeIdSchema.optional(),
   side: z.enum(['YES', 'NO', 'LONG', 'SHORT']).optional(),
   sentiment: z.number().min(-1).max(1).optional(),
   shareCount: z.number().int().nonnegative().optional(),
   imageUrl: z.string().url().optional(),
-  repostOfId: UUIDSchema.optional()
+  repostOfId: SnowflakeIdSchema.optional()
 });
 
 /**
@@ -41,7 +41,7 @@ export const UpdatePostSchema = z.object({
 export const CreateCommentSchema = z.object({
   content: createTrimmedStringSchema(1, 2000),
   postId: z.string().min(1).optional(), // Optional since it comes from route params
-  parentCommentId: UUIDSchema.optional()
+  parentCommentId: SnowflakeIdSchema.optional()
 });
 
 /**
@@ -55,7 +55,7 @@ export const UpdateCommentSchema = z.object({
  * Like/unlike schema (for posts or comments)
  */
 export const LikeSchema = z.object({
-  targetId: UUIDSchema,
+  targetId: SnowflakeIdSchema,
   targetType: z.enum(['post', 'comment'])
 });
 
@@ -71,7 +71,7 @@ export const SharePostSchema = z.object({
  */
 export const ReplyToPostSchema = z.object({
   content: createTrimmedStringSchema(1, 5000),
-  marketId: UUIDSchema.optional(),
+  marketId: SnowflakeIdSchema.optional(),
   sentiment: z.number().min(-1).max(1).optional()
 });
 
@@ -80,7 +80,7 @@ export const ReplyToPostSchema = z.object({
  */
 export const PostFeedQuerySchema = PaginationSchema.extend({
   userId: UserIdSchema.optional(),
-  marketId: UUIDSchema.optional(),
+  marketId: SnowflakeIdSchema.optional(),
   onlyFollowing: z.coerce.boolean().default(false),
   onlyFavorites: z.coerce.boolean().default(false),
   minSentiment: z.coerce.number().min(-1).max(1).optional(),
@@ -102,7 +102,7 @@ export const PostInteractionsQuerySchema = z.object({
  * Comment replies query schema
  */
 export const CommentRepliesQuerySchema = PaginationSchema.extend({
-  commentId: UUIDSchema,
+  commentId: SnowflakeIdSchema,
   depth: z.coerce.number().int().min(1).max(5).default(3)
 });
 
@@ -110,6 +110,6 @@ export const CommentRepliesQuerySchema = PaginationSchema.extend({
  * Favorite profile schema
  */
 export const FavoriteProfileSchema = z.object({
-  targetUserId: UUIDSchema
+  targetUserId: SnowflakeIdSchema
 });
 

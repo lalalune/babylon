@@ -15,11 +15,13 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../src/lib/logger';
+import { generateSnowflakeId } from '../src/lib/snowflake';
 
 const prisma = new PrismaClient();
 
 import type { SeedActorsDatabase } from '../src/shared/types';
 import { FollowInitializer } from '../src/lib/services/FollowInitializer';
+import { CapitalAllocationService } from '../src/lib/services/capital-allocation-service';
 
 async function main() {
   logger.info('SEEDING DATABASE', undefined, 'Script');
@@ -54,30 +56,29 @@ async function main() {
     
     if (hasPool) poolActorsCount++;
     
-    try {
-      await prisma.actor.create({
-        data: {
-          id: actor.id,
-          name: actor.name,
-          description: actor.description || null,
-          domain: actor.domain || [],
-          personality: actor.personality || null,
-          tier: actor.tier || null,
-          affiliations: actor.affiliations || [],
-          postStyle: actor.postStyle || null,
-          postExample: actor.postExample || [],
-          hasPool: hasPool,
-          tradingBalance: hasPool ? new Prisma.Decimal(10000) : new Prisma.Decimal(0),
-          reputationPoints: hasPool ? 10000 : 0,
-          profileImageUrl: profileImageUrl,
-        },
-      });
-    } catch (error: any) {
+    await prisma.actor.create({
+      data: {
+        id: actor.id,
+        name: actor.name,
+        description: actor.description || null,
+        domain: actor.domain || [],
+        personality: actor.personality || null,
+        tier: actor.tier || null,
+        affiliations: actor.affiliations || [],
+        postStyle: actor.postStyle || null,
+        postExample: actor.postExample || [],
+        hasPool: hasPool,
+        tradingBalance: hasPool ? new Prisma.Decimal(10000) : new Prisma.Decimal(0),
+        reputationPoints: hasPool ? 10000 : 0,
+        profileImageUrl: profileImageUrl,
+        updatedAt: new Date(),
+      },
+    }).catch((error: { code?: string }) => {
       // Skip if actor already exists (P2002 = unique constraint violation)
       if (error.code !== 'P2002') {
         throw error;
       }
-    }
+    });
   }
   
   logger.info(`Seeded ${actorsData.actors.length} actors (${poolActorsCount} with trading pools)`, undefined, 'Script');
@@ -97,27 +98,25 @@ async function main() {
     const orgImagePath = join(process.cwd(), 'public', 'images', 'organizations', `${org.id}.jpg`);
     const imageUrl = existsSync(orgImagePath) ? `/images/organizations/${org.id}.jpg` : null;
     
-    try {
-      await prisma.organization.create({
-        data: {
-          id: org.id,
-          name: org.name,
-          description: org.description || '',
-          type: org.type,
-          canBeInvolved: org.canBeInvolved !== false,
-          initialPrice: org.initialPrice || null,
-          currentPrice: org.initialPrice || null,
-          imageUrl: imageUrl,
-        },
-      });
-      orgCount++;
-    } catch (error: any) {
+    await prisma.organization.create({
+      data: {
+        id: org.id,
+        name: org.name,
+        description: org.description || '',
+        type: org.type,
+        canBeInvolved: org.canBeInvolved !== false,
+        initialPrice: org.initialPrice || null,
+        currentPrice: org.initialPrice || null,
+        imageUrl: imageUrl,
+        updatedAt: new Date(),
+      },
+    }).catch((error: { code?: string }) => {
       // Skip if organization already exists (P2002 = unique constraint violation)
       if (error.code !== 'P2002') {
         throw error;
       }
-      orgCount++;
-    }
+    });
+    orgCount++;
   }
   
   logger.info(`Seeded ${orgCount} organizations`, undefined, 'Script');
@@ -129,69 +128,172 @@ async function main() {
   });
 
   if (!existingGame) {
+    const now = new Date();
     await prisma.game.create({
       data: {
+        id: await generateSnowflakeId(),
         isContinuous: true,
-        isRunning: true,
-        currentDate: new Date(),
+        isRunning: true, // Game starts running by default
+        currentDate: now,
         currentDay: 1,
         speed: 60000,
+        startedAt: now, // Set startedAt timestamp
+        updatedAt: now,
       },
     });
-    logger.info('Game state initialized', undefined, 'Script');
+    logger.info('✅ Game state initialized (RUNNING)', undefined, 'Script');
   } else {
-    logger.info('Game state already exists', undefined, 'Script');
+    // If game exists but is paused, start it
+    if (!existingGame.isRunning) {
+      await prisma.game.update({
+        where: { id: existingGame.id },
+        data: {
+          isRunning: true,
+          startedAt: existingGame.startedAt || new Date(),
+          pausedAt: null,
+        },
+      });
+      logger.info('✅ Game state updated to RUNNING', undefined, 'Script');
+    } else {
+      logger.info('✅ Game state already exists and is RUNNING', undefined, 'Script');
+    }
   }
 
-  // Initialize pools for actors with hasPool=true
-  logger.info('Initializing trading pools...', undefined, 'Script');
+  // Initialize pools for actors with hasPool=true WITH CAPITAL
+  logger.info('Initializing trading pools with capital...', undefined, 'Script');
   
   const poolActors = await prisma.actor.findMany({
     where: { hasPool: true },
-    select: { id: true, name: true },
   });
   
   let poolsCreated = 0;
-  for (const actor of poolActors) {
+  let totalCapitalAllocated = 0;
+  
+  // Process pools in parallel batches
+  await Promise.all(poolActors.map(async (actor) => {
+    // Calculate realistic capital allocation
+    const actorData = actorsData.actors.find(a => a.id === actor.id);
+    if (!actorData) {
+      logger.warn(`Actor ${actor.id} not found in actors.json`, undefined, 'Script');
+      return;
+    }
+
+    const capitalAllocation = CapitalAllocationService.calculateCapital(actorData);
+    
     try {
       await prisma.pool.create({
         data: {
+          id: `pool-${actor.id}`,
           npcActorId: actor.id,
           name: `${actor.name}'s Pool`,
           description: `Trading pool managed by ${actor.name}`,
-          totalValue: new Prisma.Decimal(0),
-          totalDeposits: new Prisma.Decimal(0),
-          availableBalance: new Prisma.Decimal(0),
+          totalValue: new Prisma.Decimal(capitalAllocation.initialPoolBalance),
+          totalDeposits: new Prisma.Decimal(0), // No user deposits yet
+          availableBalance: new Prisma.Decimal(capitalAllocation.initialPoolBalance),
           lifetimePnL: new Prisma.Decimal(0),
-          performanceFeeRate: 0.08,
+          performanceFeeRate: 0.05, // 5% performance fee
           totalFeesCollected: new Prisma.Decimal(0),
-          isActive: true
+          isActive: true,
+          updatedAt: new Date(),
         },
       });
+      
+      // Also update actor's trading balance
+      await prisma.actor.update({
+        where: { id: actor.id },
+        data: {
+          tradingBalance: new Prisma.Decimal(capitalAllocation.tradingBalance),
+          reputationPoints: capitalAllocation.reputationPoints,
+        },
+      });
+      
       poolsCreated++;
+      totalCapitalAllocated += capitalAllocation.initialPoolBalance;
+      
+      logger.info(`✅ Created pool for ${actor.name} with $${capitalAllocation.initialPoolBalance.toLocaleString()}`, {
+        actorId: actor.id,
+        capital: capitalAllocation.initialPoolBalance,
+      }, 'Script');
     } catch (error: any) {
-      // Skip if pool already exists (P2002 = unique constraint violation)
       if (error.code !== 'P2002') {
         throw error;
       }
+      
+      // Pool already exists - update with capital if needed
+      const existingPool = await prisma.pool.findFirst({ where: { npcActorId: actor.id } });
+      if (!existingPool) {
+        poolsCreated++;
+        return;
+      }
+
+      const currentBalance = Number(existingPool.availableBalance);
+      
+      // Always update to ensure proper capital allocation
+      await prisma.pool.update({
+        where: { id: existingPool.id },
+        data: {
+          totalValue: new Prisma.Decimal(capitalAllocation.initialPoolBalance),
+          availableBalance: new Prisma.Decimal(capitalAllocation.initialPoolBalance),
+        },
+      });
+      
+      await prisma.actor.update({
+        where: { id: actor.id },
+        data: {
+          tradingBalance: new Prisma.Decimal(capitalAllocation.tradingBalance),
+          reputationPoints: capitalAllocation.reputationPoints,
+        },
+      });
+      
+      totalCapitalAllocated += capitalAllocation.initialPoolBalance;
       poolsCreated++;
+      
+      logger.info(`✅ Updated pool for ${actor.name}: $${currentBalance.toFixed(0)} → $${capitalAllocation.initialPoolBalance.toLocaleString()}`, {
+        actorId: actor.id,
+        oldBalance: currentBalance,
+        newBalance: capitalAllocation.initialPoolBalance,
+      }, 'Script');
     }
-  }
+  }));
   
-  logger.info(`Initialized ${poolsCreated} pools for ${poolActors.length} pool actors`, undefined, 'Script');
+  logger.info(`Initialized ${poolsCreated} pools with $${totalCapitalAllocated.toLocaleString()} total capital`, undefined, 'Script');
 
   // Seed relationships from actors.json
   logger.info('Seeding actor relationships...', undefined, 'Script');
   
   if (actorsData.relationships && actorsData.relationships.length > 0) {
     logger.info(`Found ${actorsData.relationships.length} relationships in actors.json`, { count: actorsData.relationships.length }, 'Script');
-    await FollowInitializer.importRelationships(actorsData.relationships);
-    await FollowInitializer.createFollows(actorsData.relationships);
-    logger.info('Relationships loaded successfully', undefined, 'Script');
+    
+    try {
+      await FollowInitializer.importRelationships(actorsData.relationships);
+      logger.info('✅ Relationships imported', undefined, 'Script');
+      
+      await FollowInitializer.createFollows(actorsData.relationships);
+      logger.info('✅ Follows created from relationships', undefined, 'Script');
+    } catch (error) {
+      logger.error('Failed to seed relationships', { error }, 'Script');
+    }
   } else {
     logger.warn('No relationships in actors.json', undefined, 'Script');
     logger.warn('Generate: npx tsx scripts/init-actor-relationships.ts', undefined, 'Script');
     logger.warn('This updates actors.json with relationship data', undefined, 'Script');
+  }
+  
+  // Initialize NPC-to-NPC follows if they don't exist
+  logger.info('Checking NPC-to-NPC follow relationships...', undefined, 'Script');
+  const existingFollows = await prisma.actorFollow.count();
+  
+  if (existingFollows === 0) {
+    logger.info('No NPC follows found, initializing...', undefined, 'Script');
+    
+    try {
+      await FollowInitializer.initializeActorFollows();
+      logger.info('✅ NPC follow relationships initialized', undefined, 'Script');
+    } catch (error) {
+      logger.error('Failed to initialize NPC follows', { error }, 'Script');
+    }
+  } else {
+    logger.info(`Found ${existingFollows} existing NPC follow relationships`, { count: existingFollows }, 'Script');
   }
 
   // Seed default real users for DM testing
@@ -211,6 +313,7 @@ async function main() {
       hasBio: true,
       hasProfileImage: true,
       reputationPoints: 5000,
+      updatedAt: new Date(),
     },
     {
       id: 'demo-user-welcome-bot',
@@ -225,34 +328,133 @@ async function main() {
       hasBio: true,
       hasProfileImage: true,
       reputationPoints: 3000,
+      updatedAt: new Date(),
     },
   ];
 
   let usersCreated = 0;
   for (const userData of defaultUsers) {
-    try {
-      await prisma.user.upsert({
-        where: { id: userData.id },
-        update: {
-          username: userData.username,
-          displayName: userData.displayName,
-          bio: userData.bio,
-          profileImageUrl: userData.profileImageUrl,
-          profileComplete: userData.profileComplete,
-          hasUsername: userData.hasUsername,
-          hasBio: userData.hasBio,
-          hasProfileImage: userData.hasProfileImage,
-          reputationPoints: userData.reputationPoints,
-        },
-        create: userData,
-      });
-      usersCreated++;
-    } catch (error: any) {
-      logger.error(`Failed to create user ${userData.username}`, error, 'Script');
-    }
+    await prisma.user.upsert({
+      where: { id: userData.id },
+      update: {
+        username: userData.username,
+        displayName: userData.displayName,
+        bio: userData.bio,
+        profileImageUrl: userData.profileImageUrl,
+        profileComplete: userData.profileComplete,
+        hasUsername: userData.hasUsername,
+        hasBio: userData.hasBio,
+        hasProfileImage: userData.hasProfileImage,
+        reputationPoints: userData.reputationPoints,
+      },
+      create: userData,
+    });
+    usersCreated++;
   }
 
   logger.info(`Created/updated ${usersCreated} default real users for DM testing`, undefined, 'Script');
+
+  // Seed WorldFacts
+  logger.info('Seeding world facts...', undefined, 'Script');
+  
+  const worldFacts = [
+    {
+      category: 'crypto',
+      key: 'bitcoin_price',
+      label: 'Bitcoin Price',
+      value: '$45,000',
+      source: 'initial_seed',
+      priority: 10,
+    },
+    {
+      category: 'crypto',
+      key: 'ethereum_price',
+      label: 'Ethereum Price',
+      value: '$2,400',
+      source: 'initial_seed',
+      priority: 9,
+    },
+    {
+      category: 'crypto',
+      key: 'market_trend',
+      label: 'Market Trend',
+      value: 'Bullish momentum across major cryptocurrencies',
+      source: 'initial_seed',
+      priority: 8,
+    },
+    {
+      category: 'technology',
+      key: 'ai_development',
+      label: 'AI Development',
+      value: 'LLMs continue to advance with multimodal capabilities',
+      source: 'initial_seed',
+      priority: 7,
+    },
+    {
+      category: 'technology',
+      key: 'blockchain_adoption',
+      label: 'Blockchain Adoption',
+      value: 'Enterprise blockchain solutions gaining traction',
+      source: 'initial_seed',
+      priority: 6,
+    },
+    {
+      category: 'economy',
+      key: 'market_sentiment',
+      label: 'Market Sentiment',
+      value: 'Cautiously optimistic amid global uncertainty',
+      source: 'initial_seed',
+      priority: 5,
+    },
+    {
+      category: 'politics',
+      key: 'regulation_status',
+      label: 'Crypto Regulation',
+      value: 'Multiple jurisdictions working on comprehensive frameworks',
+      source: 'initial_seed',
+      priority: 4,
+    },
+    {
+      category: 'general',
+      key: 'babylon_status',
+      label: 'Babylon Game Status',
+      value: 'Live and operational',
+      source: 'initial_seed',
+      priority: 10,
+    },
+  ];
+
+  let worldFactsCreated = 0;
+  for (const fact of worldFacts) {
+    await prisma.worldFact.upsert({
+      where: {
+        category_key: {
+          category: fact.category,
+          key: fact.key,
+        },
+      },
+      update: {
+        label: fact.label,
+        value: fact.value,
+        source: fact.source,
+        priority: fact.priority,
+        lastUpdated: new Date(),
+      },
+      create: {
+        id: await generateSnowflakeId(),
+        category: fact.category,
+        key: fact.key,
+        label: fact.label,
+        value: fact.value,
+        source: fact.source,
+        priority: fact.priority,
+        lastUpdated: new Date(),
+      },
+    });
+    worldFactsCreated++;
+  }
+
+  logger.info(`Seeded ${worldFactsCreated} world facts`, undefined, 'Script');
 
   // Stats
   const stats = {
@@ -262,9 +464,12 @@ async function main() {
     organizations: await prisma.organization.count(),
     companies: await prisma.organization.count({ where: { type: 'company' } }),
     relationships: await prisma.actorRelationship.count(),
-    follows: await prisma.actorFollow.count(),
+    actorFollows: await prisma.actorFollow.count(),
+    userActorFollows: await prisma.userActorFollow.count(),
+    userFollows: await prisma.follow.count(),
     posts: await prisma.post.count(),
     realUsers: await prisma.user.count({ where: { isActor: false } }),
+    worldFacts: await prisma.worldFact.count(),
   };
 
   logger.info('Database Summary:', {
@@ -272,17 +477,24 @@ async function main() {
     pools: stats.pools,
     organizations: `${stats.organizations} (${stats.companies} companies)`,
     relationships: stats.relationships,
-    follows: stats.follows,
+    npcFollows: `${stats.actorFollows} (NPC-to-NPC)`,
+    userActorFollows: `${stats.userActorFollows} (User-to-NPC)`,
+    userFollows: `${stats.userFollows} (User-to-User)`,
     posts: stats.posts,
     realUsers: stats.realUsers,
+    worldFacts: stats.worldFacts,
   }, 'Script');
 
   logger.info('SEED COMPLETE', undefined, 'Script');
 }
 
 main()
+  .then(() => {
+    logger.info('✅ Seed completed successfully', undefined, 'Script');
+    process.exit(0);
+  })
   .catch((error) => {
-    logger.error('Seed failed:', error, 'Script');
+    logger.error('❌ Seed failed', { error }, 'Script');
     process.exit(1);
   })
   .finally(async () => {

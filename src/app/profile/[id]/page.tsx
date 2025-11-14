@@ -4,13 +4,16 @@ import { FollowButton } from '@/components/interactions/FollowButton'
 import { OnChainBadge } from '@/components/profile/OnChainBadge'
 import { ProfileWidget } from '@/components/profile/ProfileWidget'
 import { PostCard } from '@/components/posts/PostCard'
+import { ArticleCard } from '@/components/articles/ArticleCard'
 import { Avatar } from '@/components/shared/Avatar'
 import { VerifiedBadge } from '@/components/shared/VerifiedBadge'
 import { PageContainer } from '@/components/shared/PageContainer'
 import { ProfileHeaderSkeleton, FeedSkeleton } from '@/components/shared/Skeleton'
+import { TradesFeed } from '@/components/trades/TradesFeed'
 import { useAuth } from '@/hooks/useAuth'
 import { useErrorToasts } from '@/hooks/useErrorToasts'
 import { extractUsername, isUsername } from '@/lib/profile-utils'
+import { getBannerImageUrl } from '@/lib/assets'
 import { cn } from '@/lib/utils'
 import { POST_TYPES } from '@/shared/constants'
 import type { Actor, FeedPost, Organization } from '@/shared/types'
@@ -19,7 +22,7 @@ import type { ProfileInfo } from '@/types/profiles'
 import { ArrowLeft, MessageCircle, Search } from 'lucide-react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 
 export default function ActorProfilePage() {
   const params = useParams()
@@ -27,10 +30,11 @@ export default function ActorProfilePage() {
   const identifier = decodeURIComponent(params.id as string)
   const isUsernameParam = isUsername(identifier)
   const actorId = isUsernameParam ? extractUsername(identifier) : identifier
-  const { user, authenticated } = useAuth()
+  const { user, authenticated, getAccessToken } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
-  const [tab, setTab] = useState<'posts' | 'replies'>('posts')
+  const [tab, setTab] = useState<'posts' | 'replies' | 'trades'>('posts')
   const { allGames } = useGameStore();
+  const [optimisticFollowerCount, setOptimisticFollowerCount] = useState<number | null>(null)
   
   // Check if viewing own profile - compare with both actorId and identifier (for ID-based URLs)
   const isOwnProfile = authenticated && user && (
@@ -64,7 +68,7 @@ export default function ActorProfilePage() {
 
   // Enable error toast notifications
   useErrorToasts()
-
+  
   // Load actor/user info
   const [actorInfo, setActorInfo] = useState<ProfileInfo | null>(null)
   const [loading, setLoading] = useState(true)
@@ -93,116 +97,102 @@ export default function ActorProfilePage() {
     if (!authenticated || !actorInfo?.id || isCreatingDM || !user?.id) return
 
     setIsCreatingDM(true)
-    try {
-      // Generate deterministic chat ID (same format as backend)
-      // Sort IDs to ensure consistency
-      const sortedIds = [user.id, actorInfo.id].sort()
-      const chatId = `dm-${sortedIds.join('-')}`
-      
-      // Navigate directly to chat page
-      // Chat will be created in DB when first message is sent
-      router.push(`/chats?chat=${chatId}&newDM=${actorInfo.id}`)
-    } catch (error) {
-      console.error('Error opening DM:', error)
-    } finally {
-      setIsCreatingDM(false)
-    }
+    
+    // Generate deterministic chat ID (same format as backend)
+    // Sort IDs to ensure consistency
+    const sortedIds = [user.id, actorInfo.id].sort()
+    const chatId = `dm-${sortedIds.join('-')}`
+    
+    // Navigate directly to chat page
+    // Chat will be created in DB when first message is sent
+    router.push(`/chats?chat=${chatId}&newDM=${actorInfo.id}`)
+    
+    setIsCreatingDM(false)
   }
 
-  useEffect(() => {
-    const loadActorInfo = async () => {
-      setLoading(true)
-      
-      // If it's a username (starts with @) or looks like a username, try to find user by username
-      if (isUsernameParam || (!actorId.startsWith('did:privy:') && actorId.length <= 42 && !actorId.includes('-'))) {
-        // Try to load user profile by username first
-        const token = typeof window !== 'undefined' ? window.__privyAccessToken : null
-        const headers: HeadersInit = {
-          'Content-Type': 'application/json',
-        }
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`
+  const loadActorInfo = useCallback(async () => {
+    setLoading(true)
+    
+    const token = await getAccessToken()
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+    
+    // First, always try to load as a user by ID
+    // This handles IDs like "testuser-53618432" or Privy IDs
+    const userResponse = await fetch(`/api/users/${encodeURIComponent(actorId)}/profile`, { headers }).catch((error: Error) => {
+      console.error('Error loading user by ID:', error)
+      return null
+    })
+    
+    if (userResponse?.ok) {
+      const userData = await userResponse.json()
+      if (userData.user) {
+        const user = userData.user
+        setActorInfo({
+          id: user.id,
+          name: user.displayName || user.username || 'User',
+          description: user.bio || '',
+          role: user.isActor ? 'Actor' : 'User',
+          type: user.isActor ? 'actor' : 'user' as const,
+          isUser: true,
+          username: user.username,
+          profileImageUrl: user.profileImageUrl,
+          coverImageUrl: user.coverImageUrl,
+          stats: user.stats,
+        })
+        
+        // Redirect to username-based URL if username exists and we're not already on it
+        if (user.username && !isUsernameParam && !isOwnProfile) {
+          const cleanUsername = user.username.startsWith('@') ? user.username.slice(1) : user.username
+          router.replace(`/profile/${cleanUsername}`)
+          return
         }
         
-        // Try username lookup API
-        const usernameLookupResponse = await fetch(`/api/users/by-username/${encodeURIComponent(actorId)}`, { headers })
-        if (usernameLookupResponse.ok) {
-          const usernameData = await usernameLookupResponse.json()
-          if (usernameData.user) {
-            const user = usernameData.user
-            setActorInfo({
-              id: user.id,
-              name: user.displayName || user.username || 'User',
-              description: user.bio || '',
-              role: user.isActor ? 'Actor' : 'User',
-              type: user.isActor ? 'actor' : 'user' as const,
-              isUser: true,
-              username: user.username,
-              profileImageUrl: user.profileImageUrl,
-              coverImageUrl: user.coverImageUrl,
-              stats: user.stats,
-            })
-            
-            // Redirect to username-based URL if we're on ID-based URL (but not if it's the current user's own profile - handled by useEffect)
-            if (!isUsernameParam && user.username && !isOwnProfile) {
-              const cleanUsername = user.username.startsWith('@') ? user.username.slice(1) : user.username
-              router.replace(`/profile/${cleanUsername}`)
-              return // Don't render, just redirect
-            }
-            
-            setLoading(false)
+        setLoading(false)
+        return
+      }
+    }
+      
+    // If it's a username (starts with @) or looks like a username, try username lookup
+    if (isUsernameParam || (!actorId.startsWith('did:privy:') && actorId.length <= 42 && !actorId.includes('-'))) {
+      const usernameLookupResponse = await fetch(`/api/users/by-username/${encodeURIComponent(actorId)}`, { headers }).catch((error: Error) => {
+        console.error('Error loading user by username:', error)
+        return null
+      })
+      
+      if (usernameLookupResponse?.ok) {
+        const usernameData = await usernameLookupResponse.json()
+        if (usernameData.user) {
+          const user = usernameData.user
+          setActorInfo({
+            id: user.id,
+            name: user.displayName || user.username || 'User',
+            description: user.bio || '',
+            role: user.isActor ? 'Actor' : 'User',
+            type: user.isActor ? 'actor' : 'user' as const,
+            isUser: true,
+            username: user.username,
+            profileImageUrl: user.profileImageUrl,
+            coverImageUrl: user.coverImageUrl,
+            stats: user.stats,
+          })
+          
+          // Redirect to username-based URL if we're on ID-based URL
+          if (!isUsernameParam && user.username && !isOwnProfile) {
+            const cleanUsername = user.username.startsWith('@') ? user.username.slice(1) : user.username
+            router.replace(`/profile/${cleanUsername}`)
             return
           }
+          
+          setLoading(false)
+          return
         }
       }
-      
-      // Check if this is a user ID (starts with "did:privy:" or contains privy, or is the current user's ID)
-      const isUserId = actorId.startsWith('did:privy:') || 
-                      actorId.includes('privy') || 
-                      actorId.length > 42 ||
-                      (authenticated && currentUserId && (currentUserId === actorId || currentUserId === decodeURIComponent(identifier)))
-      
-      if (isUserId) {
-        // Load user profile from API by ID
-        const token = typeof window !== 'undefined' ? window.__privyAccessToken : null
-        const headers: HeadersInit = {
-          'Content-Type': 'application/json',
-        }
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`
-        }
-        
-        const response = await fetch(`/api/users/${encodeURIComponent(actorId)}/profile`, { headers })
-        if (response.ok) {
-          const data = await response.json()
-          if (data.user) {
-            const user = data.user
-            setActorInfo({
-              id: user.id,
-              name: user.displayName || user.username || 'User',
-              description: user.bio || '',
-              role: user.isActor ? 'Actor' : 'User',
-              type: user.isActor ? 'actor' : 'user' as const,
-              isUser: true,
-              username: user.username,
-              profileImageUrl: user.profileImageUrl,
-              coverImageUrl: user.coverImageUrl,
-              stats: user.stats,
-            })
-            
-            // Redirect to username-based URL if username exists
-            if (user.username && !isUsernameParam) {
-              const cleanUsername = user.username.startsWith('@') ? user.username.slice(1) : user.username
-              // Always redirect to username URL if we have one and we're on an ID-based URL
-              router.replace(`/profile/${cleanUsername}`)
-              return // Don't render, just redirect
-            }
-            
-            setLoading(false)
-            return
-          }
-        }
-      }
+    }
       
       // Try to load from actors.json (contains all actors)
       const response = await fetch('/data/actors.json')
@@ -230,24 +220,23 @@ export default function ActorProfilePage() {
           }
         }
         
-        // Fetch actor stats from database
-        let stats = { followers: 0, following: 0, posts: 0 }
-        try {
-          const statsResponse = await fetch(`/api/actors/${encodeURIComponent(actor.id)}/stats`)
-          if (statsResponse.ok) {
-            const statsData = await statsResponse.json()
-            if (statsData.stats) {
-              stats = {
-                followers: statsData.stats.followers || 0,
-                following: statsData.stats.following || 0,
-                posts: statsData.stats.posts || 0,
-              }
-            }
+      // Fetch actor stats from database
+      let stats = { followers: 0, following: 0, posts: 0 }
+      const statsResponse = await fetch(`/api/actors/${encodeURIComponent(actor.id)}/stats`).catch((error: Error) => {
+        console.error('Failed to load actor stats:', error)
+        return null
+      })
+      
+      if (statsResponse?.ok) {
+        const statsData = await statsResponse.json()
+        if (statsData.stats) {
+          stats = {
+            followers: statsData.stats.followers || 0,
+            following: statsData.stats.following || 0,
+            posts: statsData.stats.posts || 0,
           }
-        } catch (error) {
-          console.error('Failed to load actor stats:', error)
-          // Continue with default stats (0)
         }
+      }
         
         setActorInfo({
           id: actor.id,
@@ -274,24 +263,23 @@ export default function ActorProfilePage() {
         org = actorsDb.organizations?.find((o) => o.name === actorId)
       }
       if (org) {
-        // Fetch organization stats from database (orgs are also stored as actors)
-        let stats = { followers: 0, following: 0, posts: 0 }
-        try {
-          const statsResponse = await fetch(`/api/actors/${encodeURIComponent(org.id)}/stats`)
-          if (statsResponse.ok) {
-            const statsData = await statsResponse.json()
-            if (statsData.stats) {
-              stats = {
-                followers: statsData.stats.followers || 0,
-                following: statsData.stats.following || 0,
-                posts: statsData.stats.posts || 0,
-              }
-            }
+      // Fetch organization stats from database (orgs are also stored as actors)
+      let stats = { followers: 0, following: 0, posts: 0 }
+      const statsResponse = await fetch(`/api/actors/${encodeURIComponent(org.id)}/stats`).catch((error: Error) => {
+        console.error('Failed to load organization stats:', error)
+        return null
+      })
+      
+      if (statsResponse?.ok) {
+        const statsData = await statsResponse.json()
+        if (statsData.stats) {
+          stats = {
+            followers: statsData.stats.followers || 0,
+            following: statsData.stats.following || 0,
+            posts: statsData.stats.posts || 0,
           }
-        } catch (error) {
-          console.error('Failed to load organization stats:', error)
-          // Continue with default stats (0)
         }
+      }
         
         setActorInfo({
           id: org.id,
@@ -309,10 +297,38 @@ export default function ActorProfilePage() {
       // Not found
       setActorInfo(null)
       setLoading(false)
+  }, [actorId, allGames, authenticated, currentUserId, identifier, isOwnProfile, isUsernameParam, router, getAccessToken])
+
+  useEffect(() => {
+    loadActorInfo()
+  }, [loadActorInfo])
+  
+  // Listen for profile updates (when user follows/unfollows someone)
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      // Reset optimistic count to trigger refetch from server
+      setTimeout(() => {
+        setOptimisticFollowerCount(null)
+        // Refetch actor info to get updated counts
+        loadActorInfo()
+      }, 1000) // Small delay to allow backend cache invalidation
     }
     
-    loadActorInfo()
-  }, [actorId, allGames, authenticated, currentUserId, identifier, isOwnProfile, isUsernameParam, router])
+    window.addEventListener('profile-updated', handleProfileUpdate)
+    return () => window.removeEventListener('profile-updated', handleProfileUpdate)
+  }, [loadActorInfo])
+  
+  // Reset optimistic count when actorInfo changes (server data arrived)
+  useEffect(() => {
+    if (actorInfo && optimisticFollowerCount !== null) {
+      // Wait a bit then reset to use server value
+      const timer = setTimeout(() => {
+        setOptimisticFollowerCount(null)
+      }, 2000)
+      return () => clearTimeout(timer)
+    }
+    return undefined
+  }, [actorInfo, optimisticFollowerCount])
 
   useEffect(() => {
     const loadPosts = async () => {
@@ -480,7 +496,7 @@ export default function ActorProfilePage() {
           </div>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <p className="text-muted-foreground">Actor &quot;{actorId}&quot; not found</p>
+          <p className="text-muted-foreground">User or Actor &quot;{actorId}&quot; not found</p>
           <Link
             href="/feed"
             className="px-6 py-3 rounded-lg font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
@@ -520,38 +536,32 @@ export default function ActorProfilePage() {
         <div className="border-b border-border">
           {/* Cover Image */}
           <div className="relative h-[200px] bg-muted">
-            {actorInfo.isUser && actorInfo.type === 'user' && 'coverImageUrl' in actorInfo && actorInfo.coverImageUrl ? (
-              <img
-                src={actorInfo.coverImageUrl as string}
-                alt="Cover"
-                className="w-full h-full object-cover"
-              />
-            ) : actorInfo.type === 'actor' ? (
-              <img
-                src={`/images/actor-banners/${actorInfo.id}.jpg`}
-                alt={`${actorInfo.name} banner`}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  // Fallback to gradient if image not found
-                  e.currentTarget.style.display = 'none'
-                  e.currentTarget.nextElementSibling?.classList.remove('hidden')
-                }}
-              />
-            ) : actorInfo.type === 'organization' ? (
-              <img
-                src={`/images/org-banners/${actorInfo.id}.jpg`}
-                alt={`${actorInfo.name} banner`}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  // Fallback to gradient if image not found
-                  e.currentTarget.style.display = 'none'
-                  e.currentTarget.nextElementSibling?.classList.remove('hidden')
-                }}
-              />
-            ) : null}
+            {(() => {
+              // Get banner URL using the utility function (supports CDN)
+              const bannerUrl = actorInfo.isUser && actorInfo.type === 'user' && 'coverImageUrl' in actorInfo
+                ? actorInfo.coverImageUrl as string
+                : getBannerImageUrl(
+                    null,
+                    actorInfo.id,
+                    actorInfo.type === 'organization' ? 'organization' : 'actor'
+                  )
+
+              return bannerUrl ? (
+                <img
+                  src={bannerUrl}
+                  alt={`${actorInfo.name} banner`}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // Fallback to gradient if image not found
+                    e.currentTarget.style.display = 'none'
+                    e.currentTarget.nextElementSibling?.classList.remove('hidden')
+                  }}
+                />
+              ) : null
+            })()}
             <div className={cn(
               "w-full h-full bg-gradient-to-br from-primary/20 to-primary/5",
-              (actorInfo.type === 'actor' || actorInfo.type === 'organization') ? "hidden" : ""
+              actorInfo.type === 'actor' || actorInfo.type === 'organization' ? "hidden" : ""
             )} />
           </div>
 
@@ -598,6 +608,13 @@ export default function ActorProfilePage() {
                       userId={actorInfo.id}
                       size="md"
                       variant="button"
+                      onFollowerCountChange={(delta) => {
+                        // Optimistically update the follower count based on current displayed value
+                        setOptimisticFollowerCount(prev => {
+                          const currentCount = prev !== null ? prev : (actorInfo.stats?.followers || 0)
+                          return Math.max(0, currentCount + delta) // Never go negative
+                        })
+                      }}
                     />
                   </>
                 )}
@@ -646,14 +663,16 @@ export default function ActorProfilePage() {
                 <span className="text-muted-foreground ml-1">Following</span>
               </Link>
               <Link href="#" className="hover:underline">
-                <span className="font-bold text-foreground">{actorInfo.stats?.followers || 0}</span>
+                <span className="font-bold text-foreground">
+                  {optimisticFollowerCount !== null ? optimisticFollowerCount : (actorInfo.stats?.followers || 0)}
+                </span>
                 <span className="text-muted-foreground ml-1">Followers</span>
               </Link>
             </div>
           </div>
         </div>
 
-        {/* Tabs: Posts vs Replies */}
+        {/* Tabs: Posts vs Replies vs Trades */}
         <div className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b border-border">
           <div className="flex items-center justify-between h-14 px-4">
             {/* Tab Buttons */}
@@ -680,25 +699,40 @@ export default function ActorProfilePage() {
               >
                 Replies
               </button>
+              <button
+                onClick={() => setTab('trades')}
+                className={cn(
+                  'px-4 h-full font-semibold transition-all duration-300 relative hover:bg-muted/30',
+                  tab === 'trades'
+                    ? 'text-foreground opacity-100'
+                    : 'text-foreground opacity-50'
+                )}
+              >
+                Trades
+              </button>
             </div>
 
-            {/* Search Bar - Top Right */}
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={`Search ${tab}...`}
-                className="w-full pl-10 pr-4 py-2 rounded-full bg-muted border-0 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
-              />
-            </div>
+            {/* Search Bar - Top Right (hide on trades tab) */}
+            {tab !== 'trades' && (
+              <div className="relative w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={`Search ${tab}...`}
+                  className="w-full pl-10 pr-4 py-2 rounded-full bg-muted border-0 text-sm focus:ring-2 focus:ring-primary focus:outline-none"
+                />
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Posts */}
+        {/* Posts/Replies/Trades */}
         <div className="px-4">
-          {loadingPosts ? (
+          {tab === 'trades' ? (
+            <TradesFeed userId={actorInfo?.id} />
+          ) : loadingPosts ? (
             <div className="w-full">
               <FeedSkeleton count={5} />
             </div>
@@ -710,27 +744,52 @@ export default function ActorProfilePage() {
             </div>
           ) : (
             <div className="space-y-0">
-              {filteredPosts.map((item, i) => (
-                <PostCard
-                  key={`${item.post.id}-${i}`}
-                  post={{
-                    id: item.post.id,
-                    content: item.post.content,
-                    authorId: item.post.author,
-                    authorName: item.post.authorName,
-                    authorUsername: item.post.authorUsername || null,
-                    authorProfileImageUrl: item.post.authorProfileImageUrl || null,
-                    timestamp: item.post.timestamp,
-                    likeCount: item.post.likeCount,
-                    commentCount: item.post.commentCount,
-                    shareCount: item.post.shareCount,
-                    isLiked: item.post.isLiked,
-                    isShared: item.post.isShared,
-                  }}
-                  onClick={() => router.push(`/post/${item.post.id}`)}
-                  showInteractions={true}
-                />
-              ))}
+              {filteredPosts.map((item, i) => {
+                const postData = {
+                  id: item.post.id,
+                  type: item.post.type,
+                  content: item.post.content,
+                  fullContent: item.post.fullContent || null,
+                  articleTitle: item.post.articleTitle || null,
+                  byline: item.post.byline || null,
+                  biasScore: item.post.biasScore ?? null,
+                  category: item.post.category || null,
+                  authorId: item.post.author,
+                  authorName: item.post.authorName,
+                  authorUsername: item.post.authorUsername || null,
+                  authorProfileImageUrl: item.post.authorProfileImageUrl || null,
+                  timestamp: item.post.timestamp,
+                  likeCount: item.post.likeCount,
+                  commentCount: item.post.commentCount,
+                  shareCount: item.post.shareCount,
+                  isLiked: item.post.isLiked,
+                  isShared: item.post.isShared,
+                  // Repost metadata
+                  isRepost: item.post.isRepost || false,
+                  originalPostId: item.post.originalPostId || null,
+                  originalAuthorId: item.post.originalAuthorId || null,
+                  originalAuthorName: item.post.originalAuthorName || null,
+                  originalAuthorUsername: item.post.originalAuthorUsername || null,
+                  originalAuthorProfileImageUrl: item.post.originalAuthorProfileImageUrl || null,
+                  originalContent: item.post.originalContent || null,
+                  quoteComment: item.post.quoteComment || null,
+                };
+                
+                return postData.type && postData.type === 'article' ? (
+                  <ArticleCard
+                    key={`${item.post.id}-${i}`}
+                    post={postData}
+                    onClick={() => router.push(`/post/${item.post.id}`)}
+                  />
+                ) : (
+                  <PostCard
+                    key={`${item.post.id}-${i}`}
+                    post={postData}
+                    onClick={() => router.push(`/post/${item.post.id}`)}
+                    showInteractions={true}
+                  />
+                );
+              })}
             </div>
           )}
         </div>
@@ -769,38 +828,32 @@ export default function ActorProfilePage() {
           <div className="border-b border-border">
             {/* Cover Image */}
             <div className="relative h-[200px] bg-muted">
-              {actorInfo.isUser && actorInfo.type === 'user' && 'coverImageUrl' in actorInfo && actorInfo.coverImageUrl ? (
-                <img
-                  src={actorInfo.coverImageUrl as string}
-                  alt="Cover"
-                  className="w-full h-full object-cover"
-                />
-              ) : actorInfo.type === 'actor' ? (
-                <img
-                  src={`/images/actor-banners/${actorInfo.id}.jpg`}
-                  alt={`${actorInfo.name} banner`}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    // Fallback to gradient if image not found
-                    e.currentTarget.style.display = 'none'
-                    e.currentTarget.nextElementSibling?.classList.remove('hidden')
-                  }}
-                />
-              ) : actorInfo.type === 'organization' ? (
-                <img
-                  src={`/images/org-banners/${actorInfo.id}.jpg`}
-                  alt={`${actorInfo.name} banner`}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    // Fallback to gradient if image not found
-                    e.currentTarget.style.display = 'none'
-                    e.currentTarget.nextElementSibling?.classList.remove('hidden')
-                  }}
-                />
-              ) : null}
+              {(() => {
+                // Get banner URL using the utility function (supports CDN)
+                const bannerUrl = actorInfo.isUser && actorInfo.type === 'user' && 'coverImageUrl' in actorInfo
+                  ? actorInfo.coverImageUrl as string
+                  : getBannerImageUrl(
+                      null,
+                      actorInfo.id,
+                      actorInfo.type === 'organization' ? 'organization' : 'actor'
+                    )
+
+                return bannerUrl ? (
+                  <img
+                    src={bannerUrl}
+                    alt={`${actorInfo.name} banner`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback to gradient if image not found
+                      e.currentTarget.style.display = 'none'
+                      e.currentTarget.nextElementSibling?.classList.remove('hidden')
+                    }}
+                  />
+                ) : null
+              })()}
               <div className={cn(
                 "w-full h-full bg-gradient-to-br from-primary/20 to-primary/5",
-                (actorInfo.type === 'actor' || actorInfo.type === 'organization') ? "hidden" : ""
+                actorInfo.type === 'actor' || actorInfo.type === 'organization' ? "hidden" : ""
               )} />
             </div>
 
@@ -847,6 +900,13 @@ export default function ActorProfilePage() {
                         userId={actorInfo.id}
                         size="md"
                         variant="button"
+                        onFollowerCountChange={(delta) => {
+                          // Optimistically update the follower count based on current displayed value
+                          setOptimisticFollowerCount(prev => {
+                            const currentCount = prev !== null ? prev : (actorInfo.stats?.followers || 0)
+                            return Math.max(0, currentCount + delta) // Never go negative
+                          })
+                        }}
                       />
                     </>
                   )}
@@ -888,7 +948,9 @@ export default function ActorProfilePage() {
                   <span className="text-muted-foreground ml-1">Following</span>
                 </Link>
                 <Link href="#" className="hover:underline">
-                  <span className="font-bold text-foreground">{actorInfo.stats?.followers || 0}</span>
+                  <span className="font-bold text-foreground">
+                    {optimisticFollowerCount !== null ? optimisticFollowerCount : (actorInfo.stats?.followers || 0)}
+                  </span>
                   <span className="text-muted-foreground ml-1">Followers</span>
                 </Link>
               </div>
@@ -952,27 +1014,52 @@ export default function ActorProfilePage() {
               </div>
             ) : (
               <div className="space-y-0">
-                {filteredPosts.map((item, i) => (
-                  <PostCard
-                    key={`${item.post.id}-${i}`}
-                    post={{
-                      id: item.post.id,
-                      content: item.post.content,
-                      authorId: item.post.author,
-                      authorName: item.post.authorName,
-                      authorUsername: item.post.authorUsername || null,
-                      authorProfileImageUrl: item.post.authorProfileImageUrl || null,
-                      timestamp: item.post.timestamp,
-                      likeCount: item.post.likeCount,
-                      commentCount: item.post.commentCount,
-                      shareCount: item.post.shareCount,
-                      isLiked: item.post.isLiked,
-                      isShared: item.post.isShared,
-                    }}
-                    onClick={() => router.push(`/post/${item.post.id}`)}
-                    showInteractions={true}
-                  />
-                ))}
+                {filteredPosts.map((item, i) => {
+                  const postData = {
+                    id: item.post.id,
+                    type: item.post.type,
+                    content: item.post.content,
+                    fullContent: item.post.fullContent || null,
+                    articleTitle: item.post.articleTitle || null,
+                    byline: item.post.byline || null,
+                    biasScore: item.post.biasScore ?? null,
+                    category: item.post.category || null,
+                    authorId: item.post.author,
+                    authorName: item.post.authorName,
+                    authorUsername: item.post.authorUsername || null,
+                    authorProfileImageUrl: item.post.authorProfileImageUrl || null,
+                    timestamp: item.post.timestamp,
+                    likeCount: item.post.likeCount,
+                    commentCount: item.post.commentCount,
+                    shareCount: item.post.shareCount,
+                    isLiked: item.post.isLiked,
+                    isShared: item.post.isShared,
+                    // Repost metadata
+                    isRepost: item.post.isRepost || false,
+                    originalPostId: item.post.originalPostId || null,
+                    originalAuthorId: item.post.originalAuthorId || null,
+                    originalAuthorName: item.post.originalAuthorName || null,
+                    originalAuthorUsername: item.post.originalAuthorUsername || null,
+                    originalAuthorProfileImageUrl: item.post.originalAuthorProfileImageUrl || null,
+                    originalContent: item.post.originalContent || null,
+                    quoteComment: item.post.quoteComment || null,
+                  };
+                  
+                  return postData.type && postData.type === 'article' ? (
+                    <ArticleCard
+                      key={`${item.post.id}-${i}`}
+                      post={postData}
+                      onClick={() => router.push(`/post/${item.post.id}`)}
+                    />
+                  ) : (
+                    <PostCard
+                      key={`${item.post.id}-${i}`}
+                      post={postData}
+                      onClick={() => router.push(`/post/${item.post.id}`)}
+                      showInteractions={true}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>

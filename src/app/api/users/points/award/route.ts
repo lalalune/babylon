@@ -5,15 +5,16 @@
  * Tracks transactions for transparency
  */
 
-import { successResponse } from '@/lib/api/auth-middleware'
-import { prisma } from '@/lib/database-service'
-import { BusinessLogicError } from '@/lib/errors'
-import { withErrorHandling } from '@/lib/errors/error-handler'
-import { logger } from '@/lib/logger'
-import { AwardPointsSchema, UserIdParamSchema } from '@/lib/validation/schemas'
-import { Prisma } from '@prisma/client'
-import type { NextRequest } from 'next/server'
-import { requireUserByIdentifier } from '@/lib/users/user-lookup'
+import { successResponse } from '@/lib/api/auth-middleware';
+import { prisma } from '@/lib/database-service';
+import { BusinessLogicError } from '@/lib/errors';
+import { withErrorHandling } from '@/lib/errors/error-handler';
+import { logger } from '@/lib/logger';
+import { requireUserByIdentifier } from '@/lib/users/user-lookup';
+import { AwardPointsSchema, UserIdParamSchema } from '@/lib/validation/schemas';
+import { Prisma } from '@prisma/client';
+import type { NextRequest } from 'next/server';
+import { generateSnowflakeId } from '@/lib/snowflake';
 
 /**
  * POST /api/users/points/award
@@ -39,6 +40,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   // Award points by creating a deposit transaction
   const transaction = await prisma.balanceTransaction.create({
     data: {
+      id: await generateSnowflakeId(),
       userId: user.id,
       type: 'deposit',
       amount: amountDecimal,

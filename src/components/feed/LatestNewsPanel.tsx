@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 // ArticleDetailModal removed - articles now use /post/[id] page
 import { useWidgetRefresh } from '@/contexts/WidgetRefreshContext'
 import { useWidgetCacheStore } from '@/stores/widgetCacheStore'
+import { Skeleton } from '@/components/shared/Skeleton'
 
 interface ArticleItem {
   id: string
@@ -34,7 +35,8 @@ export function LatestNewsPanel() {
     // Check cache first (unless explicitly skipping)
     if (!skipCache) {
       const cached = getLatestNews()
-      if (cached) {
+      // Only use cache if it has data (don't cache empty arrays)
+      if (cached && Array.isArray(cached) && cached.length > 0) {
         setArticles(cached as ArticleItem[])
         setLoading(false)
         return
@@ -124,29 +126,12 @@ export function LatestNewsPanel() {
   const getSentimentIcon = (sentiment?: string) => {
     switch (sentiment) {
       case 'positive':
-        return <TrendingUp className="w-6 h-6 sm:w-7 sm:h-7 text-green-500" />
+        return <TrendingUp className="w-4 h-4 text-green-500" />
       case 'negative':
-        return <AlertCircle className="w-6 h-6 sm:w-7 sm:h-7 text-red-500" />
+        return <AlertCircle className="w-4 h-4 text-red-500" />
       default:
-        return <Newspaper className="w-6 h-6 sm:w-7 sm:h-7 text-[#0066FF]" />
+        return <Newspaper className="w-4 h-4 text-[#0066FF]" />
     }
-  }
-
-  const getBiasIndicator = (biasScore?: number) => {
-    if (!biasScore || Math.abs(biasScore) < 0.3) return null;
-    
-    const isPositive = biasScore > 0;
-    const strength = Math.abs(biasScore);
-    
-    return (
-      <span 
-        className="text-xs font-semibold ml-1" 
-        style={{ color: isPositive ? '#10b981' : '#ef4444' }}
-        title={`Bias: ${isPositive ? 'Favorable' : 'Critical'} (${strength.toFixed(2)})`}
-      >
-        {isPositive ? '↗' : '↘'}
-      </span>
-    );
   }
 
   const getTimeAgo = (timestamp: string) => {
@@ -165,45 +150,39 @@ export function LatestNewsPanel() {
   }
 
   const handleArticleClick = (articleId: string) => {
-    // Navigate to post detail page
+    // Navigate to post detail page (will redirect to /article/[id] if needed)
     window.location.href = `/post/${articleId}`
   }
 
   return (
     <>
-      <div className="bg-sidebar rounded-lg p-4 flex-1 flex flex-col">
-        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-3 text-left">Latest News</h2>
+      <div className="bg-sidebar rounded-2xl p-4 flex-1 flex flex-col">
+        <h2 className="text-lg font-bold text-foreground mb-3 text-left">Latest News</h2>
         {loading ? (
-          <div className="text-base text-muted-foreground pl-3 flex-1">Loading...</div>
+          <div className="space-y-3 pl-3 flex-1">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
         ) : articles.length === 0 ? (
-          <div className="text-base text-muted-foreground pl-3 flex-1">No articles available yet.</div>
+          <div className="text-sm text-muted-foreground pl-3 flex-1">No articles available yet.</div>
         ) : (
-          <div className="space-y-2.5 pl-3 flex-1">
+          <div className="space-y-2 pl-3 flex-1">
             {articles.map((article) => (
               <div
                 key={article.id}
                 onClick={() => handleArticleClick(article.id)}
-                className="flex items-start gap-2.5 cursor-pointer hover:bg-muted/50 rounded-lg p-1.5 -ml-1.5 transition-colors duration-200"
+                className="flex items-start gap-3 cursor-pointer hover:bg-muted/50 rounded-lg p-1.5 -ml-1.5 transition-colors duration-200"
               >
-                <div className="mt-0.5 flex-shrink-0">
+                <div className="mt-0.5 shrink-0">
                   {getSentimentIcon(article.sentiment)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-lg sm:text-xl font-semibold text-foreground leading-relaxed">
+                  <p className="text-sm font-semibold text-foreground leading-snug">
                     {article.title}
-                    {getBiasIndicator(article.biasScore)}
                   </p>
-                  <p className="text-sm sm:text-base text-muted-foreground mt-0.5">
-                    {article.authorOrgName}
-                    {article.byline && ` · ${article.byline}`}
-                  </p>
-                  <p className="text-sm text-muted-foreground/80 mt-1">
-                    {getTimeAgo(article.publishedAt)}
-                    {article.category && (
-                      <span className="ml-2 text-[#0066FF] font-semibold">
-                        {article.category}
-                      </span>
-                    )}
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {article.authorOrgName} · {getTimeAgo(article.publishedAt)}
                   </p>
                 </div>
               </div>

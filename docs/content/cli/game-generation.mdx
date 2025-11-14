@@ -1,0 +1,244 @@
+# Game Generation (Optional)
+
+**⚠️ Note:** With the continuous engine (daemon), you typically **don't need** to pre-generate games. The daemon generates everything in real-time. This command is mainly for **testing**, **demos**, or creating **curated scenarios**.
+
+## When to Use This
+
+- ✅ Testing game mechanics with known outcomes
+- ✅ Creating demo scenarios for presentations  
+- ✅ Generating test data for analysis
+- ❌ NOT needed for normal production use (use daemon instead)
+
+## Overview
+
+The game generator creates complete 30-day game scenarios with:
+- Scenario definitions and themes
+- Prediction market questions
+- 30-day event timelines
+- Social media feeds
+- Group chat conversations
+- Historical context from previous games
+
+**For production:** Just use `bun run dev` - content generates automatically via `executeGameTick()`!
+
+## Usage
+
+```bash
+# Basic generation
+bun run command:generate
+
+# With verbose output
+bun run command:generate:verbose
+```
+
+## Requirements
+
+### API Keys
+
+At least one LLM API key is required:
+
+```bash
+# Groq (recommended - fastest)
+export GROQ_API_KEY=your_key_here
+
+# OR OpenAI (fallback)
+export OPENAI_API_KEY=your_key_here
+```
+
+Get API keys:
+- Groq: [https://console.groq.com/](https://console.groq.com/) (free tier available)
+- OpenAI: [https://platform.openai.com/](https://platform.openai.com/)
+
+### Database
+
+Ensure database is migrated:
+
+```bash
+bun run db:migrate
+```
+
+### Actor Validation
+
+Validate actors before generation:
+
+```bash
+bun run command:validate
+```
+
+## Generation Flow
+
+### Step 0: Genesis Game
+
+On first run, a genesis game is automatically generated:
+
+```bash
+STEP 0: Checking for genesis game in database...
+No genesis game found, generating...
+Genesis game saved to database
+Total events: 450
+Total posts: 750
+```
+
+The genesis game establishes:
+- Initial world state
+- Starting questions
+- Actor relationships
+- Organization context
+
+### Step 1: Load History
+
+Previous games are loaded as context (last 2-3 games):
+
+```bash
+STEP 1: Loading previous games...
+Found 2 previous game(s):
+Game #1: Jan 1 - Jan 30, 2024
+Game #2: Jan 31 - Feb 29, 2024
+Next game will be #3 starting Mar 1, 2024
+```
+
+This ensures narrative continuity and evolving storylines.
+
+### Step 2: Generate New Game
+
+LLM generates new game with:
+- Unique scenarios (tech, politics, economy)
+- 10-15 prediction market questions
+- 30 days of events and posts
+- Character arcs and developments
+
+```bash
+STEP 2: Generating Game #3...
+Start: 2024-03-01
+Duration: 30 days
+Retries enabled - will not give up on LLM failures
+Game generation complete!
+Duration: 45.3s
+Total events: 450
+Total feed posts: 750
+Total group messages: 320
+```
+
+### Step 3: Save to Database
+
+Game metadata is saved:
+
+```bash
+STEP 3: Saving game to database...
+Saved game to database (ID: 1234567890)
+Ready for next game! Run `bun run generate` again in 30 days.
+```
+
+## Output
+
+### Scenarios & Questions
+
+```bash
+SCENARIOS & QUESTIONS:
+=========================
+1. AI Regulation Breakthrough
+   A major international summit produces surprising consensus
+   Theme: politics
+   Questions:
+     1. Will the AI Safety Bill pass by March 15?
+        Outcome: YES | Rank: 1
+     2. Will OpenLie commit to safety protocols?
+        Outcome: NO | Rank: 2
+```
+
+### Verbose Mode
+
+Enable detailed output:
+
+```bash
+bun run command:generate:verbose
+```
+
+Shows:
+- Main actors in this game
+- Question details and answers
+- Historical highlights
+- Top moments from previous games
+- Complete game summary
+
+## Troubleshooting
+
+### No API Key
+
+```
+ERROR: No API key found!
+This generator requires an LLM API key to function.
+```
+
+**Solution:** Set `GROQ_API_KEY` or `OPENAI_API_KEY`
+
+### Actor Validation Failed
+
+```
+ACTOR VALIDATION FAILED
+Invalid affiliations found:
+❌ Actor1 has invalid affiliation: "nonexistent-org"
+```
+
+**Solution:** Fix actors data or run validation tool first
+
+### Database Connection Failed
+
+```
+Error: Can't reach database server
+```
+
+**Solution:** Check database connection string and ensure database is running
+
+## Advanced Usage
+
+### Custom Start Date
+
+Games automatically calculate next start date based on last game. To override, you would need to modify the database directly (not recommended).
+
+### History Context
+
+The generator uses the last 2-3 games for context. To start fresh:
+
+```bash
+# This will create a new genesis game
+bun run db:reset
+bun run db:seed
+bun run command:generate
+```
+
+## API Reference
+
+### Main Function
+
+```typescript
+async function main(): Promise<void>
+```
+
+Orchestrates complete game generation workflow.
+
+### Actor Validation
+
+```typescript
+async function validateActorsData(): Promise<void>
+```
+
+Validates actor affiliations before generation. Exits with code 1 if validation fails.
+
+## Performance
+
+Typical generation times:
+- **With Groq:** 30-60 seconds
+- **With OpenAI:** 2-5 minutes
+
+Factors affecting speed:
+- LLM provider (Groq is 5-10x faster)
+- Network latency
+- Number of questions generated
+- History size
+
+## Next Steps
+
+- [🚀 Start Development (Recommended) →](/cli/development)
+- [🧪 Test with Simulations →](/cli/simulation)
+

@@ -37,7 +37,6 @@ export {
   InsufficientFundsError,
   TradingError,
   PositionError,
-  PoolError,
   AgentError,
   AgentAuthenticationError,
   CoalitionError,

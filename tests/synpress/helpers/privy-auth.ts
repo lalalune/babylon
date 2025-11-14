@@ -28,11 +28,18 @@ export function getPrivyTestAccount(): PrivyTestAccount {
   if (!email || !phone || !otp) {
     throw new Error(
       'Privy test credentials not configured. Please set PRIVY_TEST_EMAIL, PRIVY_TEST_PHONE, and PRIVY_TEST_OTP environment variables.\n' +
-      'Get these from: Privy Dashboard > User management > Authentication > Advanced > Enable test accounts'
+      'See tests/synpress/README-PRIVY-SETUP.md for setup instructions.'
     )
   }
 
   return { email, phone, otp }
+}
+
+/**
+ * Check if Privy test credentials are configured
+ */
+export function hasPrivyTestCredentials(): boolean {
+  return !!(process.env.PRIVY_TEST_EMAIL && process.env.PRIVY_TEST_PHONE && process.env.PRIVY_TEST_OTP)
 }
 
 /**
@@ -67,22 +74,23 @@ export async function loginWithPrivyEmail(
     }
   }
   
-  if (loginButton && await loginButton.isVisible().catch(() => false)) {
-    await loginButton.click()
+  if (loginButton && await loginButton.isVisible()) {
+    // Wait a bit for any overlays to clear
+    await page.waitForTimeout(1000)
+    // Use force click to bypass overlay issues
+    await loginButton.click({ force: true, timeout: 10000 })
     console.log('✅ Clicked login button')
   } else {
     console.log('ℹ️ No login button found - may already be logged in or on a public page')
   }
   
   // Wait for Privy modal to appear
-  await page.waitForSelector('[data-privy-modal]', { timeout: 10000 }).catch(() => {
-    console.log('⚠️ Privy modal did not appear - checking if already authenticated')
-  })
+  await page.waitForSelector('[data-privy-modal]', { timeout: 10000 })
   
   // Look for email input in Privy modal
   const emailInput = page.locator('input[type="email"], input[placeholder*="email" i]').first()
   
-  if (await emailInput.isVisible({ timeout: 5000 }).catch(() => false)) {
+  if (await emailInput.isVisible({ timeout: 5000 })) {
     // Enter email
     await emailInput.fill(testAccount.email)
     console.log(`✅ Entered test email: ${testAccount.email}`)
@@ -95,22 +103,55 @@ export async function loginWithPrivyEmail(
     // Wait for OTP input
     await page.waitForSelector('input[type="text"], input[placeholder*="code" i], input[placeholder*="otp" i]', { timeout: 10000 })
     
-    // Enter OTP
-    const otpInput = page.locator('input[type="text"], input[placeholder*="code" i], input[placeholder*="otp" i]').first()
-    await otpInput.fill(testAccount.otp)
-    console.log(`✅ Entered OTP: ${testAccount.otp}`)
+    // Enter OTP - might be multiple inputs or single input
+    const otpInputs = page.locator('input[type="text"], input[placeholder*="code" i], input[placeholder*="otp" i]')
+    const count = await otpInputs.count()
     
-    // Click submit/verify button
+    if (count === 1) {
+      // Single OTP input
+      await otpInputs.first().fill(testAccount.otp)
+      console.log(`✅ Entered OTP in single input: ${testAccount.otp}`)
+    } else if (count === 6) {
+      // Multiple OTP inputs (one per digit)
+      const digits = testAccount.otp.split('')
+      for (let i = 0; i < Math.min(digits.length, count); i++) {
+        const digit = digits[i]
+        if (digit !== undefined) {
+          await otpInputs.nth(i).fill(digit)
+        }
+      }
+      console.log(`✅ Entered OTP in ${count} inputs: ${testAccount.otp}`)
+    } else {
+      // Try filling the first one
+      await otpInputs.first().fill(testAccount.otp)
+      console.log(`✅ Entered OTP: ${testAccount.otp}`)
+    }
+    
+    // Wait a moment for OTP to be processed
+    await page.waitForTimeout(1500)
+    
+    // Click submit/verify button if it's enabled
     const submitButton = page.locator('button:has-text("Submit"), button:has-text("Verify"), button:has-text("Continue"), button[type="submit"]').first()
-    await submitButton.click()
-    console.log('✅ Clicked submit')
+    
+    // Wait for button to be enabled
+    await submitButton.waitFor({ state: 'visible', timeout: 5000 })
+    const isEnabled = await submitButton.isEnabled({ timeout: 2000 })
+    if (isEnabled) {
+      await submitButton.click()
+      console.log('✅ Clicked submit')
+    } else {
+      console.log('ℹ️ Submit button disabled - OTP might auto-submit')
+      // OTP might auto-verify, just wait
+      await page.waitForTimeout(2000)
+    }
     
     // Wait for authentication to complete
     await page.waitForTimeout(3000)
     
     // Check if we need to create embedded wallet
     const createWalletButton = page.locator('button:has-text("Create wallet"), button:has-text("Continue")').first()
-    if (await createWalletButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+    const walletButtonVisible = await createWalletButton.isVisible({ timeout: 5000 })
+    if (walletButtonVisible) {
       await createWalletButton.click()
       console.log('✅ Created embedded wallet')
       await page.waitForTimeout(2000)
@@ -185,7 +226,7 @@ export async function loginWithPrivyWallet(
   await walletButton.click()
   console.log('✅ Selected wallet login')
   
-  // Wait for MetaMask connection popup
+    // Wait for MetaMask connection popup
   await page.waitForTimeout(2000)
   
   // Connect MetaMask
@@ -193,12 +234,8 @@ export async function loginWithPrivyWallet(
   console.log('✅ Connected MetaMask')
   
   // Sign message if prompted
-  try {
-    await metamask.confirmSignature()
-    console.log('✅ Signed authentication message')
-  } catch (error) {
-    console.log('ℹ️ No signature required or already signed')
-  }
+  await metamask.confirmSignature()
+  console.log('✅ Signed authentication message')
   
   // Wait for authentication to complete
   await page.waitForLoadState('networkidle')
@@ -223,7 +260,8 @@ export async function logoutFromPrivy(page: Page): Promise<void> {
   
   for (const selector of logoutSelectors) {
     const logoutButton = page.locator(selector).first()
-    if (await logoutButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+    const isButtonVisible = await logoutButton.isVisible({ timeout: 5000 })
+    if (isButtonVisible) {
       await logoutButton.click()
       console.log('✅ Clicked logout button')
       await page.waitForTimeout(2000)
@@ -241,7 +279,8 @@ export async function logoutFromPrivy(page: Page): Promise<void> {
   
   for (const selector of profileMenuSelectors) {
     const menuButton = page.locator(selector).first()
-    if (await menuButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+    const isMenuVisible = await menuButton.isVisible({ timeout: 5000 })
+    if (isMenuVisible) {
       await menuButton.click()
       console.log('✅ Opened profile menu')
       await page.waitForTimeout(1000)
@@ -249,7 +288,8 @@ export async function logoutFromPrivy(page: Page): Promise<void> {
       // Look for logout in menu
       for (const logoutSelector of logoutSelectors) {
         const logoutButton = page.locator(logoutSelector).first()
-        if (await logoutButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+        const isLogoutVisible = await logoutButton.isVisible({ timeout: 5000 })
+        if (isLogoutVisible) {
           await logoutButton.click()
           console.log('✅ Clicked logout from menu')
           await page.waitForTimeout(2000)
@@ -266,7 +306,26 @@ export async function logoutFromPrivy(page: Page): Promise<void> {
  * Check if user is authenticated
  */
 export async function isAuthenticated(page: Page): Promise<boolean> {
-  // Look for indicators of authentication
+  // First check localStorage for auth state
+  const hasAuthInStorage = await page.evaluate(() => {
+    const babylonAuth = localStorage.getItem('babylon-auth')
+    if (babylonAuth) {
+      try {
+        const parsed = JSON.parse(babylonAuth)
+        return !!parsed?.state?.user
+      } catch {
+        return false
+      }
+    }
+    return false
+  })
+  
+  // If we have auth in storage, user is likely authenticated
+  if (hasAuthInStorage) {
+    return true
+  }
+  
+  // Also check for UI indicators of authentication
   const authenticatedIndicators = [
     '[data-testid="user-profile"]',
     '[data-testid="user-menu"]',
@@ -276,7 +335,8 @@ export async function isAuthenticated(page: Page): Promise<boolean> {
   ]
   
   for (const selector of authenticatedIndicators) {
-    if (await page.locator(selector).isVisible({ timeout: 2000 }).catch(() => false)) {
+    const isVisible = await page.locator(selector).isVisible({ timeout: 2000 }).catch(() => false)
+    if (isVisible) {
       return true
     }
   }

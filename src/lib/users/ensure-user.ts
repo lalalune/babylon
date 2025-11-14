@@ -1,7 +1,6 @@
 import { prisma } from '@/lib/database-service'
 import type { AuthenticatedUser } from '@/lib/api/auth-middleware'
-import { Prisma } from '@prisma/client'
-import { logger } from '@/lib/logger'
+import type { Prisma } from '@prisma/client'
 
 interface EnsureUserOptions {
   displayName?: string
@@ -19,19 +18,9 @@ const selectWithPrivyId = {
   profileImageUrl: true,
 } as const
 
-const selectWithoutPrivyId = {
-  id: true,
-  username: true,
-  displayName: true,
-  walletAddress: true,
-  isActor: true,
-  profileImageUrl: true,
-} as const
-
 type CanonicalUserWithPrivy = Prisma.UserGetPayload<{ select: typeof selectWithPrivyId }>
-type CanonicalUserWithoutPrivy = Prisma.UserGetPayload<{ select: typeof selectWithoutPrivyId }>
 
-type CanonicalUser = CanonicalUserWithPrivy | CanonicalUserWithoutPrivy
+type CanonicalUser = CanonicalUserWithPrivy
 
 export async function ensureUserForAuth(
   user: AuthenticatedUser,
@@ -55,6 +44,7 @@ export async function ensureUserForAuth(
     id: user.dbUserId ?? user.userId,
     privyId,
     isActor: options.isActor ?? false,
+    updatedAt: new Date(),
   }
 
   if (user.walletAddress) {
@@ -77,39 +67,12 @@ export async function ensureUserForAuth(
     }
   }
 
-  let canonicalUser: CanonicalUser
-
-  try {
-    canonicalUser = await prisma.user.upsert({
-      where: { privyId },
-      update: updateData,
-      create: createData,
-      select: selectWithPrivyId,
-    })
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2022' &&
-      error.meta?.column === 'User.privyId'
-    ) {
-      logger.warn(
-        'privyId column missing - falling back to legacy user upsert',
-        { userId: user.userId },
-        'ensureUserForAuth'
-      )
-
-      const { privyId: _privyId, ...fallbackCreateData } = createData
-
-      canonicalUser = await prisma.user.upsert({
-        where: { id: fallbackCreateData.id },
-        update: updateData,
-        create: fallbackCreateData as Prisma.UserCreateInput,
-        select: selectWithoutPrivyId,
-      })
-    } else {
-      throw error
-    }
-  }
+  const canonicalUser: CanonicalUser = await prisma.user.upsert({
+    where: { privyId },
+    update: updateData,
+    create: createData,
+    select: selectWithPrivyId,
+  })
 
   user.dbUserId = canonicalUser.id
 

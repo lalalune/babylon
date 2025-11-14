@@ -1,0 +1,384 @@
+# Moderation API Reference
+
+Complete API documentation for the moderation system.
+
+## REST API Endpoints
+
+### Block User
+
+**Endpoint:** `POST /api/users/{userId}/block`
+
+**Authentication:** Required
+
+**Parameters:**
+- `action` (string, required): `"block"` or `"unblock"`
+- `reason` (string, optional): Reason for blocking (max 500 chars)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "User blocked successfully",
+  "block": {
+    "id": "block_123",
+    "blockerId": "user_456",
+    "blockedId": "user_789",
+    "reason": "Spam posting",
+    "createdAt": "2025-11-13T10:00:00Z"
+  }
+}
+```
+
+**Check Block Status:**  
+`GET /api/users/{userId}/block`
+
+Returns:
+```json
+{
+  "isBlocked": true,
+  "block": {
+    "id": "block_123",
+    "createdAt": "2025-11-13T10:00:00Z",
+    "reason": "Spam posting"
+  }
+}
+```
+
+---
+
+### Mute User
+
+**Endpoint:** `POST /api/users/{userId}/mute`
+
+**Authentication:** Required
+
+**Parameters:**
+- `action` (string, required): `"mute"` or `"unmute"`
+- `reason` (string, optional): Reason for muting (max 500 chars)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "User muted successfully",
+  "mute": {
+    "id": "mute_123",
+    "muterId": "user_456",
+    "mutedId": "user_789",
+    "reason": "Too many posts",
+    "createdAt": "2025-11-13T10:00:00Z"
+  }
+}
+```
+
+---
+
+### Create Report
+
+**Endpoint:** `POST /api/moderation/reports`
+
+**Authentication:** Required
+
+**Parameters:**
+- `reportType` (string, required): `"user"` or `"post"`
+- `reportedUserId` (string, conditional): Required if `reportType` is `"user"`
+- `reportedPostId` (string, conditional): Required if `reportType` is `"post"`
+- `category` (string, required): One of:
+  - `spam`
+  - `harassment`
+  - `hate_speech`
+  - `violence`
+  - `misinformation`
+  - `inappropriate`
+  - `impersonation`
+  - `self_harm`
+  - `other`
+- `reason` (string, required): Detailed explanation (10-2000 chars)
+- `evidence` (string, optional): URL to evidence
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Report submitted successfully. Our moderation team will review it.",
+  "report": {
+    "id": "report_123",
+    "reporterId": "user_456",
+    "reportedUserId": "user_789",
+    "reportType": "user",
+    "category": "spam",
+    "reason": "Posting promotional content repeatedly",
+    "status": "pending",
+    "priority": "low",
+    "createdAt": "2025-11-13T10:00:00Z"
+  }
+}
+```
+
+---
+
+### Get User's Reports
+
+**Endpoint:** `GET /api/moderation/reports`
+
+**Authentication:** Required
+
+**Query Parameters:**
+- `limit` (number, optional): Results per page (default: 50, max: 100)
+- `offset` (number, optional): Pagination offset (default: 0)
+- `status` (string, optional): Filter by status
+- `category` (string, optional): Filter by category
+- `reportType` (string, optional): Filter by type
+
+**Response:**
+```json
+{
+  "reports": [
+    {
+      "id": "report_123",
+      "reportType": "user",
+      "category": "spam",
+      "reason": "Posting promotional content",
+      "status": "pending",
+      "priority": "low",
+      "createdAt": "2025-11-13T10:00:00Z",
+      "reportedUser": {
+        "id": "user_789",
+        "username": "spammer",
+        "displayName": "Spam User"
+      }
+    }
+  ],
+  "pagination": {
+    "limit": 50,
+    "offset": 0,
+    "total": 1
+  }
+}
+```
+
+---
+
+### Get Blocked Users
+
+**Endpoint:** `GET /api/moderation/blocks`
+
+**Authentication:** Required
+
+**Query Parameters:**
+- `limit` (number, optional): Results per page (default: 20)
+- `offset` (number, optional): Pagination offset (default: 0)
+
+**Response:**
+```json
+{
+  "blocks": [
+    {
+      "id": "block_123",
+      "createdAt": "2025-11-13T10:00:00Z",
+      "reason": "Spam posting",
+      "blocked": {
+        "id": "user_789",
+        "username": "spammer",
+        "displayName": "Spam User",
+        "profileImageUrl": "https://..."
+      }
+    }
+  ],
+  "pagination": {
+    "limit": 20,
+    "offset": 0,
+    "total": 1
+  }
+}
+```
+
+---
+
+### Get Muted Users
+
+**Endpoint:** `GET /api/moderation/mutes`
+
+**Authentication:** Required
+
+**Query Parameters:**
+- `limit` (number, optional): Results per page (default: 20)
+- `offset` (number, optional): Pagination offset (default: 0)
+
+**Response:**
+```json
+{
+  "mutes": [
+    {
+      "id": "mute_123",
+      "createdAt": "2025-11-13T10:00:00Z",
+      "reason": "Too many posts",
+      "muted": {
+        "id": "user_789",
+        "username": "poster",
+        "displayName": "Frequent Poster"
+      }
+    }
+  ],
+  "pagination": {
+    "limit": 20,
+    "offset": 0,
+    "total": 1
+  }
+}
+```
+
+---
+
+## Admin API Endpoints
+
+### List All Reports
+
+**Endpoint:** `GET /api/admin/reports`
+
+**Authentication:** Required (Admin only)
+
+**Query Parameters:**
+- `limit` (number, optional): Results per page (default: 50)
+- `offset` (number, optional): Pagination offset
+- `status` (string, optional): Filter by status
+- `category` (string, optional): Filter by category
+- `priority` (string, optional): Filter by priority
+- `reportType` (string, optional): Filter by type
+- `reporterId` (string, optional): Filter by reporter
+- `reportedUserId` (string, optional): Filter by reported user
+- `reportedPostId` (string, optional): Filter by reported post
+- `sortBy` (string, optional): Sort field (`created`, `updated`, `priority`)
+- `sortOrder` (string, optional): Sort order (`asc`, `desc`)
+
+---
+
+### Get Report Details
+
+**Endpoint:** `GET /api/admin/reports/{reportId}`
+
+**Authentication:** Required (Admin only)
+
+**Response:** Includes full report details and related reports.
+
+---
+
+### Take Action on Report
+
+**Endpoint:** `POST /api/admin/reports/{reportId}`
+
+**Authentication:** Required (Admin only)
+
+**Parameters:**
+- `action` (string, required): One of:
+  - `resolve` - Mark as resolved
+  - `dismiss` - Mark as dismissed
+  - `escalate` - Escalate to critical priority
+  - `ban_user` - Ban the reported user immediately
+- `resolution` (string, required): Resolution message (1-1000 chars)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Report resolved successfully"
+}
+```
+
+---
+
+### Get Report Statistics
+
+**Endpoint:** `GET /api/admin/reports/stats`
+
+**Authentication:** Required (Admin only)
+
+**Response:**
+```json
+{
+  "totals": {
+    "total": 125,
+    "pending": 23,
+    "reviewing": 15,
+    "resolved": 82,
+    "dismissed": 5
+  },
+  "byCategory": [
+    { "category": "spam", "count": 45 },
+    { "category": "harassment", "count": 32 }
+  ],
+  "byPriority": [
+    { "priority": "critical", "count": 8 },
+    { "priority": "high", "count": 28 }
+  ],
+  "topReportedUsers": [
+    {
+      "user": { "id": "user_123", "username": "spammer" },
+      "reportCount": 12
+    }
+  ],
+  "topReporters": [
+    {
+      "user": { "id": "user_456", "username": "moderator" },
+      "reportCount": 24
+    }
+  ],
+  "recentActivity": {
+    "last7Days": 32,
+    "resolved7Days": 28
+  }
+}
+```
+
+---
+
+## A2A Protocol Methods
+
+See [A2A Integration](/moderation/a2a-integration) for complete A2A protocol documentation.
+
+Quick reference:
+- `moderation.blockUser`
+- `moderation.unblockUser`
+- `moderation.muteUser`
+- `moderation.unmuteUser`
+- `moderation.reportUser`
+- `moderation.reportPost`
+- `moderation.getBlocks`
+- `moderation.getMutes`
+- `moderation.checkBlockStatus`
+- `moderation.checkMuteStatus`
+
+---
+
+## Error Codes
+
+| Code | Message | Description |
+|------|---------|-------------|
+| 400 | Invalid params | Missing or invalid parameters |
+| 401 | Unauthorized | Not authenticated |
+| 403 | Forbidden | Not authorized (e.g., not admin) |
+| 404 | Not found | User or post not found |
+| 409 | Conflict | Already blocked/muted/reported |
+| 429 | Rate limit exceeded | Too many requests |
+| 500 | Internal error | Server error |
+
+---
+
+## Rate Limits
+
+- Block/Unblock: 10 per minute
+- Mute/Unmute: 10 per minute
+- Report: 5 per minute
+- Duplicate detection: 24 hour window
+
+---
+
+## Best Practices
+
+1. **Always provide reasons** when blocking or muting for audit trail
+2. **Include evidence URLs** when reporting for faster resolution
+3. **Check status first** to avoid duplicate errors
+4. **Handle rate limits** gracefully with exponential backoff
+5. **Use appropriate categories** for accurate priority assignment
+6. **Write detailed reasons** (min 10 chars) for reports
+

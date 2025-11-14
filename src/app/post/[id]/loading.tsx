@@ -18,7 +18,7 @@ export default function PostDetailLoading() {
                 <Skeleton className="h-6 w-32 max-w-full mb-4" />
                 {Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="flex gap-3 pb-4 border-b border-border/5">
-                    <Skeleton className="w-10 h-10 rounded-full flex-shrink-0" />
+                    <Skeleton className="w-10 h-10 rounded-full shrink-0" />
                     <div className="flex-1 min-w-0 space-y-2">
                       <div className="flex items-center gap-2 flex-wrap">
                         <Skeleton className="h-4 w-24 max-w-full" />
@@ -35,7 +35,7 @@ export default function PostDetailLoading() {
         </div>
 
         {/* Right: Widget placeholder */}
-        <div className="w-80 xl:w-96 flex-shrink-0 border-l border-border/5 bg-background" />
+        <div className="w-80 xl:w-96 shrink-0 border-l border-border/5 bg-background" />
       </div>
 
       {/* Mobile/Tablet */}
@@ -49,7 +49,7 @@ export default function PostDetailLoading() {
             <Skeleton className="h-5 w-24 max-w-full mb-4" />
             {Array.from({ length: 2 }).map((_, i) => (
               <div key={i} className="flex gap-3 pb-4 border-b border-border/5">
-                <Skeleton className="w-10 h-10 rounded-full flex-shrink-0" />
+                <Skeleton className="w-10 h-10 rounded-full shrink-0" />
                 <div className="flex-1 min-w-0 space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Skeleton className="h-4 w-20 max-w-full" />

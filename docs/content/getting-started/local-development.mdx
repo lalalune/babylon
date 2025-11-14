@@ -8,7 +8,7 @@ Babylon supports multiple development modes:
 
 ### Default Mode (Recommended)
 
-Runs both the web server and the game engine daemon:
+Runs the web server with automatic game tick:
 
 ```bash
 bun run dev
@@ -16,7 +16,7 @@ bun run dev
 
 This will:
 - Start Next.js development server on `http://localhost:3000`
-- Start the game engine daemon (generates content every 60 seconds)
+- Start local cron simulator (generates content every 60 seconds)
 - Enable hot module replacement (HMR)
 - Watch for file changes
 
@@ -30,13 +30,9 @@ bun run dev:web-only
 
 ### Serverless/Cron Mode
 
-Test the Vercel cron behavior locally:
+The default `bun run dev` already simulates Vercel cron behavior using `scripts/local-cron-simulator.ts`.
 
-```bash
-bun run dev:cron-mode
-```
-
-This simulates how the app runs in production on Vercel with cron jobs instead of a daemon.
+In production, Vercel Cron calls `/api/cron/game-tick` every 60 seconds - same function, different trigger.
 
 ## Development Workflow
 

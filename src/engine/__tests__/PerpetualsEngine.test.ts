@@ -1,28 +1,58 @@
 /**
- * Perpetuals Engine Tests
+ * PerpetualsEngine Test Suite
+ *
+ * @module engine/__tests__/PerpetualsEngine.test
  * 
- * Verifies:
- * - Position opening with correct liquidation prices
- * - PnL calculations (long/short)
+ * @description
+ * Comprehensive test suite for the PerpetualsEngine leveraged trading system.
+ * Tests position management, PnL calculations, funding rates, liquidations,
+ * and market data tracking.
+ * 
+ * **Test Coverage:**
+ * - Market initialization from organizations
+ * - Position opening (long/short with leverage)
+ * - Liquidation price calculations
+ * - Unrealized PnL calculations
+ * - Liquidation detection logic
  * - Funding payment calculations
- * - Liquidation detection
+ * - Position closing with realized PnL
+ * - Price updates and PnL tracking
  * - Daily snapshot recording
+ * - Exit price override functionality
+ * 
+ * **Key Features Tested:**
+ * - Correct liquidation prices for various leverages
+ * - Accurate PnL for both long and short positions
+ * - Proper funding rate application
+ * - Liquidation triggering at correct prices
+ * - Position state synchronization
+ * - Market data integrity
+ * 
+ * **Testing Approach:**
+ * - Unit tests for calculation functions
+ * - Integration tests for full position lifecycle
+ * - Edge case testing (high leverage, price movements)
+ * - State consistency verification
+ * 
+ * @see {@link PerpetualsEngine} - Class under test
+ * @see {@link /shared/perps-types.ts} - Calculation functions tested
  */
+import { describe, expect, test } from 'bun:test';
 
-import { describe, test, expect } from 'bun:test';
-import { PerpetualsEngine } from '../PerpetualsEngine';
 import {
+  calculateFundingPayment,
   calculateLiquidationPrice,
   calculateUnrealizedPnL,
-  calculateFundingPayment,
   shouldLiquidate,
 } from '@/shared/perps-types';
 import type { Organization } from '@/shared/types';
 
+import { PerpetualsEngine } from '../PerpetualsEngine';
+
 describe('PerpetualsEngine', () => {
   test('initializes markets from organizations', () => {
     const engine = new PerpetualsEngine();
-    
+
     const orgs: Organization[] = [
       {
         id: 'test-company',
@@ -30,7 +60,7 @@ describe('PerpetualsEngine', () => {
         description: 'Test',
         type: 'company',
         canBeInvolved: true,
-        initialPrice: 100.00,
+        initialPrice: 100.0,
       },
       {
         id: 'test-media',
@@ -42,7 +72,7 @@ describe('PerpetualsEngine', () => {
     ];
 
     engine.initializeMarkets(orgs);
-    
+
     const markets = engine.getMarkets();
     expect(markets.length).toBe(1); // Only company, not media
     expect(markets[0]!.name).toBe('Test Company');
@@ -50,7 +80,7 @@ describe('PerpetualsEngine', () => {
 
   test('opens long position correctly', () => {
     const engine = new PerpetualsEngine();
-    
+
     const orgs: Organization[] = [
       {
         id: 'test-company',
@@ -58,7 +88,7 @@ describe('PerpetualsEngine', () => {
         description: 'Test',
         type: 'company',
         canBeInvolved: true,
-        initialPrice: 100.00,
+        initialPrice: 100.0,
       },
     ];
 
@@ -124,18 +154,18 @@ describe('PerpetualsEngine', () => {
   });
 
   test('calculates funding payments correctly', () => {
-    // $1,000 position, 1% annual rate, 8 hours
-    const payment = calculateFundingPayment(1000, 0.01, 8);
+    // $1,000 position, 1% annual rate, single 8-hour period
+    const payment = calculateFundingPayment(1000, 0.01);
     expect(payment).toBeCloseTo(0.009, 2); // ~$0.009
 
-    // $10,000 position, 5% annual rate, 24 hours (3 periods)
-    const largePayment = calculateFundingPayment(10000, 0.05, 24);
-    expect(largePayment).toBeCloseTo(1.37, 2); // ~$1.37 (corrected)
+    // $10,000 position, 5% annual rate, still per 8-hour period baseline
+    const largePayment = calculateFundingPayment(10000, 0.05);
+    expect(largePayment).toBeCloseTo(0.46, 2);
   });
 
   test('records daily snapshots', () => {
     const engine = new PerpetualsEngine();
-    
+
     const orgs: Organization[] = [
       {
         id: 'test-company',
@@ -143,7 +173,7 @@ describe('PerpetualsEngine', () => {
         description: 'Test',
         type: 'company',
         canBeInvolved: true,
-        initialPrice: 100.00,
+        initialPrice: 100.0,
       },
     ];
 
@@ -163,7 +193,7 @@ describe('PerpetualsEngine', () => {
 
   test('updates positions with new prices', () => {
     const engine = new PerpetualsEngine();
-    
+
     const orgs: Organization[] = [
       {
         id: 'test-company',
@@ -171,7 +201,7 @@ describe('PerpetualsEngine', () => {
         description: 'Test',
         type: 'company',
         canBeInvolved: true,
-        initialPrice: 100.00,
+        initialPrice: 100.0,
       },
     ];
 
@@ -198,9 +228,9 @@ describe('PerpetualsEngine', () => {
     expect(updatedPositions[0]!.unrealizedPnL).toBeGreaterThan(0);
   });
 
-  test('closes positions and calculates realized PnL', () => {
+  test('closePosition uses override exit price for PnL', () => {
     const engine = new PerpetualsEngine();
-    
+
     const orgs: Organization[] = [
       {
         id: 'test-company',
@@ -208,7 +238,82 @@ describe('PerpetualsEngine', () => {
         description: 'Test',
         type: 'company',
         canBeInvolved: true,
-        initialPrice: 100.00,
+        initialPrice: 100,
+      },
+    ];
+
+    engine.initializeMarkets(orgs);
+    const ticker = engine.getMarkets()[0]!.ticker;
+
+    const position = engine.openPosition('user-override', {
+      ticker,
+      side: 'long',
+      size: 100,
+      leverage: 5,
+      orderType: 'market',
+    });
+
+    const overridePrice = 125;
+    const result = engine.closePosition(position.id, overridePrice);
+
+    const expectedPnl =
+      ((overridePrice - position.entryPrice) / position.entryPrice) *
+      position.size;
+    expect(result.realizedPnL).toBeCloseTo(expectedPnl, 6);
+    expect(result.position.currentPrice).toBe(overridePrice);
+  });
+
+  test('closePosition override keeps remaining positions in sync', () => {
+    const engine = new PerpetualsEngine();
+
+    const orgs: Organization[] = [
+      {
+        id: 'test-company',
+        name: 'Test Company',
+        description: 'Test',
+        type: 'company',
+        canBeInvolved: true,
+        initialPrice: 100,
+      },
+    ];
+
+    engine.initializeMarkets(orgs);
+    const ticker = engine.getMarkets()[0]!.ticker;
+
+    const closingPosition = engine.openPosition('closer', {
+      ticker,
+      side: 'long',
+      size: 50,
+      leverage: 2,
+      orderType: 'market',
+    });
+
+    engine.openPosition('holder', {
+      ticker,
+      side: 'long',
+      size: 75,
+      leverage: 3,
+      orderType: 'market',
+    });
+
+    engine.closePosition(closingPosition.id, 130);
+
+    const remainingPositions = engine.getUserPositions('holder');
+    expect(remainingPositions[0]!.currentPrice).toBe(130);
+    expect(remainingPositions[0]!.unrealizedPnL).toBeGreaterThan(0);
+  });
+
+  test('closes positions and calculates realized PnL', () => {
+    const engine = new PerpetualsEngine();
+
+    const orgs: Organization[] = [
+      {
+        id: 'test-company',
+        name: 'Test Company',
+        description: 'Test',
+        type: 'company',
+        canBeInvolved: true,
+        initialPrice: 100.0,
       },
     ];
 
@@ -230,9 +335,8 @@ describe('PerpetualsEngine', () => {
 
     // Close position
     const { realizedPnL } = engine.closePosition(position.id);
-    
+
     expect(realizedPnL).toBeGreaterThan(0); // Made profit
     expect(engine.getUserPositions('user-1').length).toBe(0); // Position closed
   });
 });
-

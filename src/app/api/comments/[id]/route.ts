@@ -1,6 +1,126 @@
 /**
- * API Route: /api/comments/[id]
- * Methods: PATCH (edit), DELETE (delete)
+ * Comment Management API
+ * 
+ * @description
+ * Edit or delete individual comments. Only comment authors can modify
+ * their own comments. Includes cascade deletion of replies and reactions.
+ * 
+ * **Features:**
+ * - Author-only editing
+ * - Author-only deletion
+ * - Cascade delete (removes replies and reactions)
+ * - Content validation
+ * - RLS enforcement
+ * 
+ * @openapi
+ * /api/comments/{id}:
+ *   patch:
+ *     tags:
+ *       - Comments
+ *     summary: Edit comment
+ *     description: Updates comment content (author only)
+ *     security:
+ *       - PrivyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Comment ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - content
+ *             properties:
+ *               content:
+ *                 type: string
+ *                 minLength: 1
+ *                 description: Updated comment content
+ *     responses:
+ *       200:
+ *         description: Comment updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: string
+ *                 content:
+ *                   type: string
+ *                 author:
+ *                   type: object
+ *                 likeCount:
+ *                   type: integer
+ *                 replyCount:
+ *                   type: integer
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not the comment author
+ *       404:
+ *         description: Comment not found
+ *   delete:
+ *     tags:
+ *       - Comments
+ *     summary: Delete comment
+ *     description: Deletes comment and all replies (author only)
+ *     security:
+ *       - PrivyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Comment ID
+ *     responses:
+ *       200:
+ *         description: Comment deleted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 deletedCommentId:
+ *                   type: string
+ *                 deletedRepliesCount:
+ *                   type: integer
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not the comment author
+ *       404:
+ *         description: Comment not found
+ * 
+ * @example
+ * ```typescript
+ * // Edit comment
+ * await fetch(`/api/comments/${commentId}`, {
+ *   method: 'PATCH',
+ *   headers: { 'Authorization': `Bearer ${token}` },
+ *   body: JSON.stringify({
+ *     content: 'Updated comment text'
+ *   })
+ * });
+ * 
+ * // Delete comment
+ * const response = await fetch(`/api/comments/${commentId}`, {
+ *   method: 'DELETE',
+ *   headers: { 'Authorization': `Bearer ${token}` }
+ * });
+ * const { deletedRepliesCount } = await response.json();
+ * console.log(`Deleted comment and ${deletedRepliesCount} replies`);
+ * ```
+ * 
+ * @see {@link /lib/db/context} RLS context
  */
 
 import type { NextRequest } from 'next/server';
@@ -49,7 +169,7 @@ export const PATCH = withErrorHandling(async (
         content: content.trim(),
       },
       include: {
-        author: {
+        User: {
           select: {
             id: true,
             displayName: true,
@@ -59,8 +179,8 @@ export const PATCH = withErrorHandling(async (
         },
         _count: {
           select: {
-            reactions: true,
-            replies: true,
+            Reaction: true,
+            other_Comment: true,
           },
         },
       },
@@ -79,9 +199,9 @@ export const PATCH = withErrorHandling(async (
     parentCommentId: updatedComment.parentCommentId,
     createdAt: updatedComment.createdAt,
     updatedAt: updatedComment.updatedAt,
-    author: updatedComment.author,
-    likeCount: updatedComment._count.reactions,
-    replyCount: updatedComment._count.replies,
+    author: updatedComment.User,
+    likeCount: updatedComment._count.Reaction,
+    replyCount: updatedComment._count.other_Comment,
   });
 });
 
@@ -105,7 +225,7 @@ export const DELETE = withErrorHandling(async (
       include: {
         _count: {
           select: {
-            replies: true,
+            other_Comment: true,
           },
         },
       },
@@ -120,7 +240,7 @@ export const DELETE = withErrorHandling(async (
       throw new AuthorizationError('You can only delete your own comments', 'comment', 'delete');
     }
 
-    const repliesCount = comment._count.replies;
+    const repliesCount = comment._count.other_Comment;
 
     // Delete comment (cascade will delete reactions and replies)
     await db.comment.delete({

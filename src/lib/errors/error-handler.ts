@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { Prisma } from '@prisma/client';
 import { isAuthenticationError } from '@/lib/api/auth-middleware';
 import { trackServerError } from '@/lib/posthog/server';
+import * as Sentry from '@sentry/nextjs';
 
 /**
  * Main error handler that processes all errors and returns appropriate responses
@@ -51,21 +52,50 @@ export function errorHandler(error: Error | unknown, request: NextRequest): Next
 
   // Track error with PostHog (async, don't await to avoid slowing down response)
   const userId = request.headers.get('x-user-id') || null;
-  trackServerError(userId, error, {
+  void trackServerError(userId, error, {
     endpoint: new URL(request.url).pathname,
     method: request.method,
-  }).catch((trackError) => {
-    logger.warn('Failed to track error with PostHog', { error: trackError });
   });
+
+  // Capture error in Sentry (only for server errors, not client errors like validation)
+  // Skip capturing validation errors, authentication errors, and known operational errors
+  const shouldCaptureInSentry = 
+    error instanceof Error &&
+    !(error instanceof ZodError) &&
+    !(error instanceof BabylonError && error.isOperational && error.statusCode < 500) &&
+    !isAuthenticationError(error) &&
+    error.name !== 'ValidationError';
+
+  if (shouldCaptureInSentry) {
+    Sentry.withScope((scope) => {
+      // Add request context
+      scope.setContext('request', {
+        url: request.url,
+        method: request.method,
+        headers: Object.fromEntries(request.headers.entries()),
+      });
+
+      // Add user context if available
+      if (userId) {
+        scope.setUser({ id: userId });
+      }
+
+      // Add additional context for Babylon errors
+      if (error instanceof BabylonError && error.context) {
+        scope.setContext('errorContext', error.context);
+        scope.setTag('errorCode', error.code);
+      }
+
+      // Capture the exception
+      Sentry.captureException(error);
+    });
+  }
 
   // Handle authentication errors consistently
   if (isAuthenticationError(error)) {
     return NextResponse.json(
       {
-        error: {
-          message: error.message || 'Authentication required',
-          code: 'AUTH_FAILED'
-        }
+        error: error.message || 'Authentication required'
       },
       { status: 401 }
     );
@@ -73,17 +103,17 @@ export function errorHandler(error: Error | unknown, request: NextRequest): Next
 
   // Handle Babylon errors (our custom errors)
   if (error instanceof BabylonError) {
+    const errorData: Record<string, unknown> = { error: error.message }
+    if (error.context?.details) {
+      errorData.details = error.context.details
+    }
+    if (process.env.NODE_ENV === 'development') {
+      errorData.code = error.code
+      errorData.stack = error.stack
+    }
+    
     return NextResponse.json(
-      {
-        error: {
-          message: error.message,
-          code: error.code,
-          ...(process.env.NODE_ENV === 'development' && {
-            stack: error.stack,
-            context: error.context
-          })
-        }
-      },
+      errorData,
       {
         status: error.statusCode,
         headers: error.code === 'RATE_LIMIT' && error.context?.retryAfter
@@ -99,32 +129,23 @@ export function errorHandler(error: Error | unknown, request: NextRequest): Next
   }
 
   if (error instanceof Prisma.PrismaClientValidationError) {
-    return NextResponse.json(
-      {
-        error: {
-          message: 'Invalid database query',
-          code: 'DATABASE_VALIDATION_ERROR',
-          ...(process.env.NODE_ENV === 'development' && {
-            details: error.message
-          })
-        }
-      },
-      { status: 400 }
-    );
+    const errorData: Record<string, unknown> = { error: 'Invalid database query' }
+    if (process.env.NODE_ENV === 'development') {
+      errorData.details = error.message
+    }
+    
+    return NextResponse.json(errorData, { status: 400 });
   }
 
   // Handle Zod validation errors
   if (error instanceof ZodError) {
     return NextResponse.json(
       {
-        error: {
-          message: 'Validation failed',
-          code: 'VALIDATION_ERROR',
-          violations: error.issues.map(err => ({
-            field: err.path.join('.'),
-            message: err.message
-          }))
-        }
+        error: 'Validation failed',
+        details: error.issues.map(err => ({
+          field: err.path.join('.'),
+          message: err.message
+        }))
       },
       { status: 400 }
     );
@@ -134,10 +155,7 @@ export function errorHandler(error: Error | unknown, request: NextRequest): Next
   if (error.name === 'SyntaxError') {
     return NextResponse.json(
       {
-        error: {
-          message: 'Invalid JSON in request body',
-          code: 'INVALID_JSON'
-        }
+        error: 'Invalid JSON in request body'
       },
       { status: 400 }
     );
@@ -146,32 +164,26 @@ export function errorHandler(error: Error | unknown, request: NextRequest): Next
   if (error.name === 'TypeError') {
     return NextResponse.json(
       {
-        error: {
-          message: process.env.NODE_ENV === 'production'
-            ? 'An unexpected error occurred'
-            : error.message,
-          code: 'TYPE_ERROR'
-        }
+        error: process.env.NODE_ENV === 'production'
+          ? 'An unexpected error occurred'
+          : error.message
       },
       { status: 500 }
     );
   }
 
   // Default error response
-  return NextResponse.json(
-    {
-      error: {
-        message: process.env.NODE_ENV === 'production'
-          ? 'An unexpected error occurred'
-          : error.message,
-        code: 'INTERNAL_ERROR',
-        ...(process.env.NODE_ENV === 'development' && {
-          stack: error.stack
-        })
-      }
-    },
-    { status: 500 }
-  );
+  const errorData: Record<string, unknown> = {
+    error: process.env.NODE_ENV === 'production'
+      ? 'An unexpected error occurred'
+      : error.message
+  }
+  
+  if (process.env.NODE_ENV === 'development' && error.stack) {
+    errorData.stack = error.stack
+  }
+  
+  return NextResponse.json(errorData, { status: 500 });
 }
 
 /**
@@ -182,51 +194,26 @@ function handlePrismaError(error: Prisma.PrismaClientKnownRequestError): NextRes
     case 'P2002':
       // Unique constraint violation
       const fields = error.meta?.target as string[] | undefined;
-      return NextResponse.json(
-        {
-          error: {
-            message: `Duplicate entry for field(s): ${fields?.join(', ') || 'unknown'}`,
-            code: 'DUPLICATE_ENTRY',
-            fields
-          }
-        },
-        { status: 409 }
-      );
+      const errorData: Record<string, unknown> = { error: `Duplicate entry for field(s): ${fields?.join(', ') || 'unknown'}` }
+      if (fields) errorData.fields = fields
+      return NextResponse.json(errorData, { status: 409 });
 
     case 'P2025':
       // Record not found
-      return NextResponse.json(
-        {
-          error: {
-            message: 'Record not found',
-            code: 'NOT_FOUND'
-          }
-        },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Record not found' }, { status: 404 });
 
     case 'P2003':
       // Foreign key constraint failure
       const field = error.meta?.field_name as string | undefined;
-      return NextResponse.json(
-        {
-          error: {
-            message: `Foreign key constraint failed on field: ${field || 'unknown'}`,
-            code: 'FOREIGN_KEY_CONSTRAINT',
-            field
-          }
-        },
-        { status: 400 }
-      );
+      const fkErrorData: Record<string, unknown> = { error: `Foreign key constraint failed on field: ${field || 'unknown'}` }
+      if (field) fkErrorData.field = field
+      return NextResponse.json(fkErrorData, { status: 400 });
 
     case 'P2014':
       // Relation violation
       return NextResponse.json(
         {
-          error: {
-            message: 'The change you are trying to make would violate the required relation',
-            code: 'RELATION_VIOLATION'
-          }
+          error: 'The change you are trying to make would violate the required relation'
         },
         { status: 400 }
       );
@@ -235,29 +222,19 @@ function handlePrismaError(error: Prisma.PrismaClientKnownRequestError): NextRes
       // Query interpretation error
       return NextResponse.json(
         {
-          error: {
-            message: 'Query interpretation error',
-            code: 'QUERY_ERROR'
-          }
+          error: 'Query interpretation error'
         },
         { status: 400 }
       );
 
     default:
       // Generic database error
-      return NextResponse.json(
-        {
-          error: {
-            message: 'Database operation failed',
-            code: 'DATABASE_ERROR',
-            ...(process.env.NODE_ENV === 'development' && {
-              prismaCode: error.code,
-              meta: error.meta
-            })
-          }
-        },
-        { status: 500 }
-      );
+      const dbErrorData: Record<string, unknown> = { error: 'Database operation failed' }
+      if (process.env.NODE_ENV === 'development') {
+        dbErrorData.prismaCode = error.code
+        dbErrorData.meta = error.meta
+      }
+      return NextResponse.json(dbErrorData, { status: 500 });
   }
 }
 
@@ -295,14 +272,8 @@ export function withErrorHandling<TContext extends RouteContext = RouteContext>(
   ) => Promise<NextResponse> | NextResponse
 ): (req: NextRequest, context?: TContext) => Promise<NextResponse> {
   return async (req: NextRequest, context?: TContext): Promise<NextResponse> => {
-    try {
-      // Execute the handler
-      const response = await handler(req, context!);
-      return response;
-    } catch (error) {
-      // Handle any errors that occur
-      return errorHandler(error, req);
-    }
+    const response = await handler(req, context!);
+    return response;
   };
 }
 
@@ -315,17 +286,18 @@ export function asyncHandler<TContext extends RouteContext = RouteContext>(
   handler?: (req: NextRequest, context?: TContext) => Promise<NextResponse>,
   teardown?: () => Promise<void>
 ): (req: NextRequest, context?: TContext) => Promise<NextResponse> {
-  return withErrorHandling(async (req: NextRequest, context?: TContext) => {
-    try {
-      // Run setup if provided
-      if (setup) {
-        await setup();
-      }
+  return async (req: NextRequest, context?: TContext) => {
+    // Run setup if provided
+    if (setup) {
+      await setup();
+    }
 
-      // Run the main handler
-      if (!handler) {
-        throw new Error('Handler function is required');
-      }
+    // Run the main handler
+    if (!handler) {
+      throw new Error('Handler function is required');
+    }
+    
+    try {
       const response = await handler(req, context);
 
       // Run teardown if provided (only on success)
@@ -334,18 +306,13 @@ export function asyncHandler<TContext extends RouteContext = RouteContext>(
       }
 
       return response;
-    } catch (error) {
+    } finally {
       // Run teardown even on error (if provided)
       if (teardown) {
-        try {
-          await teardown();
-        } catch (teardownError) {
-          logger.error('Teardown failed', teardownError);
-        }
+        await teardown();
       }
-      throw error;
     }
-  });
+  };
 }
 
 /**

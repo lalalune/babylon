@@ -29,7 +29,7 @@ export default function ApiDocsPage() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2">Babylon API Documentation</h1>
           <p className="text-muted-foreground">
-            Complete API reference for the Babylon prediction market platform
+            Complete API reference for the Babylon social conspiracy game
           </p>
         </div>
         
@@ -50,4 +50,9 @@ export default function ApiDocsPage() {
     </div>
   );
 }
+
+
+
+
+
 

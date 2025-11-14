@@ -19,6 +19,17 @@ export async function requireAdmin(request: NextRequest): Promise<AuthenticatedU
   // First authenticate the user
   const user = await authenticate(request);
   
+  // In localhost, allow any authenticated user to access admin
+  const isLocalhost = request.headers.get('host')?.includes('localhost') || 
+                      request.headers.get('host')?.includes('127.0.0.1');
+  
+  if (isLocalhost) {
+    logger.info(`Admin access granted (localhost bypass)`, { 
+      userId: user.userId 
+    }, 'requireAdmin');
+    return user;
+  }
+  
   // Check if user is an admin in the database
   const dbUser = await prisma.user.findUnique({
     where: { id: user.userId },

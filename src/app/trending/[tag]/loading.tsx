@@ -25,7 +25,7 @@ export default function TrendingTagLoading() {
         </div>
 
         {/* Right: Widget placeholder */}
-        <div className="w-80 xl:w-96 flex-shrink-0 border-l border-border/5 bg-background" />
+        <div className="w-80 xl:w-96 shrink-0 border-l border-border/5 bg-background" />
       </div>
 
       {/* Mobile/Tablet */}

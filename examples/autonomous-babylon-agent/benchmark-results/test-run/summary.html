@@ -1,0 +1,190 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Benchmark Metrics Summary</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1200px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .metric {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .metric-group {
+      background: #f9f9f9;
+      padding: 16px;
+      border-radius: 6px;
+    }
+    .metric-group h3 {
+      margin-top: 0;
+      color: #333;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .metric-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .metric-item:last-child {
+      border-bottom: none;
+    }
+    .metric-label {
+      color: #666;
+      font-size: 14px;
+    }
+    .metric-value {
+      font-weight: 600;
+      font-size: 16px;
+      color: #333;
+    }
+    .metric-value.positive {
+      color: #10b981;
+    }
+    .metric-value.negative {
+      color: #ef4444;
+    }
+    .score-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .score-excellent { background: #d1fae5; color: #065f46; }
+    .score-good { background: #dbeafe; color: #1e40af; }
+    .score-fair { background: #fef3c7; color: #92400e; }
+    .score-poor { background: #fee2e2; color: #991b1b; }
+    h1 {
+      color: #111;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 32px;
+    }
+  </style>
+</head>
+<body>
+  <h1>📊 Benchmark Results</h1>
+  <p class="subtitle">Agent: autonomous-babylon-agent | Benchmark: 247338991517433856</p>
+  
+  <div class="card">
+    <h2>Overall Performance</h2>
+    <div class="metric-item">
+      <span class="metric-label">Total P&L</span>
+      <span class="metric-value positive">
+        +$0.00
+      </span>
+    </div>
+    <div class="metric-item">
+      <span class="metric-label">Optimality Score</span>
+      <span class="metric-value">
+        0.0%
+        <span class="score-badge score-poor">Poor</span>
+      </span>
+    </div>
+    <div class="metric-item">
+      <span class="metric-label">Total Duration</span>
+      <span class="metric-value">0.0s</span>
+    </div>
+    <div class="metric-item">
+      <span class="metric-label">Avg Response Time</span>
+      <span class="metric-value">0ms</span>
+    </div>
+  </div>
+  
+  <div class="card">
+    <div class="metric">
+      <div class="metric-group">
+        <h3>Prediction Markets</h3>
+        <div class="metric-item">
+          <span class="metric-label">Total Positions</span>
+          <span class="metric-value">0</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Accuracy</span>
+          <span class="metric-value ">0.0%</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Correct</span>
+          <span class="metric-value positive">0</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Incorrect</span>
+          <span class="metric-value negative">0</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Avg P&L per Position</span>
+          <span class="metric-value positive">
+            +$0.00
+          </span>
+        </div>
+      </div>
+      
+      <div class="metric-group">
+        <h3>Perpetual Futures</h3>
+        <div class="metric-item">
+          <span class="metric-label">Total Trades</span>
+          <span class="metric-value">0</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Win Rate</span>
+          <span class="metric-value ">0.0%</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Profitable Trades</span>
+          <span class="metric-value positive">0</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Avg P&L per Trade</span>
+          <span class="metric-value positive">
+            +$0.00
+          </span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Max Drawdown</span>
+          <span class="metric-value negative">$0.00</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="card">
+    <h2>Social Engagement</h2>
+    <div class="metric-item">
+      <span class="metric-label">Posts Created</span>
+      <span class="metric-value">0</span>
+    </div>
+    <div class="metric-item">
+      <span class="metric-label">Groups Joined</span>
+      <span class="metric-value">0</span>
+    </div>
+    <div class="metric-item">
+      <span class="metric-label">Reputation Gained</span>
+      <span class="metric-value positive">
+        +0
+      </span>
+    </div>
+  </div>
+  
+  <p style="text-align: center; color: #999; margin-top: 40px;">
+    Generated: 11/13/2025, 4:37:04 AM
+  </p>
+</body>
+</html>

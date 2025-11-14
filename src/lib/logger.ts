@@ -41,7 +41,21 @@ class Logger {
 
   private formatLog(entry: LogEntry): string {
     const contextStr = entry.context ? `[${entry.context}]` : ''
-    const dataStr = entry.data ? ` ${JSON.stringify(entry.data)}` : ''
+    let dataStr = ''
+    if (entry.data) {
+      // Handle cyclic structures and errors
+      dataStr = ` ${JSON.stringify(entry.data, (_key, value) => {
+        // Handle Error objects specially
+        if (value instanceof Error) {
+          return {
+            name: value.name,
+            message: value.message,
+            stack: value.stack,
+          }
+        }
+        return value
+      })}`
+    }
     return `[${entry.timestamp}] ${contextStr} [${entry.level.toUpperCase()}] ${entry.message}${dataStr}`
   }
 

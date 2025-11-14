@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { UUIDSchema, PaginationSchema } from './common';
+import { SnowflakeIdSchema, PaginationSchema } from './common';
 
 /**
  * SSE channel schema
@@ -42,7 +42,7 @@ export const NotificationsQuerySchema = PaginationSchema.extend({
  * Mark notifications as read schema
  */
 export const MarkNotificationsReadSchema = z.object({
-  notificationIds: z.array(UUIDSchema).optional(),
+  notificationIds: z.array(SnowflakeIdSchema).optional(),
   markAllAsRead: z.boolean().optional()
 }).refine(
   (data) => data.markAllAsRead === true || (data.notificationIds && data.notificationIds.length > 0),

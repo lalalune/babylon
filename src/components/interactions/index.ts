@@ -9,3 +9,4 @@ export { FollowButton } from './FollowButton';
 export { CommentInput } from './CommentInput';
 export { CommentCard } from './CommentCard';
 export { InteractionBar } from './InteractionBar';
+export { DeleteButton } from './DeleteButton';

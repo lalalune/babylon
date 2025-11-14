@@ -8,9 +8,6 @@ export * from './common';
 // Export all user schemas
 export * from './user';
 
-// Export all pool schemas
-export * from './pool';
-
 // Export all trade schemas
 export * from './trade';
 

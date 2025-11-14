@@ -4,18 +4,19 @@
  * GET /api/feed/widgets/trending - Get current trending tags
  */
 
-import type { NextRequest } from 'next/server'
 import { optionalAuth, type AuthenticatedUser } from '@/lib/api/auth-middleware'
-import { asUser, asPublic } from '@/lib/db/context'
+import { asPublic, asUser } from '@/lib/db/context'
+import { withErrorHandling } from '@/lib/errors/error-handler'
 import { getCurrentTrendingTags } from '@/lib/services/tag-storage-service'
 import { generateTrendingSummary } from '@/lib/services/trending-summary-service'
+import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 
-export async function GET(request: NextRequest) {
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  // Get trending tags from cache
   const trending = await getCurrentTrendingTags(5)
 
-  // If no trending data exists yet (first load), return placeholder
-  if (trending.length === 0) {
+  if (!trending || trending.length === 0) {
     return NextResponse.json({
       success: true,
       trending: [],
@@ -31,9 +32,9 @@ export async function GET(request: NextRequest) {
       const recentPosts = (authUser && authUser.userId)
         ? await asUser(authUser, async (db) => {
           return await db.postTag.findMany({
-            where: { tagId: item.tag.id },
+            where: { tagId: item.Tag.id },
             include: {
-              post: {
+              Post: {
                 select: {
                   content: true,
                 },
@@ -47,9 +48,9 @@ export async function GET(request: NextRequest) {
         })
         : await asPublic(async (db) => {
           return await db.postTag.findMany({
-            where: { tagId: item.tag.id },
+            where: { tagId: item.Tag.id },
             include: {
-              post: {
+              Post: {
                 select: {
                   content: true,
                 },
@@ -62,19 +63,19 @@ export async function GET(request: NextRequest) {
           })
         })
 
-      const postContents = recentPosts.map(pt => pt.post.content)
+      const postContents = recentPosts.map(pt => pt.Post.content)
       
       const summary = await generateTrendingSummary(
-        item.tag.displayName,
-        item.tag.category,
+        item.Tag.displayName,
+        item.Tag.category,
         postContents
       )
 
       return {
         id: item.id,
-        tag: item.tag.displayName,
-        tagSlug: item.tag.name,
-        category: item.tag.category,
+        tag: item.Tag.displayName,
+        tagSlug: item.Tag.name,
+        category: item.Tag.category,
         postCount: item.postCount,
         summary,
         rank: item.rank,
@@ -82,9 +83,11 @@ export async function GET(request: NextRequest) {
     })
   )
 
+  // Filter out null values
+  const validItems = trendingItems.filter((item): item is NonNullable<typeof item> => item !== null)
+
   return NextResponse.json({
     success: true,
-    trending: trendingItems,
+    trending: validItems,
   })
-}
-
+})

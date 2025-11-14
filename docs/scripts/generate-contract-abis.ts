@@ -35,18 +35,14 @@ interface ContractABI {
 }
 
 async function* walkDirectory(dir: string, ext: string): AsyncGenerator<string> {
-  try {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        yield* walkDirectory(fullPath, ext);
-      } else if (entry.isFile() && entry.name.endsWith(ext)) {
-        yield fullPath;
-      }
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      yield* walkDirectory(fullPath, ext);
+    } else if (entry.isFile() && entry.name.endsWith(ext)) {
+      yield fullPath;
     }
-  } catch {
-    // Directory doesn't exist, skip
   }
 }
 
@@ -54,27 +50,19 @@ async function loadCompiledContracts(): Promise<ContractABI[]> {
   const contracts: ContractABI[] = [];
   const outDir = path.join(process.cwd(), '../out');
   
-  try {
-    // Foundry puts compiled contracts in out/ContractName.sol/ContractName.json
-    for await (const filePath of walkDirectory(outDir, '.json')) {
-      try {
-        const content = await fs.readFile(filePath, 'utf-8');
-        const data = JSON.parse(content);
-        
-        if (data.abi && Array.isArray(data.abi)) {
-          const fileName = path.basename(filePath, '.json');
-          contracts.push({
-            name: fileName,
-            abi: data.abi,
-            bytecode: data.bytecode?.object,
-          });
-        }
-      } catch {
-        // Skip invalid JSON files
-      }
+  // Foundry puts compiled contracts in out/ContractName.sol/ContractName.json
+  for await (const filePath of walkDirectory(outDir, '.json')) {
+    const content = await fs.readFile(filePath, 'utf-8');
+    const data = JSON.parse(content);
+    
+    if (data.abi && Array.isArray(data.abi)) {
+      const fileName = path.basename(filePath, '.json');
+      contracts.push({
+        name: fileName,
+        abi: data.abi,
+        bytecode: data.bytecode?.object,
+      });
     }
-  } catch {
-    console.warn('Could not read compiled contracts. Run `forge build` first.');
   }
   
   return contracts;

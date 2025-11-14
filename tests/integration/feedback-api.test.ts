@@ -3,13 +3,14 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test'
-import { prisma } from '@/lib/database-service'
+import { prisma } from '../../src/lib/database-service'
 import {
   CompletionFormat,
   generateGameCompletionFeedback,
   type TradeMetrics,
   type GameMetrics,
-} from '@/lib/reputation/reputation-service'
+} from '../../src/lib/reputation/reputation-service'
+import { generateSnowflakeId } from '../../src/lib/snowflake'
 
 describe('Feedback API Integration', () => {
   let testUserId: string
@@ -19,17 +20,23 @@ describe('Feedback API Integration', () => {
     // Create test users
     const user1 = await prisma.user.create({
       data: {
+        id: await generateSnowflakeId(),
         privyId: `test-feedback-${Date.now()}-1`,
         username: `testuser1-${Date.now()}`,
         displayName: 'Test User 1',
+          isTest: true,
+        updatedAt: new Date(),
       },
     })
 
     const user2 = await prisma.user.create({
       data: {
+        id: await generateSnowflakeId(),
         privyId: `test-feedback-${Date.now()}-2`,
         username: `testuser2-${Date.now()}`,
         displayName: 'Test User 2',
+          isTest: true,
+        updatedAt: new Date(),
       },
     })
 

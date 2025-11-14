@@ -27,73 +27,34 @@ interface AllocationRequest {
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const body = (await request.json()) as AllocationRequest
+  const body = (await request.json()) as AllocationRequest
 
-    // Validate required fields
-    if (!body.npcUserId) {
-      return NextResponse.json({ error: 'npcUserId is required' }, { status: 400 })
-    }
+  const adjustedAmount = await NPCInvestmentManager.calculateReputationAdjustedAllocation(
+    body.npcUserId,
+    body.baseAmount
+  )
 
-    if (body.baseAmount === undefined || body.baseAmount <= 0) {
-      return NextResponse.json(
-        { error: 'baseAmount must be a positive number' },
-        { status: 400 }
-      )
-    }
+  const reputation = await getReputationBreakdown(body.npcUserId)
+  const reputationScore = reputation!.reputationScore
+  const multiplier = adjustedAmount / body.baseAmount
+  const usedFallback = false
 
-    // Calculate reputation-adjusted allocation
-    const adjustedAmount = await NPCInvestmentManager.calculateReputationAdjustedAllocation(
-      body.npcUserId,
-      body.baseAmount
-    )
+  logger.warn(`Could not retrieve reputation for ${body.npcUserId}`)
 
-    // Get reputation data to include in response
-    let reputationScore = 0
-    let multiplier = 1.0
-    let usedFallback = false
+  logger.info('Reputation-adjusted allocation calculated', {
+    npcUserId: body.npcUserId,
+    baseAmount: body.baseAmount,
+    adjustedAmount,
+    reputationScore,
+    multiplier,
+  })
 
-    try {
-      const reputation = await getReputationBreakdown(body.npcUserId)
-      if (reputation) {
-        reputationScore = reputation.reputationScore
-        multiplier = adjustedAmount / body.baseAmount
-      } else {
-        usedFallback = true
-      }
-    } catch (error) {
-      usedFallback = true
-      logger.warn(`Could not retrieve reputation for ${body.npcUserId}`, { error })
-    }
-
-    logger.info('Reputation-adjusted allocation calculated', {
-      npcUserId: body.npcUserId,
-      baseAmount: body.baseAmount,
-      adjustedAmount,
-      reputationScore,
-      multiplier,
-    })
-
-    return NextResponse.json({
-      success: true,
-      adjustedAmount,
-      baseAmount: body.baseAmount,
-      reputationScore,
-      multiplier,
-      usedFallback,
-    })
-  } catch (error) {
-    logger.error('Failed to calculate adjusted allocation', error)
-
-    if (error instanceof Error) {
-      if (error.message.includes('not found')) {
-        return NextResponse.json({ error: 'NPC user not found' }, { status: 404 })
-      }
-    }
-
-    return NextResponse.json(
-      { error: 'Failed to calculate allocation' },
-      { status: 500 }
-    )
-  }
+  return NextResponse.json({
+    success: true,
+    adjustedAmount,
+    baseAmount: body.baseAmount,
+    reputationScore,
+    multiplier,
+    usedFallback,
+  })
 }

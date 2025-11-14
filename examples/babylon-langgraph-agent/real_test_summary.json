@@ -1,0 +1,197 @@
+{
+  "total_logs": 26,
+  "by_level": {
+    "INFO": 15,
+    "SUCCESS": 8,
+    "ERROR": 0,
+    "WARNING": 0,
+    "DEBUG": 3
+  },
+  "logs": [
+    {
+      "timestamp": "2025-11-12T22:56:53.141011",
+      "level": "INFO",
+      "message": "\ud83e\udd16 Starting Babylon Autonomous Agent (Python + LangGraph + HTTP A2A)",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:56:53.141221",
+      "level": "INFO",
+      "message": "\ud83e\uddea TEST MODE: Running for 3 ticks",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:56:53.141286",
+      "level": "INFO",
+      "message": "\ud83d\udccb Logging to file: real_test.jsonl",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:56:53.141376",
+      "level": "INFO",
+      "message": "Loading private key from environment",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:56:53.144096",
+      "level": "SUCCESS",
+      "message": "Agent Identity Ready",
+      "data": {
+        "tokenId": 17013,
+        "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "agentId": "11155111:17013",
+        "name": "Python Babylon Agent"
+      }
+    },
+    {
+      "timestamp": "2025-11-12T22:56:53.144176",
+      "level": "INFO",
+      "message": "Connecting to A2A endpoint: http://localhost:3000/api/a2a",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:56:53.178233",
+      "level": "SUCCESS",
+      "message": "Connected to Babylon A2A",
+      "data": {
+        "url": "http://localhost:3000/api/a2a",
+        "agent_id": "11155111:17013"
+      }
+    },
+    {
+      "timestamp": "2025-11-12T22:56:53.178353",
+      "level": "INFO",
+      "message": "Initializing LangGraph agent with strategy: balanced",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:56:53.216997",
+      "level": "SUCCESS",
+      "message": "LangGraph Agent Ready",
+      "data": {
+        "strategy": "balanced",
+        "model": "llama-3.1-8b-instant",
+        "tools": 5
+      }
+    },
+    {
+      "timestamp": "2025-11-12T22:56:53.217099",
+      "level": "INFO",
+      "message": "Will run for 3 ticks, then exit",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:56:53.217137",
+      "level": "INFO",
+      "message": "Starting tick #1",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:56:53.217165",
+      "level": "DEBUG",
+      "message": "Memory: 0 actions stored",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:56:53.217235",
+      "level": "INFO",
+      "message": "Calling LangGraph agent for decision...",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:56:56.917416",
+      "level": "SUCCESS",
+      "message": "Tick #1 complete",
+      "data": {
+        "duration_seconds": 3.7,
+        "decision_preview": "Based on the recent memory and the available tools, the current state of the agent is that it has no",
+        "memory_size": 0
+      }
+    },
+    {
+      "timestamp": "2025-11-12T22:56:56.917618",
+      "level": "INFO",
+      "message": "Sleeping 10s until next tick...",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:57:06.918221",
+      "level": "INFO",
+      "message": "Starting tick #2",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:57:06.918456",
+      "level": "DEBUG",
+      "message": "Memory: 0 actions stored",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:57:06.918692",
+      "level": "INFO",
+      "message": "Calling LangGraph agent for decision...",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:57:08.726599",
+      "level": "SUCCESS",
+      "message": "Tick #2 complete",
+      "data": {
+        "duration_seconds": 1.81,
+        "decision_preview": "Based on the recent memory and the available tools, the current state of the agent is that it has no",
+        "memory_size": 0
+      }
+    },
+    {
+      "timestamp": "2025-11-12T22:57:08.726793",
+      "level": "INFO",
+      "message": "Sleeping 10s until next tick...",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:57:18.727048",
+      "level": "INFO",
+      "message": "Starting tick #3",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:57:18.727197",
+      "level": "DEBUG",
+      "message": "Memory: 0 actions stored",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:57:18.727248",
+      "level": "INFO",
+      "message": "Calling LangGraph agent for decision...",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:57:19.588558",
+      "level": "SUCCESS",
+      "message": "Tick #3 complete",
+      "data": {
+        "duration_seconds": 0.86,
+        "decision_preview": "Based on the recent memory and the available tools, the current state of the agent is that it has no",
+        "memory_size": 0
+      }
+    },
+    {
+      "timestamp": "2025-11-12T22:57:19.588756",
+      "level": "SUCCESS",
+      "message": "\u2705 Completed 3 ticks, exiting test mode",
+      "data": null
+    },
+    {
+      "timestamp": "2025-11-12T22:57:19.588817",
+      "level": "SUCCESS",
+      "message": "Test run complete",
+      "data": {
+        "total_ticks": 4,
+        "total_duration_seconds": 26.37,
+        "avg_tick_duration": 6.59,
+        "total_actions_in_memory": 0
+      }
+    }
+  ]
+}

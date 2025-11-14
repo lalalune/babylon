@@ -1,0 +1,371 @@
+# Python RL Training System
+
+Complete reinforcement learning training system for Babylon autonomous agents using continuous MMO-style training.
+
+## Overview
+
+The Python RL training system enables continuous learning from live agent gameplay:
+- **Continuous Collection**: Agents generate training data 24/7
+- **Automated Training**: GRPO/RULER training runs automatically
+- **Live Deployment**: Updated models deploy without downtime
+- **MMO-Style**: Multiple agents learn together, share experiences
+
+**Based on**: OpenPipe GRPO, Stanford RULER architecture
+
+**Status**: ✅ **Production Ready** - Complete automation pipeline
+
+## Architecture
+
+```mermaid
+graph TB
+    A[Live Agents] --> B[Trajectory Collection]
+    B --> C[(PostgreSQL)]
+    C --> D[Training Pipeline]
+    D --> E[GRPO Trainer]
+    E --> F[Model Checkpoint]
+    F --> G[Deployment]
+    G --> H[Updated Agents]
+    H --> A
+```
+
+### Continuous Learning Loop
+
+1. **Agents Play**: Autonomous agents interact with Babylon
+2. **Data Collection**: Decisions recorded via trajectory logger
+3. **Windowed Batching**: Group by time windows (1-hour default)
+4. **Training**: GRPO/RULER optimize model on successful decisions
+5. **Deployment**: New model replaces old without downtime
+6. **Repeat**: Loop continues indefinitely
+
+## Quick Start
+
+### 1. Installation
+
+```bash
+cd python
+pip install -r requirements.txt
+```
+
+### 2. Configuration
+
+Create `.env.training`:
+
+```env
+# Database
+DATABASE_URL=postgresql://user:pass@host/babylon
+
+# Training
+OPENPIPE_API_KEY=your_key
+MODEL_NAME=Qwen/Qwen2.5-0.5B-Instruct
+TRAINING_FREQUENCY_WINDOWS=1
+WINDOW_DURATION_HOURS=1
+
+# Deployment
+DEPLOYMENT_STRATEGY=replace
+LOCAL_ENDPOINT=http://localhost:8000
+```
+
+### 3. Start Training
+
+```bash
+# Continuous mode (runs forever)
+python src/training/continuous_trainer.py
+
+# Single window (test)
+python src/training/continuous_trainer.py --mode single
+```
+
+## Training Modes
+
+### Continuous Mode (Production)
+
+Runs indefinitely, training on new data as it arrives:
+
+```bash
+python src/training/continuous_trainer.py \
+  --mode continuous \
+  --window-hours 1 \
+  --frequency 1
+```
+
+**Process**:
+1. Wait for window to complete
+2. Collect trajectories from that window
+3. Train GRPO model
+4. Deploy new model
+5. Repeat
+
+### Single Window Mode (Testing)
+
+Train on one window and exit:
+
+```bash
+python src/training/continuous_trainer.py \
+  --mode single \
+  --window-hours 6
+```
+
+### Backfill Mode (Catch-up)
+
+Train on historical data:
+
+```bash
+python src/training/continuous_trainer.py \
+  --mode backfill \
+  --backfill-hours 48
+```
+
+## Data Collection
+
+### Windowing Strategy
+
+**Time Windows**:
+- Default: 1 hour
+- Configurable: 15 minutes to 24 hours
+- Agents: Minimum 3 per window
+- Actions: Minimum 5 per trajectory
+
+**Example Window**:
+```
+Window: 2024-11-13 10:00 - 11:00
+- Agents: 5
+- Trajectories: 47
+- Avg Reward: 0.73
+- Training: Yes
+```
+
+### Quality Filters
+
+**Trajectories must have**:
+- ✅ Complete provider data
+- ✅ LLM call with reasoning
+- ✅ Action result
+- ✅ Reward score
+- ✅ All timestamps
+
+**Rejected if**:
+- ❌ Missing required fields
+- ❌ Reward below threshold
+- ❌ Incomplete data
+- ❌ Malformed JSON
+
+## Training Configuration
+
+### GRPO Settings
+
+```python
+from training.grpo_config import GRPOConfig
+
+config = GRPOConfig(
+    model_name="Qwen/Qwen2.5-0.5B-Instruct",
+    batch_size=4,
+    gradient_accumulation_steps=2,
+    learning_rate=1e-6,
+    kl_penalty=0.05,
+    iterations_per_window=10,
+    reward_threshold=0.5
+)
+```
+
+### RULER Scoring
+
+```python
+from training.ruler_scorer import RULERScorer
+
+scorer = RULERScorer(
+    model_path="./checkpoints/latest",
+    scoring_method="preference",  # or "regression"
+    temperature=0.7
+)
+
+scores = scorer.score_trajectories(trajectories)
+```
+
+## Deployment
+
+### Strategy: Replace
+
+Replace old model with new model atomically:
+
+```python
+deployment = {
+    "strategy": "replace",
+    "endpoint": "http://localhost:8000",
+    "model_path": "./checkpoints/window_123",
+    "validation": True  # Test before deploying
+}
+```
+
+### Strategy: A/B Test
+
+Run two models simultaneously:
+
+```python
+deployment = {
+    "strategy": "ab_test",
+    "model_a": "./checkpoints/baseline",
+    "model_b": "./checkpoints/window_123",
+    "split": 0.5  # 50/50 split
+}
+```
+
+## Monitoring
+
+### Training Metrics
+
+Track key metrics:
+
+```python
+{
+    "window_id": 123,
+    "agents": 5,
+    "trajectories": 47,
+    "avg_reward": 0.73,
+    "training_loss": 0.21,
+    "kl_divergence": 0.03,
+    "deployment_success": True,
+    "duration_minutes": 15
+}
+```
+
+### Performance Tracking
+
+Monitor agent performance:
+
+```python
+# Before training
+baseline_win_rate = 0.52
+
+# After training
+improved_win_rate = 0.67
+
+# Improvement
+delta = +0.15  # 15% better!
+```
+
+## Advanced Features
+
+### Custom Reward Functions
+
+```python
+class TradingRewardFunction:
+    def compute(self, trajectory):
+        # Extract metrics
+        pnl = trajectory['result']['pnl']
+        hold_time = trajectory['result']['hold_time_minutes']
+        win_rate = trajectory['agent_stats']['win_rate']
+        
+        # Compute components
+        pnl_reward = pnl / trajectory['result']['investment']
+        speed_reward = 1.0 if hold_time < 60 else 0.5
+        consistency_reward = win_rate
+        
+        # Weighted combination
+        return (
+            0.5 * pnl_reward +
+            0.2 * speed_reward +
+            0.3 * consistency_reward
+        )
+```
+
+### Multi-Agent Learning
+
+```python
+# Collect from multiple agents
+agents = ["agent-1", "agent-2", "agent-3"]
+
+trajectories = []
+for agent in agents:
+    agent_data = collect_trajectories(agent, window)
+    trajectories.extend(agent_data)
+
+# Train on combined experience
+model = train_grpo(trajectories)
+```
+
+### Transfer Learning
+
+```python
+# Fine-tune on Babylon-specific strategies
+trainer = GRPOTrainer(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",  # General model
+    babylon_data="./trajectories/",            # Babylon-specific
+    transfer_layers=["attention", "ffn"]       # What to fine-tune
+)
+```
+
+## Production Setup
+
+### CoreWeave Deployment
+
+```yaml
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: babylon-rl-training
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+      - name: trainer
+        image: babylon/rl-training:latest
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: url
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+```
+
+### Automation
+
+```bash
+# Cron job for continuous training
+0 * * * * cd /app/python && python src/training/continuous_trainer.py --mode single
+```
+
+## Troubleshooting
+
+### No Trajectories Collected
+
+**Check**:
+- Agents are running
+- Trajectory logger is enabled
+- Database connection works
+- Actions are wrapped with logging
+
+### Training Fails
+
+**Common Issues**:
+- Insufficient trajectories (need 5+ per agent)
+- Missing required fields
+- Invalid reward scores
+- GPU out of memory
+
+### Model Doesn't Improve
+
+**Try**:
+- Increase training iterations
+- Adjust learning rate
+- Filter low-reward trajectories
+- Increase batch size
+
+## Resources
+
+- **Full Documentation**: `python/README.md`
+- **Quick Start**: `python/START_HERE.md`
+- **Scorer Implementation**: `python/src/training/ruler_scorer.py`
+- **Automation Pipeline**: `src/lib/training/AutomationPipeline.ts`
+
+## Next Steps
+
+- [Trajectory Logging](/agents/trajectory-logging)
+- [Autonomous Agents](/agents/autonomous-guide)
+- [Agent Performance](/agents/performance)
+- [Python LangGraph Example](/agents/examples-python-langgraph)
+

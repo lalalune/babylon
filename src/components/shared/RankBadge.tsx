@@ -107,13 +107,13 @@ export function RankNumber({ rank, size = 'md', className = '' }: RankNumberProp
 
   if (rank === 1) {
     bgColor = 'bg-gradient-to-br from-yellow-500 to-yellow-600'
-    textColor = 'text-white'
+    textColor = 'text-primary-foreground'
   } else if (rank <= 3) {
     bgColor = 'bg-gradient-to-br from-gray-400 to-gray-500'
-    textColor = 'text-white'
+    textColor = 'text-primary-foreground'
   } else if (rank <= 10) {
     bgColor = 'bg-gradient-to-br from-amber-700 to-amber-800'
-    textColor = 'text-white'
+    textColor = 'text-primary-foreground'
   }
 
   return (

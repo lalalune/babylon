@@ -24,36 +24,14 @@ async function executeTick() {
   tickCount++;
   logger.info(`🎮 Triggering game tick #${tickCount}...`, undefined, 'LocalCron');
   
-  try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.CRON_SECRET || 'development'}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      logger.error(`Tick #${tickCount} failed (HTTP ${response.status})`, data, 'LocalCron');
-      return;
-    }
-
-    if (data.skipped) {
-      logger.warn(`Tick #${tickCount} skipped: ${data.reason}`, undefined, 'LocalCron');
-      return;
-    }
-
-    logger.info(`✅ Tick #${tickCount} completed`, {
-      duration: data.duration,
-      posts: data.result?.postsCreated || 0,
-      events: data.result?.eventsCreated || 0,
-      markets: data.result?.marketsUpdated || 0,
-    }, 'LocalCron');
-
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+  const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.CRON_SECRET || 'development'}`,
+      'Content-Type': 'application/json',
+    },
+  }).catch((error: Error) => {
+    const errorMessage = error.message;
     logger.error(`Tick #${tickCount} error: ${errorMessage}`, { error }, 'LocalCron');
     
     if (errorMessage.includes('ECONNREFUSED')) {
@@ -61,7 +39,27 @@ async function executeTick() {
       logger.error('   Start it first: bun run dev', undefined, 'LocalCron');
       process.exit(1);
     }
+    throw error;
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    logger.error(`Tick #${tickCount} failed (HTTP ${response.status})`, data, 'LocalCron');
+    return;
   }
+
+  if (data.skipped) {
+    logger.warn(`Tick #${tickCount} skipped: ${data.reason}`, undefined, 'LocalCron');
+    return;
+  }
+
+  logger.info(`✅ Tick #${tickCount} completed`, {
+    duration: data.duration,
+    posts: data.result?.postsCreated || 0,
+    events: data.result?.eventsCreated || 0,
+    markets: data.result?.marketsUpdated || 0,
+  }, 'LocalCron');
 }
 
 async function main() {
@@ -95,8 +93,5 @@ async function main() {
   await new Promise(() => {});
 }
 
-main().catch((error) => {
-  logger.error('Fatal error:', error, 'LocalCron');
-  process.exit(1);
-});
+main();
 

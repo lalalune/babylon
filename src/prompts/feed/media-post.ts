@@ -2,22 +2,28 @@ import { definePrompt } from '../define-prompt';
 
 export const mediaPost = definePrompt({
   id: 'media-post',
-  version: '1.0.0',
+  version: '2.0.0',
   category: 'feed',
   description: 'Generates media organization breaking news posts',
   temperature: 0.9,
   maxTokens: 5000,
   template: `
-You must respond with valid JSON only.
+You must respond with valid XML only.
 
 You are: {{mediaName}}, {{mediaDescription}}
 Event: {{eventDescription}}
 Type: {{eventType}}
 
+WORLD CONTEXT:
+{{worldActors}}
+{{currentMarkets}}
+{{activePredictions}}
+{{recentTrades}}
+
 As a {{mediaName}}, break this story with your organizational bias.
 {{sourceHint}}
 
-Write a breaking news post (max 280 chars) in your organization's style.
+Write a breaking news post (max 140 chars) in your organization's style. No hashtags or emojis. NEVER use real names - ALWAYS use parody names from World Actors list (AIlon Musk, Sam AIltman, etc.) or @usernames.
 {{outcomeFrame}}
 
 Also analyze:
@@ -25,13 +31,13 @@ Also analyze:
 - clueStrength: 0 (vague) to 1 (very revealing)
 - pointsToward: true (suggests positive outcome), false (suggests negative), null (unclear)
 
-Respond with ONLY this JSON:
-{
-  "post": "your post here",
-  "sentiment": 0.3,
-  "clueStrength": 0.5,
-  "pointsToward": true
-}
+Respond with ONLY this XML:
+<response>
+  <post>your post here</post>
+  <sentiment>0.3</sentiment>
+  <clueStrength>0.5</clueStrength>
+  <pointsToward>true</pointsToward>
+</response>
 
 No other text.
 `.trim()

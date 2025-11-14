@@ -56,7 +56,7 @@ function FeedAuthBannerContent() {
               className={cn(
                 'px-6 py-2 font-bold',
                 'bg-background text-foreground',
-                'hover:bg-background/90',
+                'hover:bg-background/90 hover:text-foreground',
                 'transition-colors',
                 'bg-primary text-primary-foreground'
               )}

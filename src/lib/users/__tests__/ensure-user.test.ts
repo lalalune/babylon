@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
 import type { AuthenticatedUser } from '@/lib/api/auth-middleware'
 import { ensureUserForAuth, getCanonicalUserId } from '../ensure-user'
 
@@ -83,7 +83,7 @@ const prismaMock = {
   },
 }
 
-vi.mock('@/lib/database-service', () => ({
+mock.module('@/lib/database-service', () => ({
   prisma: prismaMock,
 }))
 

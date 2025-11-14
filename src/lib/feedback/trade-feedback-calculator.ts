@@ -5,7 +5,6 @@
  * Analyzes entry timing, exit timing, hold duration, and risk management.
  */
 
-import { logger } from '@/lib/logger'
 import { prisma } from '@/lib/database-service'
 import type { TradeMetrics } from '@/lib/reputation/reputation-service'
 
@@ -159,79 +158,66 @@ export function calculateRiskScore(
  * @returns TradeMetrics or null if position not found
  */
 export async function calculateTradeMetrics(positionId: string): Promise<TradeMetrics | null> {
-  try {
-    // Fetch position with related data
-    const position = await prisma.position.findUnique({
-      where: { id: positionId },
-      include: {
-        question: true,
-        user: {
-          select: {
-            virtualBalance: true,
-            totalDeposited: true,
-          },
+  // Fetch position with related data
+  const position = await prisma.position.findUnique({
+    where: { id: positionId },
+    include: {
+      Question: true,
+      User: {
+        select: {
+          virtualBalance: true,
+          totalDeposited: true,
         },
       },
-    })
+    },
+  })
 
-    if (!position || !position.question) {
-      logger.warn('Position or question not found for trade metrics', { positionId }, 'TradeFeedback')
-      return null
-    }
-
-    if (!position.questionId) {
-      logger.warn('Position has no questionId for trade metrics', { positionId }, 'TradeFeedback')
-      return null
-    }
-
-    // Build trade position object
-    const tradePosition: TradePosition = {
-      id: position.id,
-      userId: position.userId,
-      questionId: position.questionId,
-      outcome: position.outcome ?? false,
-      amount: Number(position.amount),
-      pnl: Number(position.pnl ?? 0),
-      createdAt: position.createdAt,
-      resolvedAt: position.resolvedAt,
-    }
-
-    // Market resolution date (use question's resolution date or current date)
-    const marketResolutionDate = position.question.resolutionDate
-      ? new Date(position.question.resolutionDate)
-      : new Date()
-
-    // Calculate component scores
-    const entryTimingScore = calculateEntryTimingScore(tradePosition, marketResolutionDate)
-    const exitTimingScore = calculateExitTimingScore(tradePosition, marketResolutionDate)
-
-    // User's total balance at trade time (approximate with current balance + PnL)
-    const userBalance = Number(position.user.virtualBalance) + Number(position.user.totalDeposited)
-    const riskScore = calculateRiskScore(tradePosition, userBalance)
-
-    // Combined timing score (weighted average of entry and exit)
-    const timingScore = (entryTimingScore * 0.6 + exitTimingScore * 0.4)
-
-    // Calculate holding period in hours
-    const holdingPeriod = position.resolvedAt
-      ? (position.resolvedAt.getTime() - position.createdAt.getTime()) / (1000 * 60 * 60)
-      : (marketResolutionDate.getTime() - position.createdAt.getTime()) / (1000 * 60 * 60)
-
-    // ROI calculation
-    const roi = tradePosition.amount > 0 ? tradePosition.pnl / tradePosition.amount : 0
-
-    return {
-      profitable: tradePosition.pnl > 0,
-      roi,
-      holdingPeriod,
-      timingScore,
-      riskScore,
-    }
-
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.error(`Failed to calculate trade metrics: ${errorMessage}`, { error, positionId }, 'TradeFeedback')
+  if (!position || !position.Question || !position.questionId) {
     return null
+  }
+
+  // Build trade position object
+  const tradePosition: TradePosition = {
+    id: position.id,
+    userId: position.userId,
+    questionId: position.questionId,
+    outcome: position.outcome ?? false,
+    amount: Number(position.amount),
+    pnl: Number(position.pnl ?? 0),
+    createdAt: position.createdAt,
+    resolvedAt: position.resolvedAt,
+  }
+
+  // Market resolution date (use question's resolution date or current date)
+  const marketResolutionDate = position.Question.resolutionDate
+    ? new Date(position.Question.resolutionDate)
+    : new Date()
+
+  // Calculate component scores
+  const entryTimingScore = calculateEntryTimingScore(tradePosition, marketResolutionDate)
+  const exitTimingScore = calculateExitTimingScore(tradePosition, marketResolutionDate)
+
+  // User's total balance at trade time (approximate with current balance + PnL)
+  const userBalance = Number(position.User.virtualBalance) + Number(position.User.totalDeposited)
+  const riskScore = calculateRiskScore(tradePosition, userBalance)
+
+  // Combined timing score (weighted average of entry and exit)
+  const timingScore = (entryTimingScore * 0.6 + exitTimingScore * 0.4)
+
+  // Calculate holding period in hours
+  const holdingPeriod = position.resolvedAt
+    ? (position.resolvedAt.getTime() - position.createdAt.getTime()) / (1000 * 60 * 60)
+    : (marketResolutionDate.getTime() - position.createdAt.getTime()) / (1000 * 60 * 60)
+
+  // ROI calculation
+  const roi = tradePosition.amount > 0 ? tradePosition.pnl / tradePosition.amount : 0
+
+  return {
+    profitable: tradePosition.pnl > 0,
+    roi,
+    holdingPeriod,
+    timingScore,
+    riskScore,
   }
 }
 

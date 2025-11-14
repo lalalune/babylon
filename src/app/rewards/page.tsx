@@ -11,7 +11,7 @@ import { LinkSocialAccountsModal } from '@/components/profile/LinkSocialAccounts
 import { RewardsSkeleton } from '@/components/rewards/RewardsSkeleton'
 import { useAuth } from '@/hooks/useAuth'
 import { getProfileUrl } from '@/lib/profile-utils'
-import { POINTS } from '@/lib/services/points-service'
+import { POINTS } from '@/lib/constants/points'
 import { useAuthStore } from '@/stores/authStore'
 import {
   Award,
@@ -72,7 +72,7 @@ interface ReferralData {
 }
 
 export default function RewardsPage() {
-  const { ready, authenticated } = useAuth()
+  const { ready, authenticated, getAccessToken } = useAuth()
   const { user } = useAuthStore()
   const [referralData, setReferralData] = useState<ReferralData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -87,34 +87,36 @@ export default function RewardsPage() {
     setLoading(true)
     setError(null)
 
-    try {
-      const token = typeof window !== 'undefined' ? window.__privyAccessToken : null
-      if (!token) {
-        console.error('Failed to get access token from window.__privyAccessToken')
-        setError('Authentication required')
-        setLoading(false)
-        return
-      }
-
-      const response = await fetch(`/api/users/${encodeURIComponent(user.id)}/referrals`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch referral data')
-      }
-
-      const data = await response.json()
-      setReferralData(data)
+    const token = await getAccessToken()
+    if (!token) {
+      console.error('Failed to get access token')
+      setError('Authentication required')
       setLoading(false)
-    } catch (error) {
-      console.error('Failed to fetch referral data:', error)
-      setError(error instanceof Error ? error.message : 'Failed to load referral data')
-      setLoading(false)
+      return
     }
-  }, [user?.id, authenticated])
+
+    const response = await fetch(`/api/users/${encodeURIComponent(user.id)}/referrals`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    }).catch((error: Error) => {
+      console.error('Failed to fetch referral data:', error)
+      setError(error.message)
+      setLoading(false)
+      throw error
+    })
+
+    if (!response.ok) {
+      const error = new Error('Failed to fetch referral data')
+      setError(error.message)
+      setLoading(false)
+      throw error
+    }
+
+    const data = await response.json()
+    setReferralData(data)
+    setLoading(false)
+  }, [user?.id, authenticated, getAccessToken])
 
   useEffect(() => {
     if (ready && authenticated && user?.id) {
@@ -311,7 +313,7 @@ export default function RewardsPage() {
                           : 'bg-sidebar-accent/50 border-border hover:bg-sidebar-accent cursor-pointer'
                       }`}
                     >
-                      <div className={`flex-shrink-0 ${task.color}`}>
+                      <div className={`shrink-0 ${task.color}`}>
                         <Icon className="w-6 h-6" />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -323,7 +325,7 @@ export default function RewardsPage() {
                         </div>
                         <p className="text-xs text-muted-foreground truncate">{task.description}</p>
                       </div>
-                      <div className="flex-shrink-0 text-right">
+                      <div className="shrink-0 text-right">
                         <div className={`text-sm font-bold ${task.completed ? 'text-green-500' : 'text-yellow-500'}`}>
                           {task.completed ? '✓ ' : '+'}
                           {task.points}
@@ -350,7 +352,7 @@ export default function RewardsPage() {
                 </div>
                 <button
                   onClick={() => setShowShareModal(true)}
-                  className="px-4 py-2 bg-[#0066FF] hover:bg-[#0066FF]/80 text-white rounded-lg transition-colors font-medium text-sm"
+                  className="px-4 py-2 bg-[#0066FF] hover:bg-[#0066FF]/80 text-primary-foreground rounded-lg transition-colors font-medium text-sm"
                 >
                   Share
                 </button>
@@ -393,18 +395,18 @@ export default function RewardsPage() {
                 </div>
 
                 {/* Share Button */}
-                {referralData.referralUrl && (
+                {user?.id && (
                   <ExternalShareButton
                     contentType="referral"
-                    text="Join me on Babylon! 🎮"
-                    url={referralData.referralUrl}
+                    text={`Join me on Babylon! 🎮\n\n${typeof window !== 'undefined' ? `${window.location.origin}/share/referral/${user.id}` : referralData.referralUrl || ''}`}
+                    url={typeof window !== 'undefined' ? `${window.location.origin}/share/referral/${user.id}` : referralData.referralUrl || ''}
                     className="w-full"
                   />
                 )}
 
-                {!referralData.referralUrl && (
+                {!user?.id && (
                   <p className="text-xs text-muted-foreground">
-                    Set a username in your profile to get your referral link
+                    Sign in to get your referral link
                   </p>
                 )}
               </div>
@@ -472,7 +474,7 @@ export default function RewardsPage() {
           </div>
 
           {/* Rewards Widget Column */}
-          {/* <div className="hidden xl:flex flex-col w-96 flex-shrink-0 overflow-y-auto bg-sidebar p-4">
+          {/* <div className="hidden xl:flex flex-col w-96 shrink-0 overflow-y-auto bg-sidebar p-4">
             {user && <RewardsWidget userId={user.id} />}
           </div> */}
         </div>
@@ -545,7 +547,7 @@ export default function RewardsPage() {
                           : 'bg-muted/30 border-border cursor-pointer'
                       }`}
                     >
-                      <div className={`flex-shrink-0 ${task.color}`}>
+                      <div className={`shrink-0 ${task.color}`}>
                         <Icon className="w-5 h-5" />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -557,7 +559,7 @@ export default function RewardsPage() {
                         </div>
                         <p className="text-xs text-muted-foreground truncate">{task.description}</p>
                       </div>
-                      <div className="flex-shrink-0 text-sm font-bold">
+                      <div className="shrink-0 text-sm font-bold">
                         <span className={task.completed ? 'text-green-500' : 'text-yellow-500'}>
                           {task.completed ? '✓' : '+'}{task.points}
                         </span>
@@ -604,7 +606,7 @@ export default function RewardsPage() {
                   <button
                     onClick={handleCopyUrl}
                     disabled={!referralData.referralUrl}
-                    className="px-3 py-2 bg-sidebar-accent/50 hover:bg-sidebar-accent text-foreground rounded-lg transition-colors flex items-center justify-center border border-border disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                    className="px-3 py-2 bg-sidebar-accent/50 hover:bg-sidebar-accent text-foreground rounded-lg transition-colors flex items-center justify-center border border-border disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                     aria-label="Copy referral link"
                   >
                     {copiedUrl ? (
@@ -616,18 +618,18 @@ export default function RewardsPage() {
                 </div>
 
                 {/* Share Button */}
-                {referralData.referralUrl && (
+                {user?.id && (
                   <ExternalShareButton
                     contentType="referral"
-                    text="Join me on Babylon! 🎮"
-                    url={referralData.referralUrl}
+                    text={`Join me on Babylon! 🎮\n\n${typeof window !== 'undefined' ? `${window.location.origin}/share/referral/${user.id}` : referralData.referralUrl || ''}`}
+                    url={typeof window !== 'undefined' ? `${window.location.origin}/share/referral/${user.id}` : referralData.referralUrl || ''}
                     className="w-full"
                   />
                 )}
 
-                {!referralData.referralUrl && (
+                {!user?.id && (
                   <p className="text-xs text-muted-foreground">
-                    Set a username in your profile to get your referral link
+                    Sign in to get your referral link
                   </p>
                 )}
               </div>

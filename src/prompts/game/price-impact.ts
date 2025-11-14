@@ -2,12 +2,14 @@ import { definePrompt } from '../define-prompt';
 
 export const priceImpact = definePrompt({
   id: 'price-impact',
-  version: '1',
+  version: '2.0.0',
   category: 'game',
   description: 'Analyzes how game events affect company stock prices',
   temperature: 0.3,
   maxTokens: 200,
   template: `
+You must respond with valid XML only.
+
 # Stock Price Impact Analysis
 
 You are analyzing how a game event affects a company's stock price.
@@ -53,28 +55,28 @@ Consider:
 
 ## Response Format
 
-Respond with ONLY valid JSON:
+Respond with ONLY valid XML:
 
-\`\`\`json
-{
-  "direction": "positive" | "negative" | "neutral",
-  "magnitude": "major" | "moderate" | "minor",
-  "reasoning": "Brief explanation (1 sentence)"
-}
-\`\`\`
+<response>
+  <direction>positive | negative | neutral</direction>
+  <magnitude>major | moderate | minor</magnitude>
+  <reasoning>Brief explanation (1 sentence)</reasoning>
+</response>
 
 ## Examples
 
-Event: "MAIrk Zuckerberg announces new metaverse feature"
+Event: "MAIrk Zuckerborg announces new metaverse feature"
 Company: MetAI
-→ {"direction": "positive", "magnitude": "moderate", "reasoning": "Direct product announcement from CEO"}
+→ <response><direction>positive</direction><magnitude>moderate</magnitude><reasoning>Direct product announcement from CEO</reasoning></response>
 
 Event: "Ailon Musktweets conspiracy theory"
 Company: FaceHook
-→ {"direction": "neutral", "magnitude": "minor", "reasoning": "Unrelated to FaceHook operations"}
+→ <response><direction>neutral</direction><magnitude>minor</magnitude><reasoning>Unrelated to FaceHook operations</reasoning></response>
 
-Event: "SEC investigates Palmer LuckAI for securities fraud"
+Event: "SEC investigates PAIlmer LuckAI for securities fraud"
 Company: AInduril
-→ {"direction": "negative", "magnitude": "major", "reasoning": "CEO under federal investigation"}
+→ <response><direction>negative</direction><magnitude>major</magnitude><reasoning>CEO under federal investigation</reasoning></response>
+
+No other text.
 `.trim()
 });

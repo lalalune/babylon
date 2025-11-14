@@ -4,7 +4,7 @@
  * Complete interfaces for agent monitoring and analytics
  */
 
-import type { AgentProfile, AgentReputation } from '@/a2a/types';
+import type { AgentProfile, AgentReputation } from '@/types/a2a';
 
 /**
  * Agent status information

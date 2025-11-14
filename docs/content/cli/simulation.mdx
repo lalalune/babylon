@@ -1,0 +1,242 @@
+# Game Simulation
+
+Run complete game simulations for testing and analysis.
+
+## Tools
+
+### run-game - Full Game Simulation
+
+Simulates complete prediction market games with agents, betting, and outcomes.
+
+```bash
+# Single game
+bun run command:simulate
+
+# With specific outcome
+bun run command:simulate --outcome=YES
+
+# Batch mode (100 games)
+bun run command:simulate:batch
+
+# Save results
+bun run command:simulate --save=game.json --verbose
+```
+
+### generate-world - Narrative Generation
+
+Generates complete game narratives with NPC actions and events.
+
+```bash
+# Default (SUCCESS outcome)
+bun run command:world
+
+# Specific outcome
+bun run command:world --outcome=FAILURE
+
+# Verbose narrative
+bun run command:world:verbose
+
+# Save to file
+bun run command:world --save=world.json
+```
+
+## run-game Options
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--outcome=YES\|NO` | Set predetermined outcome | `--outcome=YES` |
+| `--count=N` | Run N simulations (batch mode) | `--count=100` |
+| `--save=file` | Save game data to JSON | `--save=game.json` |
+| `--fast` | Skip verbose logging | `--fast` |
+| `--verbose`, `-v` | Show all events | `--verbose` |
+| `--json` | Output JSON only | `--json` |
+
+## generate-world Options
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--outcome=SUCCESS\|FAILURE` | Set predetermined outcome | `--outcome=SUCCESS` |
+| `--save=file` | Save world to JSON | `--save=world.json` |
+| `--verbose`, `-v` | Show all events | `--verbose` |
+| `--json` | Output JSON only | `--json` |
+
+## Use Cases
+
+### Testing Game Mechanics
+
+```bash
+# Run single game with full logging
+bun run command:simulate --verbose
+```
+
+View:
+- Agent decision-making
+- Betting patterns
+- Market dynamics
+- Winner calculation
+
+### Batch Analysis
+
+```bash
+# Run 1000 games for statistics
+bun run command:simulate --count=1000 --fast --json > results.json
+
+# Analyze with jq
+cat results.json | jq '.results[] | {outcome, winners}'
+```
+
+### Narrative Testing
+
+```bash
+# Generate complete world narrative
+bun run command:world:verbose
+
+# See full event timeline:
+# DAY 1
+# Actor1: Announces AI safety initiative
+# Actor2: Responds with skepticism
+# News: Tech Summit Reveals Surprising Consensus
+# ...
+```
+
+### Performance Benchmarking
+
+```bash
+# Measure game simulation performance
+time bun run command:simulate:batch
+
+# Output:
+# 100 games completed
+# { totalTime: '45s', avgTime: '450ms/game' }
+```
+
+## Output Formats
+
+### Console (Default)
+
+Human-readable with colors:
+
+```bash
+BABYLON GAME SIMULATION
+==========================
+Question: Will AI regulation pass?
+Predetermined Outcome: YES
+Agents: 5
+
+Agent1: Bet YES (100 tokens)
+Agent2: Bet NO (50 tokens)
+Market: 65% YES / 35% NO
+
+Outcome revealed: YES
+Winners: Agent1, Agent3
+Game complete { duration: '2.5s', events: 145 }
+```
+
+### JSON Output
+
+Machine-readable:
+
+```bash
+bun run command:simulate --json
+```
+
+```json
+{
+  "id": "game123",
+  "question": "Will AI regulation pass?",
+  "outcome": true,
+  "agents": [
+    {"id": "agent1", "tokens": 200},
+    {"id": "agent2", "tokens": 50}
+  ],
+  "market": {
+    "yesOdds": 65,
+    "noOdds": 35
+  },
+  "events": [...],
+  "winners": ["agent1", "agent3"]
+}
+```
+
+### File Export
+
+```bash
+bun run command:simulate --save=game-$(date +%s).json
+# Creates: game-1698765432.json
+```
+
+## Simulation Components
+
+### Game Simulation (run-game)
+
+1. **Market Init** - Starting odds (50/50)
+2. **Agent Deploy** - 5 agents with initial tokens
+3. **Clue Distribution** - Agents receive clues over time
+4. **Agent Betting** - Agents bet based on clues
+5. **Market Updates** - Odds adjust based on bets
+6. **Outcome Reveal** - Final outcome shown
+7. **Winner Calc** - Tokens distributed to winners
+
+### World Generation (generate-world)
+
+1. **Question Setup** - Define prediction question
+2. **NPC Cast** - Create 8 NPCs with roles
+3. **Timeline Sim** - Simulate 30 days of events
+4. **Event Generation** - Generate actions, conversations, news
+5. **Feed Posts** - Create social media posts
+6. **Outcome Reveal** - Final outcome announcement
+
+## Performance
+
+### run-game (Single)
+
+- **Duration:** 1-3 seconds
+- **Events:** 100-200
+- **Memory:** ~50MB
+
+### run-game (Batch)
+
+- **Duration:** ~500ms per game
+- **100 games:** ~50 seconds
+- **Memory:** ~100MB
+
+### generate-world
+
+- **Duration:** 5-15 seconds (depending on verbosity)
+- **Events:** 400-600
+- **Memory:** ~75MB
+
+## Testing Patterns
+
+### Outcome Balance
+
+```bash
+# Run 100 games, check 50/50 split
+bun run command:simulate:batch | grep "outcomes"
+# yesOutcomes: 50 (50%)
+# noOutcomes: 50 (50%)
+```
+
+### Agent Behavior
+
+```bash
+# Run single game, observe betting
+bun run command:simulate --verbose 2>&1 | grep "Bet"
+# Agent1: Bet YES (100 tokens)
+# Agent2: Bet NO (50 tokens)
+```
+
+### Market Dynamics
+
+```bash
+# Export game data, analyze market
+bun run command:simulate --json --save=market-test.json
+cat market-test.json | jq '.market'
+```
+
+## Next Steps
+
+- [Run Tests →](/getting-started/testing)
+- [Analyze Data →](/api-reference/markets)
+- [Deploy Production →](/deployment/vercel)
+

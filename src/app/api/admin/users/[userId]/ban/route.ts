@@ -53,7 +53,7 @@ export const POST = withErrorHandling(async (
   });
 
   if (!targetUser) {
-    throw new NotFoundError('User not found', 'user');
+    throw new NotFoundError('User', userId);
   }
 
   // Prevent banning admins (unless you're banning yourself, which is allowed)

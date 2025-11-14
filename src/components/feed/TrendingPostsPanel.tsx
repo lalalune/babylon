@@ -6,6 +6,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { useRouter } from 'next/navigation'
 import { getProfileUrl } from '@/lib/profile-utils'
 import Link from 'next/link'
+import { Skeleton } from '@/components/shared/Skeleton'
 
 interface TrendingPost {
   id: string
@@ -58,7 +59,10 @@ export function TrendingPostsPanel() {
         <h2 className="text-xl font-bold text-foreground">Trending</h2>
       </div>
       {loading ? (
-        <div className="text-sm text-muted-foreground flex-1">Loading...</div>
+        <div className="space-y-3 flex-1">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
       ) : posts.length === 0 ? (
         <div className="text-sm text-muted-foreground flex-1">No trending posts at the moment.</div>
       ) : (

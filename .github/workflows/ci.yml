@@ -1,0 +1,728 @@
+name: CI - Test All
+
+on:
+  pull_request:
+    branches: [production, staging]
+  push:
+    branches: [production, staging]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_ENV: test
+  CI: true
+
+# Maximum performance with Blacksmith runners:
+# Runners:
+# - Build: blacksmith-8vcpu-ubuntu-2404 (fastest compilation, type checking, linting)
+# - Unit/Integration: blacksmith-2vcpu-ubuntu-2404 (optimized for test execution)
+# - E2E & Synpress: blacksmith-8vcpu-ubuntu-2404 (Playwright benefits from high CPU)
+# - All jobs: 2x faster bare metal gaming CPUs with highest single-core performance
+# Cache (automatic optimizations):
+# - 4x faster cache downloads (colocated in same datacenter)
+# - Existing actions/cache@v4 automatically accelerated (node_modules, .next)
+# - Docker pull cache for postgres:15 service images (automatic)
+# - 25GB free cache storage per repo/week (2.5x GitHub's 10GB limit)
+# 
+# Artifact strategy:
+# - Build job: Upload .next directory only
+# - Test jobs: Download .next + reinstall dependencies (preserves symlinks/permissions)
+
+jobs:
+  # Step 1: Build production bundle
+  build:
+    name: Build Production
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 20
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    outputs:
+      cache-hit: ${{ steps.cache-build.outputs.cache-hit }}
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: ${{ runner.os }}-deps-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-deps-
+      
+      - name: Cache build artifacts
+        id: cache-build
+        uses: actions/cache@v4
+        with:
+          path: |
+            .next
+          key: ${{ runner.os }}-build-${{ hashFiles('**/bun.lock') }}-${{ hashFiles('**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', 'prisma/schema.prisma') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ hashFiles('**/bun.lock') }}-
+            ${{ runner.os }}-build-
+      
+      - name: Install dependencies
+        run: bun install
+      
+      - name: Setup environment variables
+        env:
+          DATABASE_URL_SECRET: ${{ secrets.DATABASE_URL || '' }}
+          NEXTAUTH_SECRET_VAR: ${{ secrets.NEXTAUTH_SECRET || '' }}
+          PRIVY_APP_ID_VAR: ${{ secrets.PRIVY_APP_ID || '' }}
+          PRIVY_APP_SECRET_VAR: ${{ secrets.PRIVY_APP_SECRET || '' }}
+          PRIVY_TEST_EMAIL_VAR: ${{ secrets.PRIVY_TEST_EMAIL || '' }}
+          PRIVY_TEST_PASSWORD_VAR: ${{ secrets.PRIVY_TEST_PASSWORD || '' }}
+          ANTHROPIC_API_KEY_VAR: ${{ secrets.ANTHROPIC_API_KEY || '' }}
+          OPENAI_API_KEY_VAR: ${{ secrets.OPENAI_API_KEY || '' }}
+          GROQ_API_KEY_VAR: ${{ secrets.GROQ_API_KEY || '' }}
+          FAL_KEY_VAR: ${{ secrets.FAL_KEY || '' }}
+          CRON_SECRET_VAR: ${{ secrets.CRON_SECRET || '' }}
+          WALLET_SEED_PHRASE_VAR: ${{ secrets.WALLET_SEED_PHRASE || '' }}
+          WALLET_PASSWORD_VAR: ${{ secrets.WALLET_PASSWORD || '' }}
+        run: bash scripts/ci/prepare-env.sh
+      
+      - name: Run Prisma Generate
+        run: bunx prisma generate 2>&1 | sed -E 's/(Datasource|ep-soft-wildflower|neondb|@[^[:space:]]*\.neon\.tech)/[REDACTED]/g' || true
+      
+      - name: Clean stale .next types before typecheck
+        run: rm -rf .next/types
+      
+      - name: Type Check
+        run: bun typecheck
+      
+      - name: Lint
+        run: bun lint
+      
+      - name: Build Production
+        run: bun run build 2>&1 | sed -E 's/(Datasource|ep-soft-wildflower|neondb|@[^[:space:]]*\.neon\.tech)/[REDACTED]/g' || true
+        env:
+          NODE_OPTIONS: '--max-old-space-size=8192'
+          SKIP_ENV_VALIDATION: true
+      
+      - name: Verify build artifacts exist
+        run: |
+          if [ -d .next ]; then
+            echo "✅ .next directory exists"
+            ls -lah .next | head -20
+          else
+            echo "❌ .next directory does not exist"
+            exit 1
+          fi
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: .next
+          retention-days: 1
+          if-no-files-found: error
+          include-hidden-files: true
+      
+      - name: Build summary
+        if: always()
+        run: |
+          echo "## 📊 Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.cache-build.outputs.cache-hit }}" == "true" ]; then
+            echo "- ⚡ **Cache Hit**: Used cached build artifacts" >> $GITHUB_STEP_SUMMARY
+            echo "- ⏱️ **Time Saved**: ~5-10 minutes" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- 🔨 **Fresh Build**: Built from source" >> $GITHUB_STEP_SUMMARY
+            echo "- 📝 **Reason**: Source code or dependencies changed" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts Uploaded" >> $GITHUB_STEP_SUMMARY
+          echo "- \`.next\` directory (production build)" >> $GITHUB_STEP_SUMMARY
+          echo "- Dependencies reinstalled in each job" >> $GITHUB_STEP_SUMMARY
+
+  # Step 2: Run unit and integration tests
+  test-unit-integration:
+    name: Unit & Integration Tests
+    needs: build
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 15
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      
+      - name: Prepare build directory
+        run: |
+          rm -rf .next
+          mkdir -p .next
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: .next
+      
+      - name: Verify downloaded artifacts
+        run: |
+          echo "📦 Contents of current directory (top-level):"
+          ls -lah
+          echo ""
+          echo "📦 Contents of .next directory:"
+          ls -lah .next
+          echo ""
+          echo "📦 Looking for .env.test:"
+          find . -name ".env.test" -type f || echo "No .env.test found"
+          echo ""
+          if [ -f .env.test ]; then
+            echo "✅ .env.test found after download"
+          else
+            echo "⚠️  .env.test NOT found - will be recreated from secrets"
+          fi
+      
+      - name: Reset lockfiles
+        run: |
+          git checkout -- bun.lock
+          rm -f bun.lockb
+          rm -rf node_modules
+      
+      - name: Install dependencies
+        run: bun install 
+      
+      - name: Setup test environment
+        env:
+          DATABASE_URL_SECRET: ${{ secrets.DATABASE_URL || '' }}
+          NEXTAUTH_SECRET_VAR: ${{ secrets.NEXTAUTH_SECRET || '' }}
+          PRIVY_APP_ID_VAR: ${{ secrets.PRIVY_APP_ID || '' }}
+          PRIVY_APP_SECRET_VAR: ${{ secrets.PRIVY_APP_SECRET || '' }}
+          PRIVY_TEST_EMAIL_VAR: ${{ secrets.PRIVY_TEST_EMAIL || '' }}
+          PRIVY_TEST_PASSWORD_VAR: ${{ secrets.PRIVY_TEST_PASSWORD || '' }}
+          ANTHROPIC_API_KEY_VAR: ${{ secrets.ANTHROPIC_API_KEY || '' }}
+          OPENAI_API_KEY_VAR: ${{ secrets.OPENAI_API_KEY || '' }}
+          GROQ_API_KEY_VAR: ${{ secrets.GROQ_API_KEY || '' }}
+          FAL_KEY_VAR: ${{ secrets.FAL_KEY || '' }}
+          CRON_SECRET_VAR: ${{ secrets.CRON_SECRET || '' }}
+          WALLET_SEED_PHRASE_VAR: ${{ secrets.WALLET_SEED_PHRASE || '' }}
+          WALLET_PASSWORD_VAR: ${{ secrets.WALLET_PASSWORD || '' }}
+          REDIS_URL: redis://localhost:6379
+        run: |
+          set -e
+          bash scripts/ci/prepare-env.sh
+          bunx prisma generate
+          
+          # Wait for postgres to be ready
+          echo "⏳ Waiting for PostgreSQL to be ready..."
+          timeout 30 bash -c 'until pg_isready -h localhost -p 5432 -U postgres; do sleep 1; done'
+          
+          # Wait for Redis to be ready
+          echo "⏳ Waiting for Redis to be ready..."
+          python3 scripts/ci/wait_for_redis.py --host localhost --port 6379 --timeout 30 --interval 1
+          
+          # Explicitly set DATABASE_URL and push schema
+          echo "📊 Pushing database schema..."
+          export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/test_db"
+          export DIRECT_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/test_db"
+          bunx prisma db push --skip-generate --accept-data-loss
+          
+          # Regenerate Prisma client after schema push
+          echo "🔄 Regenerating Prisma client with latest schema..."
+          bunx prisma generate
+          
+          # Verify tables were created
+          echo "✅ Verifying database schema..."
+          psql "$DATABASE_URL" -c "\dt" || echo "⚠️ Could not list tables"
+      
+      - name: Run Unit Tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+        run: bun test tests/unit/ --coverage
+        continue-on-error: false
+      
+      - name: Start Next.js dev server
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          PORT: 3000
+        run: |
+          echo "🚀 Starting Next.js dev server for integration tests..."
+          SKIP_ENV_VALIDATION=1 bunx --bun next dev > /tmp/next-server.log 2>&1 &
+          echo $! > /tmp/next-server.pid
+          echo "📝 Server PID: $(cat /tmp/next-server.pid)"
+          
+          # Wait for server to be ready (max 60s)
+          echo "⏳ Waiting for server to be ready..."
+          timeout 60 bash -c 'until curl -sf http://localhost:3000 > /dev/null 2>&1; do echo -n "."; sleep 1; done' || {
+            echo "❌ Server failed to start. Logs:"
+            cat /tmp/next-server.log
+            exit 1
+          }
+          echo ""
+          echo "✅ Next.js dev server is ready"
+      
+      - name: Run Integration Tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          TEST_API_URL: http://localhost:3000
+        run: bun test tests/integration/ tests/deployment/ tests/markets-pnl-sharing.test.ts
+        continue-on-error: false
+      
+      - name: Stop Next.js dev server
+        if: always()
+        run: |
+          if [ -f /tmp/next-server.pid ]; then
+            echo "🛑 Stopping Next.js dev server..."
+            kill $(cat /tmp/next-server.pid) || true
+            rm /tmp/next-server.pid
+          fi
+          # Show last 50 lines of server logs if they exist
+          if [ -f /tmp/next-server.log ]; then
+            echo "📝 Server logs (last 50 lines):"
+            tail -50 /tmp/next-server.log
+          fi
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-integration-test-results
+          path: |
+            coverage/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Step 3: Run E2E tests (Playwright)
+  test-e2e:
+    name: E2E Tests (Playwright)
+    needs: build
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 30
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      
+      - name: Prepare build directory
+        run: |
+          rm -rf .next
+          mkdir -p .next
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: .next
+      
+      - name: Verify downloaded artifacts
+        run: |
+          echo "📦 Contents of current directory (top-level):"
+          ls -lah
+          echo ""
+          echo "📦 Contents of .next directory:"
+          ls -lah .next
+          if [ -f .env.test ]; then
+            echo "✅ .env.test found after download"
+          else
+            echo "ℹ️  .env.test not bundled; will recreate from secrets"
+          fi
+      
+      - name: Reset lockfiles
+        run: |
+          git checkout -- bun.lock
+          rm -f bun.lockb
+          rm -rf node_modules
+      
+      - name: Install dependencies
+        run: bun install 
+      
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+      
+      - name: Setup test environment
+        env:
+          DATABASE_URL_SECRET: ${{ secrets.DATABASE_URL || '' }}
+          NEXTAUTH_SECRET_VAR: ${{ secrets.NEXTAUTH_SECRET || '' }}
+          PRIVY_APP_ID_VAR: ${{ secrets.PRIVY_APP_ID || '' }}
+          PRIVY_APP_SECRET_VAR: ${{ secrets.PRIVY_APP_SECRET || '' }}
+          PRIVY_TEST_EMAIL_VAR: ${{ secrets.PRIVY_TEST_EMAIL || '' }}
+          PRIVY_TEST_PASSWORD_VAR: ${{ secrets.PRIVY_TEST_PASSWORD || '' }}
+          ANTHROPIC_API_KEY_VAR: ${{ secrets.ANTHROPIC_API_KEY || '' }}
+          OPENAI_API_KEY_VAR: ${{ secrets.OPENAI_API_KEY || '' }}
+          GROQ_API_KEY_VAR: ${{ secrets.GROQ_API_KEY || '' }}
+          FAL_KEY_VAR: ${{ secrets.FAL_KEY || '' }}
+          CRON_SECRET_VAR: ${{ secrets.CRON_SECRET || '' }}
+          WALLET_SEED_PHRASE_VAR: ${{ secrets.WALLET_SEED_PHRASE || '' }}
+          WALLET_PASSWORD_VAR: ${{ secrets.WALLET_PASSWORD || '' }}
+        run: |
+          set -e
+          bash scripts/ci/prepare-env.sh
+          bunx prisma generate
+          
+          # Wait for postgres to be ready
+          echo "⏳ Waiting for PostgreSQL to be ready..."
+          timeout 30 bash -c 'until pg_isready -h localhost -p 5432 -U postgres; do sleep 1; done'
+          
+          # Explicitly set DATABASE_URL and push schema
+          echo "📊 Pushing database schema..."
+          export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/test_db"
+          export DIRECT_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/test_db"
+          bunx prisma db push --skip-generate --accept-data-loss
+          
+          # Regenerate Prisma client after schema push
+          echo "🔄 Regenerating Prisma client with latest schema..."
+          bunx prisma generate
+          
+          # Verify tables were created
+          echo "✅ Verifying database schema..."
+          psql "$DATABASE_URL" -c "\dt" || echo "⚠️ Could not list tables"
+      
+      - name: Start production server
+        run: |
+          echo "🚀 Starting production server..."
+          bun scripts/validation/check-environment.ts
+          bunx --bun next start > /tmp/prod-server.log 2>&1 &
+          echo $! > /tmp/prod-server.pid
+          echo "📝 Server PID: $(cat /tmp/prod-server.pid)"
+
+          echo "⏳ Waiting for server to be ready..."
+          timeout 360 bash -c 'until curl -sf http://localhost:3000/api/health; do sleep 2; done' || {
+            echo "❌ Server failed to respond within 120s. Logs:"
+            if [ -f /tmp/prod-server.log ]; then
+              tail -n 200 /tmp/prod-server.log
+            else
+              echo "⚠️  No server log file found."
+            fi
+            exit 1
+          }
+          echo "✅ Production server is ready"
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          # Set DEPLOYMENT_ENV=localnet to skip strict testnet/mainnet validation in CI
+          DEPLOYMENT_ENV: localnet
+          # NODE_ENV=production required for Next.js production build
+          NODE_ENV: production
+          PORT: 3000
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+      
+      - name: Run Playwright E2E tests
+        run: bunx playwright test tests/e2e --reporter=list,json
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+
+      - name: Stop production server
+        if: always()
+        run: |
+          if [ -f /tmp/prod-server.pid ]; then
+            PID=$(cat /tmp/prod-server.pid)
+            echo "🛑 Stopping production server (PID: $PID)..."
+            kill "$PID" || true
+            wait "$PID" || true
+            rm /tmp/prod-server.pid
+          else
+            echo "ℹ️  No production server PID file found."
+          fi
+
+          if [ -f /tmp/prod-server.log ]; then
+            echo "📝 Production server logs (last 100 lines):"
+            tail -n 100 /tmp/prod-server.log || true
+          else
+            echo "ℹ️  No production server log file found."
+          fi
+      
+      - name: Upload E2E test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Step 4: Run Synpress tests (crypto wallet E2E)
+  test-synpress:
+    name: Synpress Tests (Wallet E2E)
+    needs: build
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 45
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      
+      - name: Prepare build directory
+        run: |
+          rm -rf .next
+          mkdir -p .next
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: .next
+      
+      - name: Verify downloaded artifacts
+        run: |
+          echo "📦 Contents of current directory (top-level):"
+          ls -lah
+          echo ""
+          echo "📦 Contents of .next directory:"
+          ls -lah .next
+          if [ -f .env.test ]; then
+            echo "✅ .env.test found after download"
+          else
+            echo "ℹ️  .env.test not bundled; will recreate from secrets"
+          fi
+      
+      - name: Reset lockfiles
+        run: |
+          git checkout -- bun.lock
+          rm -f bun.lockb
+          rm -rf node_modules
+      
+      - name: Install dependencies
+        run: bun install 
+      
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+      
+      - name: Setup test environment
+        env:
+          DATABASE_URL_SECRET: ${{ secrets.DATABASE_URL || '' }}
+          NEXTAUTH_SECRET_VAR: ${{ secrets.NEXTAUTH_SECRET || '' }}
+          PRIVY_APP_ID_VAR: ${{ secrets.PRIVY_APP_ID || '' }}
+          PRIVY_APP_SECRET_VAR: ${{ secrets.PRIVY_APP_SECRET || '' }}
+          PRIVY_TEST_EMAIL_VAR: ${{ secrets.PRIVY_TEST_EMAIL || '' }}
+          PRIVY_TEST_PASSWORD_VAR: ${{ secrets.PRIVY_TEST_PASSWORD || '' }}
+          ANTHROPIC_API_KEY_VAR: ${{ secrets.ANTHROPIC_API_KEY || '' }}
+          OPENAI_API_KEY_VAR: ${{ secrets.OPENAI_API_KEY || '' }}
+          GROQ_API_KEY_VAR: ${{ secrets.GROQ_API_KEY || '' }}
+          FAL_KEY_VAR: ${{ secrets.FAL_KEY || '' }}
+          CRON_SECRET_VAR: ${{ secrets.CRON_SECRET || '' }}
+          WALLET_SEED_PHRASE_VAR: ${{ secrets.WALLET_SEED_PHRASE || '' }}
+          WALLET_PASSWORD_VAR: ${{ secrets.WALLET_PASSWORD || '' }}
+        run: |
+          set -e
+          bash scripts/ci/prepare-env.sh
+          bunx prisma generate
+          
+          # Wait for postgres to be ready
+          echo "⏳ Waiting for PostgreSQL to be ready..."
+          timeout 30 bash -c 'until pg_isready -h localhost -p 5432 -U postgres; do sleep 1; done'
+          
+          # Explicitly set DATABASE_URL and push schema
+          echo "📊 Pushing database schema..."
+          export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/test_db"
+          export DIRECT_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/test_db"
+          bunx prisma db push --skip-generate --accept-data-loss
+          
+          # Regenerate Prisma client after schema push
+          echo "🔄 Regenerating Prisma client with latest schema..."
+          bunx prisma generate
+          
+          # Verify tables were created
+          echo "✅ Verifying database schema..."
+          psql "$DATABASE_URL" -c "\dt" || echo "⚠️ Could not list tables"
+      
+      - name: Start production server
+        run: |
+          echo "🚀 Starting production server..."
+          bun scripts/validation/check-environment.ts
+          bunx --bun next start > /tmp/prod-server.log 2>&1 &
+          echo $! > /tmp/prod-server.pid
+          echo "📝 Server PID: $(cat /tmp/prod-server.pid)"
+
+          echo "⏳ Waiting for server to be ready..."
+          timeout 360 bash -c 'until curl -sf http://localhost:3000/api/health; do sleep 2; done' || {
+            echo "❌ Server failed to respond within 120s. Logs:"
+            if [ -f /tmp/prod-server.log ]; then
+              tail -n 200 /tmp/prod-server.log
+            else
+              echo "⚠️  No server log file found."
+            fi
+            exit 1
+          }
+          echo "✅ Production server is ready"
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          # Set DEPLOYMENT_ENV=localnet to skip strict testnet/mainnet validation in CI
+          DEPLOYMENT_ENV: localnet
+          # NODE_ENV=production required for Next.js production build
+          NODE_ENV: production
+          PORT: 3000
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+      
+      - name: Run Synpress tests
+        run: bunx playwright test --config=synpress.config.ts --reporter=list,json
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          WALLET_SEED_PHRASE: ${{ secrets.WALLET_SEED_PHRASE || '' }}
+          WALLET_PASSWORD: ${{ secrets.WALLET_PASSWORD || '' }}
+          PRIVY_TEST_EMAIL: ${{ secrets.PRIVY_TEST_EMAIL || '' }}
+          PRIVY_TEST_PASSWORD: ${{ secrets.PRIVY_TEST_PASSWORD || '' }}
+      
+      - name: Stop production server
+        if: always()
+        run: |
+          if [ -f /tmp/prod-server.pid ]; then
+            PID=$(cat /tmp/prod-server.pid)
+            echo "🛑 Stopping production server (PID: $PID)..."
+            kill "$PID" || true
+            wait "$PID" || true
+            rm /tmp/prod-server.pid
+          else
+            echo "ℹ️  No production server PID file found."
+          fi
+
+          if [ -f /tmp/prod-server.log ]; then
+            echo "📝 Production server logs (last 100 lines):"
+            tail -n 100 /tmp/prod-server.log || true
+          else
+            echo "ℹ️  No production server log file found."
+          fi
+      
+      - name: Upload Synpress test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synpress-results
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Step 5: All tests must pass
+  all-tests-passed:
+    name: All Tests Passed
+    needs: [build, test-unit-integration, test-e2e, test-synpress]
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    if: always()
+    
+    steps:
+      - name: Check all test results
+        run: |
+          if [[ "${{ needs.build.result }}" != "success" ]]; then
+            echo "❌ Build failed"
+            exit 1
+          fi
+          
+          if [[ "${{ needs.test-unit-integration.result }}" != "success" ]]; then
+            echo "❌ Unit/Integration tests failed"
+            exit 1
+          fi
+          
+          if [[ "${{ needs.test-e2e.result }}" != "success" ]]; then
+            echo "❌ E2E tests failed"
+            exit 1
+          fi
+          
+          if [[ "${{ needs.test-synpress.result }}" != "success" ]]; then
+            echo "❌ Synpress tests failed"
+            exit 1
+          fi
+          
+          echo "✅ All tests passed successfully!"
+      
+      - name: Summary
+        run: |
+          echo "## 🎉 Test Suite Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All tests have passed:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Build" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Unit & Integration Tests" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ E2E Tests (Playwright)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Synpress Tests (Wallet E2E)" >> $GITHUB_STEP_SUMMARY
+

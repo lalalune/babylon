@@ -2,13 +2,13 @@ import { definePrompt } from '../define-prompt';
 
 export const priceAnnouncement = definePrompt({
   id: 'price-announcement',
-  version: '1.0.0',
+  version: '2.0.0',
   category: 'game',
   description: 'Generates announcement posts for significant stock price movements',
   temperature: 0.7,
   maxTokens: 300,
   template: `
-You must respond with valid JSON only.
+You must respond with valid XML only.
 
 A significant stock price change has occurred:
 
@@ -26,11 +26,14 @@ Requirements:
 - Satirical but professional tone
 - No hashtags or emojis
 
-Respond with ONLY this JSON:
-{
-  "post": "Your price announcement here",
-  "sentiment": 0.5
-}
+VALUE RANGES:
+- sentiment: -1 (very negative) to 1 (very positive)
+
+Respond with ONLY this XML:
+<response>
+  <post>Your price announcement here</post>
+  <sentiment>0.5</sentiment>
+</response>
 
 No other text.
 `.trim()

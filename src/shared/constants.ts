@@ -52,6 +52,7 @@ export const POST_TYPES = {
   RUMOR: 'rumor',
   POST: 'post',
   REPLY: 'reply',
+  ARTICLE: 'article',
 } as const;
 
 export type PostType = (typeof POST_TYPES)[keyof typeof POST_TYPES];

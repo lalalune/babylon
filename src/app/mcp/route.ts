@@ -305,14 +305,14 @@ async function executeGetBalance(agent: { agentId: string; userId: string }) {
 async function executeGetPositions(agent: { agentId: string; userId: string }) {
   const positions = await prisma.position.findMany({
     where: { userId: agent.userId },
-    include: { market: true }
+    include: { Market: true }
   })
   
   return NextResponse.json({
     positions: positions.map(p => ({
       id: p.id,
       marketId: p.marketId,
-      question: p.market.question,
+      question: p.Market.question,
       side: p.side ? 'YES' : 'NO',
       shares: p.shares.toString(),
       avgPrice: p.avgPrice.toString()
@@ -387,7 +387,10 @@ async function executeQueryFeed(
     where: args.questionId ? {
       // Filter by question if provided
       // Note: questionId might need to be mapped from market/question
-    } : {},
+      deletedAt: null, // Filter out deleted posts
+    } : {
+      deletedAt: null, // Filter out deleted posts
+    },
     orderBy: { timestamp: 'desc' },
     take: args.limit || 20
   })

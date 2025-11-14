@@ -16,6 +16,26 @@ import type {
 } from '@/types/interactions';
 import { retryIfRetryable } from '@/lib/retry';
 
+interface RepostPost {
+  id: string
+  originalPostId: string
+  userId: string
+  createdAt: number
+  content: string
+  authorId: string
+  authorName: string
+  authorUsername?: string
+  authorProfileImageUrl?: string
+  timestamp: string
+  isRepost: boolean
+  originalAuthorId?: string | null
+  originalAuthorName?: string | null
+  originalAuthorUsername?: string | null
+  originalAuthorProfileImageUrl?: string | null
+  originalContent?: string | null
+  quoteComment?: string | null
+}
+
 interface InteractionStoreState {
   // State maps
   postInteractions: Map<string, PostInteraction>;
@@ -43,7 +63,7 @@ interface InteractionStoreActions {
   loadComments: (postId: string) => Promise<CommentWithReplies[]>;
 
   // Share actions
-  toggleShare: (postId: string) => Promise<void>;
+  toggleShare: (postId: string, comment?: string) => Promise<{ repostPost?: RepostPost } | void>;
 
   // Favorite actions
   toggleFavorite: (profileId: string) => Promise<void>;
@@ -215,7 +235,7 @@ export const useInteractionStore = create<InteractionStore>()(
 
         setLoading(loadingKey, true);
 
-        const response = await apiCall<{ data: CommentData }>(
+        const response = await apiCall<CommentData>(
           `/api/posts/${postId}/comments`,
           {
             method: 'POST',
@@ -236,7 +256,7 @@ export const useInteractionStore = create<InteractionStore>()(
         }
 
         setLoading(loadingKey, false);
-        return response.data;
+        return response;
       },
 
       editComment: async (commentId: string, content: string) => {
@@ -293,7 +313,7 @@ export const useInteractionStore = create<InteractionStore>()(
       },
 
       // Share actions
-      toggleShare: async (postId: string) => {
+      toggleShare: async (postId: string, comment?: string) => {
         const { postInteractions, setLoading } = get();
         const currentInteraction = postInteractions.get(postId) || {
           postId,
@@ -322,9 +342,13 @@ export const useInteractionStore = create<InteractionStore>()(
         setLoading(`share-${postId}`, true);
 
         const method = wasShared ? 'DELETE' : 'POST';
-        const response = await apiCall<{ data: { shareCount: number; isShared: boolean } }>(
+        const body = !wasShared && comment ? JSON.stringify({ comment }) : undefined;
+        const response = await apiCall<{ data: { shareCount: number; isShared: boolean; repostPost?: RepostPost } }>(
           `/api/posts/${postId}/share`,
-          { method }
+          { 
+            method,
+            ...(body && { body })
+          }
         );
 
         set((state) => ({
@@ -336,6 +360,9 @@ export const useInteractionStore = create<InteractionStore>()(
         }));
 
         setLoading(`share-${postId}`, false);
+
+        // Return response data (includes repostPost for optimistic UI)
+        return response.data;
       },
 
       // Favorite actions (uses follow API)

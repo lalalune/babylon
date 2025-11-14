@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "../libraries/LibMarket.sol";
-import "../libraries/LibDiamond.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {UD60x18, ud, intoUint256, exp, ln} from "@prb/math/src/UD60x18.sol";
+import {LibMarket} from "../libraries/LibMarket.sol";
+import {LibDiamond} from "../libraries/LibDiamond.sol";
 
 /// @title PredictionMarketFacet
 /// @notice Facet for prediction market operations
@@ -118,9 +119,9 @@ contract PredictionMarketFacet is ReentrancyGuard {
         position.shares[_outcome] += _numShares;
         position.totalInvested += cost;
 
-        // Distribute fee
+        // Distribute fee (consistent with calculateCost - fees added on top of LMSR cost)
         LibMarket.MarketStorage storage ms = LibMarket.marketStorage();
-        uint256 fee = (cost * market.feeRate) / (10000 + market.feeRate);
+        uint256 fee = (cost * market.feeRate) / 10000;
         if (fee > 0 && ms.feeRecipient != address(0)) {
             LibMarket.addBalance(ms.feeRecipient, fee);
         }
@@ -201,18 +202,26 @@ contract PredictionMarketFacet is ReentrancyGuard {
 
     /// @notice Claim winnings after market resolution
     /// @param _marketId The market ID
+    /// @dev In LMSR prediction markets, each winning share pays exactly 1 unit (standard across Augur/Gnosis/Polymarket)
+    /// @dev The market "odds" are reflected in purchase price, not payout. Winning shares always pay 1:1
     function claimWinnings(bytes32 _marketId) external nonReentrant {
         LibMarket.Market storage market = LibMarket.getMarket(_marketId);
         require(market.resolved, "Market not resolved");
+        require(market.winningOutcome < market.numOutcomes, "Invalid winning outcome");
 
         LibMarket.Position storage position = LibMarket.getPosition(msg.sender, _marketId);
         uint256 winningShares = position.shares[market.winningOutcome];
         require(winningShares > 0, "No winning shares");
 
-        // Calculate payout (1:1 for winning shares)
+        // Prevent double-claiming
+        require(!position.claimed, "Already claimed");
+
+        // Calculate payout: standard 1:1 for winning shares in prediction markets
+        // Each share represents a claim on 1 unit of currency if that outcome wins
         uint256 payout = winningShares * 1 ether;
 
-        // Clear position
+        // Mark as claimed and clear position (CEI pattern)
+        position.claimed = true;
         position.shares[market.winningOutcome] = 0;
 
         // Add to balance
@@ -272,13 +281,17 @@ contract PredictionMarketFacet is ReentrancyGuard {
         return position.shares[_outcome];
     }
 
-    // Internal LMSR cost function
+    // Internal LMSR cost function using PRBMath for precision
     function _costFunction(LibMarket.Market storage market, uint256 b) internal view returns (uint256) {
-        uint256 sum = 0;
+        UD60x18 sum = ud(0);
         for (uint8 i = 0; i < market.numOutcomes; i++) {
-            sum += _exp((market.shares[i] * 1e18) / b);
+            // Calculate shares[i] / b in UD60x18 format
+            UD60x18 exponent = ud((market.shares[i] * 1e18) / b);
+            sum = sum.add(exp(exponent));
         }
-        return (b * _ln(sum)) / 1e18;
+        // cost = b * ln(sum)
+        UD60x18 lnSum = ln(sum);
+        return (b * intoUint256(lnSum)) / 1e18;
     }
 
     function _costFunctionWithShares(
@@ -287,87 +300,16 @@ contract PredictionMarketFacet is ReentrancyGuard {
         uint8 outcome,
         uint256 newShares
     ) internal view returns (uint256) {
-        uint256 sum = 0;
+        UD60x18 sum = ud(0);
         for (uint8 i = 0; i < market.numOutcomes; i++) {
             uint256 shares = (i == outcome) ? newShares : market.shares[i];
-            sum += _exp((shares * 1e18) / b);
+            // Calculate shares / b in UD60x18 format
+            UD60x18 exponent = ud((shares * 1e18) / b);
+            sum = sum.add(exp(exponent));
         }
-        return (b * _ln(sum)) / 1e18;
+        // cost = b * ln(sum)
+        UD60x18 lnSum = ln(sum);
+        return (b * intoUint256(lnSum)) / 1e18;
     }
 
-    // Simple exp approximation (for small values)
-    function _exp(uint256 x) internal pure returns (uint256) {
-        // Taylor series: e^x = 1 + x + x^2/2! + x^3/3! + ...
-        // For x in range [0, 10] this gives reasonable accuracy
-        uint256 sum = 1e18;
-        uint256 term = x;
-        sum += term;
-        term = (term * x) / 2e18;
-        sum += term;
-        term = (term * x) / 3e18;
-        sum += term;
-        term = (term * x) / 4e18;
-        sum += term;
-        return sum;
-    }
-
-    /// @notice Natural logarithm approximation using Taylor series
-    /// @dev Uses ln(1+z) ≈ z - z²/2 + z³/3 - z⁴/4 + z⁵/5 for |z| < 1
-    /// @dev For values far from 1e18, uses iterative scaling via ln(x*2^n) = ln(x) + n*ln(2)
-    /// @param x Input value in fixed-point (1e18 = 1.0), must be > 0
-    /// @return Result in fixed-point (1e18 = ln(1) = 0)
-    function _ln(uint256 x) internal pure returns (uint256) {
-        require(x > 0, "ln of zero");
-        
-        // Handle edge case: ln(1) = 0
-        if (x == 1e18) return 0;
-        
-        // Normalize to range [0.5e18, 2e18] using ln(x * 2^n) = ln(x) + n*ln(2)
-        int256 scaleFactor = 0; // Track how many times we've scaled (can be negative)
-        uint256 normalized = x;
-        
-        // Scale down if x > 2e18 (divide by 2, add ln(2))
-        while (normalized > 2e18) {
-            normalized = normalized / 2;
-            scaleFactor += 1;
-        }
-        
-        // Scale up if x < 0.5e18 (multiply by 2, subtract ln(2))
-        while (normalized < 5e17) {
-            normalized = normalized * 2;
-            scaleFactor -= 1;
-        }
-        
-        // Now normalized is in [0.5e18, 2e18]
-        // Calculate z = normalized - 1e18 (in fixed-point, range [-0.5e18, 1e18])
-        int256 z = int256(normalized) - int256(1e18);
-        
-        // Taylor series: ln(1+z) ≈ z - z²/2 + z³/3 - z⁴/4 + z⁵/5
-        // All calculations in fixed-point (1e18 scale)
-        int256 z2 = (z * z) / int256(1e18);
-        int256 z3 = (z2 * z) / int256(1e18);
-        int256 z4 = (z3 * z) / int256(1e18);
-        int256 z5 = (z4 * z) / int256(1e18);
-        
-        // Compute Taylor series approximation
-        int256 taylor = z 
-            - z2 / 2 
-            + z3 / 3 
-            - z4 / 4 
-            + z5 / 5;
-        
-        // Add scaling: result = taylor + scaleFactor * ln(2)
-        // ln(2) ≈ 0.6931471805599453 (scaled by 1e18)
-        int256 ln2_scaled = 693147180559945344;
-        int256 scaled = scaleFactor * ln2_scaled;
-        int256 result = taylor + scaled;
-        
-        // For LMSR, result should be non-negative in practice (we're taking ln of sum of exponentials)
-        // But handle potential negative gracefully by returning 0 (shouldn't happen in normal operation)
-        if (result < 0) {
-            return 0;
-        }
-        
-        return uint256(result);
-    }
 }

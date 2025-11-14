@@ -3,7 +3,7 @@ pragma solidity ^0.8.27;
 
 import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {IDiamondLoupe} from "../interfaces/IDiamondLoupe.sol";
-import "@openzeppelin/contracts/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin/contracts/interfaces/IERC165.sol";
 
 /// @title DiamondLoupeFacet
 /// @notice Facet for inspecting the diamond

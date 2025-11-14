@@ -1,0 +1,359 @@
+# Admin Dashboard
+
+Complete guide for administrators managing reports and moderation.
+
+## Overview
+
+The admin dashboard provides comprehensive tools for content moderation including:
+- View all reports with filtering and sorting
+- Real-time statistics and analytics
+- Quick action buttons for common tasks
+- User analytics by moderation metrics
+
+## Accessing the Dashboard
+
+1. Log in as an admin user
+2. Navigate to `/admin`
+3. Click the **"Reports"** tab
+
+**Note:** On localhost, all authenticated users have admin access for development.
+
+---
+
+## Dashboard Features
+
+### Statistics Overview
+
+The dashboard shows key metrics at a glance:
+
+```
+┌─────────┬─────────┬──────────┬──────────┬───────────┐
+│  Total  │ Pending │ Reviewing│ Resolved │ Dismissed │
+│   125   │   23    │    15    │    82    │     5     │
+└─────────┴─────────┴──────────┴──────────┴───────────┘
+```
+
+- **Total** - All reports across all time
+- **Pending** - Reports awaiting review (yellow)
+- **Reviewing** - Reports currently being investigated (blue)
+- **Resolved** - Reports with action taken (green)
+- **Dismissed** - Reports determined invalid (gray)
+
+### Filtering Options
+
+**By Status:**
+- All
+- Pending
+- Reviewing
+- Resolved
+- Dismissed
+
+**By Priority:**
+- All
+- Critical (immediate attention needed)
+- High (serious violations)
+- Normal (standard reports)
+- Low (minor issues)
+
+**By Category:**
+- All 9 report categories
+- See full list in [Overview](/moderation/overview)
+
+### Sorting Options
+
+Sort reports by:
+- **Created Date** - Newest or oldest first
+- **Updated Date** - Recently updated
+- **Priority** - Highest priority first
+
+---
+
+## Report Management
+
+### Viewing Reports
+
+Each report card shows:
+- Status icon (pending/reviewing/resolved/dismissed)
+- Category and priority badges
+- Reporter and reported user
+- Reason preview
+- Timestamp
+
+Click "Take Action" to see full details including:
+- Complete reason and evidence
+- Related reports for same user/post
+- Reporter history
+- Reported user history
+
+### Taking Action
+
+Admins can take four actions:
+
+#### 1. Resolve
+Mark the report as resolved after taking appropriate action.
+
+**Use when:**
+- Content was removed
+- Warning was issued
+- Issue was addressed
+
+**Required:** Resolution message explaining what was done
+
+#### 2. Ban User
+Immediately ban the reported user and resolve the report.
+
+**Use when:**
+- Clear terms of service violation
+- Repeat offender
+- Severe violation requiring immediate action
+
+**Required:** Ban reason (becomes part of user's ban record)
+
+#### 3. Escalate
+Change priority to **Critical** for immediate attention.
+
+**Use when:**
+- Report is more serious than initially categorized
+- Requires immediate review
+- Potential safety issue
+
+#### 4. Dismiss
+Mark the report as invalid or not actionable.
+
+**Use when:**
+- False report
+- Not a violation
+- Resolved by other means
+
+---
+
+## Analytics & Statistics
+
+### Reports by Category
+
+See breakdown of which issues are most common:
+```
+Spam................... 45  ████████████
+Harassment............. 32  ████████
+Inappropriate.......... 20  █████
+Hate Speech............ 12  ███
+Other.................. 16  ████
+```
+
+### Reports by Priority
+
+Understand severity distribution:
+```
+Critical...............  8  ██
+High................... 28  ███████
+Normal................. 75  ███████████████
+Low.................... 14  ███
+```
+
+### Top Reported Users
+
+Identify problem users:
+1. @spammer123 (12 reports) **[BANNED]**
+2. @troll456 (8 reports)
+3. @bot789 (6 reports)
+
+**Sort users by:**
+- Number of reports received
+- Number of users blocking them
+- Number of reports they submitted
+
+### Top Reporters
+
+Identify active community moderators:
+1. @moderator1 (24 reports submitted)
+2. @helper2 (18 reports submitted)
+3. @vigilant3 (15 reports submitted)
+
+### Recent Activity
+
+Last 7 days metrics:
+- Reports submitted
+- Reports resolved
+- Resolution rate percentage
+
+---
+
+## User Management
+
+### Sorting Users by Moderation Metrics
+
+In the **Users** tab, admins can sort by:
+
+**1. Reports Received (↓ Descending)**
+- Identifies users receiving the most reports
+- Helps find problem users
+- Shows potential repeat offenders
+
+**2. Users Blocking Them (↓ Descending)**
+- Community consensus indicator
+- Shows users the community is rejecting
+- Natural moderation signal
+
+**3. Reports Submitted (↓ Descending)**
+- Identifies active reporters
+- Can reveal helpful community members
+- Can also identify abuse of reporting system
+
+### Viewing User Details
+
+For each user, see:
+- Total reports received
+- Reports by category
+- Ban status and history
+- Number of users blocking them
+- Number of users they've reported
+
+---
+
+## Best Practices
+
+### Reviewing Reports
+
+1. **Read Carefully** - Review the full reason and evidence
+2. **Check History** - View related reports for context
+3. **Be Consistent** - Apply rules uniformly
+4. **Document Actions** - Provide clear resolution messages
+5. **Act Quickly** - Address high-priority reports promptly
+
+### Taking Action
+
+1. **Verify Evidence** - Check any provided links
+2. **Consider Context** - Look at related reports
+3. **Start Light** - Warning before ban when appropriate
+4. **Explain Clearly** - Write resolution messages for transparency
+5. **Track Patterns** - Note repeat offenders
+
+### False Reports
+
+If you identify false reports:
+1. Dismiss the report with explanation
+2. Track the reporter's history
+3. Consider action if pattern of abuse
+4. Document in resolution message
+
+---
+
+## Workflow Example
+
+### Typical Report Resolution
+
+```
+1. New report appears → Status: Pending, Priority: High
+   ↓
+2. Admin clicks "Take Action"
+   ↓
+3. Reviews:
+   - Full reason: "User posted hate speech targeting a group"
+   - Evidence: Screenshot URL
+   - Related reports: 3 other harassment reports for same user
+   ↓
+4. Admin selects: "Ban User"
+   ↓
+5. Enters resolution: "User banned for repeated hate speech violations per TOS Section 3.2"
+   ↓
+6. Submits action
+   ↓
+7. Results:
+   - User banned immediately
+   - Report status → Resolved
+   - Reporter notified (future feature)
+   - Statistics updated
+   ✅ Complete
+```
+
+---
+
+## API Access
+
+Admins can also use the API directly:
+
+### Get All Reports
+```bash
+GET /api/admin/reports?status=pending&priority=high
+```
+
+### Get Statistics
+```bash
+GET /api/admin/reports/stats
+```
+
+### Take Action
+```bash
+POST /api/admin/reports/{reportId}
+{
+  "action": "resolve",
+  "resolution": "Warning issued to user"
+}
+```
+
+See [API Reference](/moderation/api-reference) for complete documentation.
+
+---
+
+## Monitoring & Metrics
+
+### Key Metrics to Track
+
+- **Response Time** - Average time to resolve reports
+- **Resolution Rate** - Percentage of reports resolved vs dismissed
+- **Top Categories** - Which violations are most common
+- **Repeat Offenders** - Users with multiple reports
+- **False Report Rate** - Dismissed reports / total reports
+
+### Health Indicators
+
+**Healthy Community:**
+- Low report volume
+- High resolution rate
+- Fast response times
+- Few repeat offenders
+- Minimal false reports
+
+**Needs Attention:**
+- Increasing report volume
+- Many pending reports
+- Repeat offenders not addressed
+- High false report rate
+
+---
+
+## Troubleshooting
+
+**Reports not loading:**
+- Check admin permissions in database
+- Verify authentication token
+- Check browser console for errors
+
+**Statistics not updating:**
+- Refresh the page
+- Check if reports were actually submitted
+- Verify database connection
+
+**Action failed:**
+- Check report is still in pending/reviewing status
+- Verify user still exists
+- Check resolution message is provided
+
+---
+
+## Security Notes
+
+- All admin actions are logged with timestamps
+- Admin user ID tracked for all resolutions
+- Audit trail maintained in database
+- Reports cannot be deleted, only resolved/dismissed
+- Banned users can be unbanned if needed
+
+---
+
+## Next Steps
+
+- [User Actions](/moderation/user-actions) - How users interact with moderation
+- [A2A Integration](/moderation/a2a-integration) - Agent-based moderation
+- [API Reference](/moderation/api-reference) - Complete API documentation
+

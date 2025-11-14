@@ -3,7 +3,7 @@
   "info": {
     "title": "Babylon API",
     "version": "1.0.0",
-    "description": "Complete API documentation for Babylon prediction market platform",
+    "description": "Complete API documentation for Babylon social conspiracy game",
     "contact": {
       "name": "Babylon Team",
       "url": "https://babylon.market"
@@ -2666,35 +2666,6 @@
     "/api/waitlist/position": {
       "get": {
         "summary": "Waitlist Position API GET /api/waitlist/position?userId={userId}",
-        "tags": [
-          "General"
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/api/waitlist/signup": {
-      "post": {
-        "summary": "Waitlist Mark API POST /api/waitlist/mark Marks an existing user as waitlisted (after they complete onboarding) NOTE: Users should complete onboarding first via /api/users/signup with isWaitlist flag",
         "tags": [
           "General"
         ],

@@ -24,18 +24,12 @@ export function useSmartWalletBalance() {
     }
 
     setLoading(true);
-    try {
-      const next = await publicClient.getBalance({
-        address: smartWalletAddress as Address,
-      });
-      setBalance(next);
-      return next;
-    } catch {
-      setBalance(null);
-      return null;
-    } finally {
-      setLoading(false);
-    }
+    const next = await publicClient.getBalance({
+      address: smartWalletAddress as Address,
+    });
+    setBalance(next);
+    setLoading(false);
+    return next;
   }, [smartWalletAddress]);
 
   useEffect(() => {

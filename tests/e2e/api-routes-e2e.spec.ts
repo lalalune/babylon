@@ -138,8 +138,8 @@ test.describe('API Validation - E2E', () => {
     
     if (status === 200) {
       const data = await response.json();
-      expect(data).toHaveProperty('profileImage');
-      expect(data).toHaveProperty('coverImage');
+      expect(data).toHaveProperty('profilePictureIndex');
+      expect(data).toHaveProperty('bannerIndex');
       console.log('✅ /api/onboarding/random-assets working');
     } else {
       expect(status).toBeLessThan(500);
@@ -163,7 +163,7 @@ test.describe('API Error Handling - E2E', () => {
       headers: {
         'Content-Type': 'application/json'
       },
-      body: 'invalid json'
+      data: 'invalid json'
     });
     
     // Should return error, not crash

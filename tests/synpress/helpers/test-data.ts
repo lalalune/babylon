@@ -64,6 +64,8 @@ export const ROUTES = {
   API_DOCS: '/api-docs',
   ADMIN: '/admin',
   DEBUG: '/debug',
+  AGENTS: '/agents',
+  AGENTS_CREATE: '/agents/create',
 }
 
 /**

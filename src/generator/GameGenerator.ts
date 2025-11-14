@@ -30,7 +30,7 @@ import { FeedGenerator } from '../engine/FeedGenerator';
 import { BabylonLLMClient } from './llm/openai-client';
 import { logger } from '@/lib/logger';
 import { generateActorContext } from '../engine/EmotionSystem';
-import { shuffleArray, toQuestionIdNumber, toQuestionIdNumberOrNull } from '@/shared/utils';
+import { shuffleArray, toQuestionIdNumberOrNull } from '@/shared/utils';
 import { 
   renderPrompt,
   scenarios as scenariosPrompt,
@@ -580,11 +580,16 @@ export class GameGenerator {
       actorDescriptions
     });
 
-    const response = await this.llm.generateJSON<{ event: string }>(
+    const rawResponse = await this.llm.generateJSON<{ event: string } | { response: { event: string } }>(
       prompt,
       undefined,
       { temperature: 0.7, maxTokens: 5000 }
     );
+
+    // Handle XML structure
+    const response = 'response' in rawResponse && rawResponse.response
+      ? rawResponse.response
+      : rawResponse as { event: string };
 
     return response.event || `${actors[0]?.name || 'Actor'} ${type}`;
   }
@@ -792,10 +797,15 @@ ${historyContext}
 If there's previous game history, reference it naturally (e.g., "After the events of last game...", "Following up on...").
 Otherwise, start fresh.`;
     
-    const result = await this.llm.generateJSON<{ scenarios: Scenario[] }>(prompt, undefined, {
+    const rawResult = await this.llm.generateJSON<{ scenarios: Scenario[] } | { response: { scenarios: Scenario[] } }>(prompt, undefined, {
       temperature: 0.9,
       maxTokens: 8000,
     });
+    
+    // Handle XML structure
+    const result = 'response' in rawResult && rawResult.response
+      ? rawResult.response
+      : rawResult as { scenarios: Scenario[] };
     
     // Validate scenarios - LLM must provide all required fields
     if (!result || !result.scenarios || !Array.isArray(result.scenarios)) {
@@ -881,7 +891,12 @@ Otherwise, start fresh.`;
       questionsList
     });
 
-    const result = await this.llm.generateJSON<{ rankings: { questionId: number; rank: number }[] }>(prompt);
+    const rawResult = await this.llm.generateJSON<{ rankings: { questionId: number; rank: number }[] } | { response: { rankings: { questionId: number; rank: number }[] } }>(prompt);
+    
+    // Handle XML structure
+    const result = 'response' in rawResult && rawResult.response
+      ? rawResult.response
+      : rawResult as { rankings: { questionId: number; rank: number }[] };
     
     // Apply rankings (with safety check)
     if (result?.rankings) {
@@ -1008,9 +1023,14 @@ Otherwise, start fresh.`;
       memberDescriptions
     });
 
-    const response = await this.llm.generateJSON<{ name: string }>(prompt, {
+    const rawResponse = await this.llm.generateJSON<{ name: string } | { response: { name: string } }>(prompt, {
       required: ['name']
     });
+
+    // Handle XML structure
+    const response = 'response' in rawResponse && rawResponse.response
+      ? rawResponse.response
+      : rawResponse as { name: string };
 
     return response.name.toLowerCase();
   }
@@ -1137,7 +1157,7 @@ Otherwise, start fresh.`;
       const type = eventTypes[Math.floor(Math.random() * eventTypes.length)]!;
       const numActorsInvolved = type === 'meeting' ? 2 + Math.floor(Math.random() * 3) : 1;
       const involvedActors = shuffleArray(allActors).slice(0, numActorsInvolved);
-      const questionId = toQuestionIdNumber(questions[i % questions.length]!.id);
+      const questionId = questions[i % questions.length]!.questionNumber || 0;
 
       eventRequests.push({
         eventNumber: i,
@@ -1305,13 +1325,26 @@ Otherwise, start fresh.`;
       eventRequestsList
     });
 
-    const response = await this.llm.generateJSON<{ 
+    const rawResponse = await this.llm.generateJSON<{ 
       events: Array<{ 
         eventNumber: number; 
         event: string; 
         pointsToward: 'YES' | 'NO' | null 
       }> 
+    } | {
+      response: {
+        events: Array<{ 
+          eventNumber: number; 
+          event: string; 
+          pointsToward: 'YES' | 'NO' | null 
+        }> 
+      }
     }>(prompt, undefined, { temperature: 0.9, maxTokens: 5000 });
+
+    // Handle XML structure
+    const response = 'response' in rawResponse && rawResponse.response
+      ? rawResponse.response
+      : rawResponse as { events: Array<{ eventNumber: number; event: string; pointsToward: 'YES' | 'NO' | null }> };
 
     return response.events || [];
   }
@@ -1343,11 +1376,16 @@ Event type: ${type}
 Actors: ${actorNames}
 Max 120 characters, one sentence.`;
 
-    const response = await this.llm.generateJSON<{ event: string }>(
+    const rawResponse = await this.llm.generateJSON<{ event: string } | { response: { event: string } }>(
       prompt,
       undefined,
       { temperature: 0.9 }
     );
+
+    // Handle XML structure
+    const response = 'response' in rawResponse && rawResponse.response
+      ? rawResponse.response
+      : rawResponse as { event: string };
 
     return response.event || `${actorNames} ${type}`;
   }
@@ -1385,11 +1423,16 @@ Max 120 characters, one sentence.`;
       outcomeContext
     });
 
-    const response = await this.llm.generateJSON<{ event: string; type: 'announcement' | 'revelation' }>(
+    const rawResponse = await this.llm.generateJSON<{ event: string; type: 'announcement' | 'revelation' } | { response: { event: string; type: 'announcement' | 'revelation' } }>(
       prompt,
       undefined,
       { temperature: 0.7, maxTokens: 5000 }
     );
+
+    // Handle XML structure
+    const response = 'response' in rawResponse && rawResponse.response
+      ? rawResponse.response
+      : rawResponse as { event: string; type: 'announcement' | 'revelation' };
 
     return {
       id: `resolution-${day}-${question.id}`,
@@ -1551,7 +1594,7 @@ ${req.members.map((m, j) => {
 }).join('\n')}${getRelationshipContext(req.members)}
    
    PEOPLE NOT IN THIS CHAT (you can gossip):
-   ${allActors.filter(a => !req.members.find(m => m.actorId === a.id)).slice(0, 12).map(a => a.name).join(', ')}
+   ${shuffleArray(allActors.filter(a => !req.members.find(m => m.actorId === a.id))).slice(0, 12).map(a => a.name).join(', ')}
    
    ${req.previousMessages.length > 0 ? `CONVERSATION HISTORY:
 ${req.previousMessages.map(pm => `   [Day ${pm.day}] ${pm.actorName}: "${pm.message}"`).join('\n')}
@@ -1593,7 +1636,7 @@ ${req.members.map((m, idx) => {
 
     const maxRetries = 5;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      const response = await this.llm.generateJSON<{ 
+      const rawResponse = await this.llm.generateJSON<{ 
         groups: Array<{
           groupId: string;
           messages: Array<{
@@ -1601,11 +1644,26 @@ ${req.members.map((m, idx) => {
             message: string;
           }>;
         }> 
+      } | {
+        response: {
+          groups: Array<{
+            groupId: string;
+            messages: Array<{
+              actorId: string;
+              message: string;
+            }>;
+          }> 
+        }
       }>(
         prompt,
         { required: ['groups'] },
         { temperature: 1.0, maxTokens: 5000 }
       );
+
+      // Handle XML structure
+      const response = 'response' in rawResponse && rawResponse.response
+        ? rawResponse.response
+        : rawResponse as { groups: Array<{ groupId: string; messages: Array<{ actorId: string; message: string }> }> };
 
       const groups = response.groups || [];
       if (groups.length === groupRequests.length && groups.every(g => g.messages && g.messages.length > 0)) {
@@ -1692,11 +1750,16 @@ ${req.members.map((m, idx) => {
       informationHint
     });
 
-    const response = await this.llm.generateJSON<{ message: string }>(
+    const rawResponse = await this.llm.generateJSON<{ message: string } | { response: { message: string } }>(
       prompt,
       undefined,
       { temperature: 1.0 }
     );
+
+    // Handle XML structure
+    const response = 'response' in rawResponse && rawResponse.response
+      ? rawResponse.response
+      : rawResponse as { message: string };
 
     return response.message || `Day ${day}: Interesting developments...`;
   }

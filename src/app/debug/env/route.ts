@@ -6,7 +6,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/logger';
+// import { logger } from '@/lib/logger';
 
 export async function GET(_request: NextRequest) {
   const checks = {
@@ -25,22 +25,12 @@ export async function GET(_request: NextRequest) {
     prismaVersion: 'unknown',
   };
 
-  // Test database connection
-  try {
-    await prisma.$queryRawUnsafe('SELECT 1');
-    checks.databaseConnection = '✅ Connected';
-    
-    // Get database info
-    const result = await prisma.$queryRawUnsafe<Array<{ version: string | null }>>('SELECT version()');
-    const rawVersion = result?.[0]?.version ?? null;
-    if (rawVersion) {
-      const extracted = rawVersion.split(' ')[0];
-      checks.prismaVersion = extracted || checks.prismaVersion;
-    }
-  } catch (error) {
-    checks.databaseConnection = '❌ Failed';
-    logger.error('Database connection test failed:', error, 'Debug');
-  }
+  await prisma.$queryRawUnsafe<Array<{ '?column?': number }>>('SELECT 1');
+  checks.databaseConnection = '✅ Connected';
+  
+  const result = await prisma.$queryRawUnsafe<Array<{ version: string | null }>>('SELECT version()');
+  const rawVersion = result[0]!.version!;
+  checks.prismaVersion = rawVersion.split(' ')[0]!
 
   // Check if we're using placeholder database URL
   if (checks.databaseUrl.isPlaceholder) {
@@ -68,7 +58,7 @@ export async function GET(_request: NextRequest) {
       : '❌ Database connection failed',
     checks,
     nextSteps: checks.databaseConnection.includes('✅')
-      ? ['✅ Everything looks good! You can use /debug/start and /debug/pause']
+      ? ['✅ Everything looks good! Database is connected and ready.']
       : [
           'Check DATABASE_URL in Vercel environment variables',
           'Verify database is accessible from Vercel servers',

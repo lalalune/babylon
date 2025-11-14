@@ -9,6 +9,11 @@ import { SubgraphClient } from './SubgraphClient'
 import { IPFSPublisher } from './IPFSPublisher'
 import { logger } from '@/lib/logger'
 import { prisma } from '@/lib/database-service'
+import { z } from 'zod'
+
+const GameConfigValueSchema = z.object({
+  tokenId: z.number(),
+});
 
 export interface DiscoverableGame {
   tokenId: number
@@ -127,8 +132,9 @@ export class GameDiscoveryService {
           where: { key: 'agent0_registration' }
         })
         
-        if (config?.value && typeof config.value === 'object' && 'tokenId' in config.value) {
-          const tokenId = Number(config.value.tokenId)
+        const validation = GameConfigValueSchema.safeParse(config?.value);
+        if (validation.success) {
+          const tokenId = validation.data.tokenId;
           const agent = await this.subgraphClient.getAgent(tokenId)
           
           if (agent) {
@@ -209,8 +215,8 @@ export class GameDiscoveryService {
       return false
     }
     
-    const data = await response.json()
-    return !!(data && typeof data === 'object' && 'name' in data && 'tools' in data)
+    const data = await response.json();
+    return !!(data && typeof data === 'object' && 'name' in data && 'tools' in data);
   }
   
   /**

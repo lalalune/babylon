@@ -2,12 +2,14 @@ import { definePrompt } from '../define-prompt';
 
 export const groupChatName = definePrompt({
   id: 'group-chat-names',
-  version: '1.0.0',
+  version: '2.0.0',
   category: 'game',
   description: 'Generates satirical group chat names',
   temperature: 0.9,
   maxTokens: 500,
   template: `
+You must respond with valid XML only.
+
 Generate a funny, satirical group chat name for this private group.
 
 ADMIN (group creator): {{adminName}}
@@ -32,9 +34,11 @@ Examples for inspiration (but make it unique to THIS group):
 - "metaverse disasters anonymous"
 - "crypto widows & orphans"
 
-Return ONLY this JSON:
-{
-  "name": "the group chat name here"
-}
+Return ONLY this XML:
+<response>
+  <name>the group chat name here</name>
+</response>
+
+No other text.
 `.trim()
 });

@@ -5,6 +5,7 @@
  */
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { generateSnowflakeId } from '@/lib/snowflake';
 
 import type { GeneratedTag } from './tag-generation-service';
 
@@ -31,25 +32,17 @@ export async function storeTagsForPost(
   const tagsToCreate = tags.filter((t) => !existingTagMap.has(t.name));
 
   if (tagsToCreate.length > 0) {
-    // Try to create all tags at once with skipDuplicates to handle race conditions
-    // This is much more efficient than parallel upserts and avoids constraint violations
-    try {
-      await prisma.tag.createMany({
-        data: tagsToCreate.map((tag) => ({
-          name: tag.name,
-          displayName: tag.displayName,
-          category: tag.category || null,
-        })),
-        skipDuplicates: true, // Ignore duplicates without error
-      });
-    } catch (error) {
-      // Log error but continue - we'll fetch all tags next
-      logger.debug(
-        'Tag createMany had partial failure (expected with concurrent creates)',
-        { error },
-        'TagStorageService'
-      );
-    }
+    const tagIds = await Promise.all(tagsToCreate.map(() => generateSnowflakeId()));
+    await prisma.tag.createMany({
+      data: tagsToCreate.map((tag, index) => ({
+        id: tagIds[index]!,
+        name: tag.name,
+        displayName: tag.displayName,
+        category: tag.category || null,
+        updatedAt: new Date(),
+      })),
+      skipDuplicates: true,
+    });
 
     // Now fetch all tags that should exist (either just created or already existed)
     const createdTags = await prisma.tag.findMany({
@@ -68,13 +61,19 @@ export async function storeTagsForPost(
     );
   }
 
-  const postTagData = tags.map((tag) => {
-    const dbTag = existingTagMap.get(tag.name)!;
+  // Pre-generate IDs for post tags
+  const postTagIds = await Promise.all(
+    tags.map(() => generateSnowflakeId())
+  );
+
+  const postTagData = tags.map((tag, idx) => {
+    const dbTag = existingTagMap.get(tag.name)!
     return {
+      id: postTagIds[idx]!,
       postId,
       tagId: dbTag.id,
-    };
-  });
+    }
+  })
 
   await prisma.postTag.createMany({
     data: postTagData,
@@ -98,7 +97,7 @@ export async function getTagsForPost(postId: string) {
   return await prisma.postTag.findMany({
     where: { postId },
     include: {
-      tag: true,
+      Tag: true,
     },
     orderBy: {
       createdAt: 'asc',
@@ -136,7 +135,7 @@ export async function getPostsByTag(
     prisma.postTag.findMany({
       where: { tagId: tag.id },
       include: {
-        post: true,
+        Post: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -151,7 +150,7 @@ export async function getPostsByTag(
 
   return {
     tag,
-    posts: postTags.map((pt) => pt.post),
+    posts: postTags.map((pt) => pt.Post),
     total,
   };
 }
@@ -187,7 +186,7 @@ export async function getTagStatistics(
       },
     },
     include: {
-      tag: true,
+      Tag: true,
     },
     orderBy: {
       createdAt: 'asc',
@@ -214,7 +213,7 @@ export async function getTagStatistics(
       if (pt.createdAt > existing.newestPostDate) existing.newestPostDate = pt.createdAt;
     } else {
       tagStats.set(pt.tagId, {
-        tag: pt.tag,
+        tag: pt.Tag,
         postCount: 1,
         recentPostCount: isRecent ? 1 : 0,
         oldestPostDate: pt.createdAt,
@@ -253,12 +252,18 @@ export async function storeTrendingTags(
   windowStart: Date,
   windowEnd: Date
 ): Promise<void> {
+  // Pre-generate IDs for trending tags
+  const trendingTagIds = await Promise.all(
+    tags.map(() => generateSnowflakeId())
+  );
+
   // Store all trending tags in a transaction
   await prisma.$transaction(async (tx) => {
     await Promise.all(
-      tags.map((tag) =>
+      tags.map((tag, idx) =>
         tx.trendingTag.create({
           data: {
+            id: trendingTagIds[idx]!,
             tagId: tag.tagId,
             score: tag.score,
             postCount: tag.postCount,
@@ -308,7 +313,7 @@ export async function getCurrentTrendingTags(limit = 10) {
       },
     },
     include: {
-      tag: true,
+      Tag: true,
     },
     orderBy: {
       rank: 'asc',

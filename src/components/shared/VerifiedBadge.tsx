@@ -32,7 +32,7 @@ export function VerifiedBadge({ className, size = 'md' }: VerifiedBadgeProps) {
       viewBox="0 0 18 18"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={cn(sizeMap[size], 'flex-shrink-0', className)}
+      className={cn(sizeMap[size], 'shrink-0', className)}
     >
       <path
         strokeWidth="1.5"

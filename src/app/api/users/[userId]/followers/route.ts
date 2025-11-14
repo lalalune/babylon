@@ -8,7 +8,6 @@ import {
   successResponse
 } from '@/lib/api/auth-middleware';
 import { prisma } from '@/lib/database-service';
-import { BusinessLogicError } from '@/lib/errors';
 import { withErrorHandling } from '@/lib/errors/error-handler';
 import { logger } from '@/lib/logger';
 import { UserFollowersQuerySchema, UserIdParamSchema } from '@/lib/validation/schemas';
@@ -47,26 +46,17 @@ export const GET = withErrorHandling(async (
   };
   UserFollowersQuerySchema.parse(queryParams);
 
-  // Try to find as user first, then actor
-  let targetId = targetIdentifier;
-  let targetUser = null;
+  let targetId = targetIdentifier
+  let targetUser = null
   
-  try {
-    targetUser = await requireUserByIdentifier(targetIdentifier, { id: true });
-    targetId = targetUser.id;
-  } catch {
-    // Not a user, might be an actor - continue with targetIdentifier
-    logger.debug('Target not found as user, checking if actor', { targetIdentifier }, 'GET /api/users/[userId]/followers');
-  }
+  targetUser = await requireUserByIdentifier(targetIdentifier, { id: true })
+  targetId = targetUser.id
 
-  // Check if target is an actor (NPC)
+  logger.debug('Target not found as user, checking if actor', { targetIdentifier }, 'GET /api/users/[userId]/followers')
+
   const targetActor = await prisma.actor.findUnique({
     where: { id: targetId },
-  });
-
-  if (!targetActor && !targetUser) {
-    throw new BusinessLogicError('User or actor not found', 'NOT_FOUND');
-  }
+  })
 
   let followers: FollowerResponse[] = [];
 
@@ -75,7 +65,7 @@ export const GET = withErrorHandling(async (
     const actorFollowers = await prisma.actorFollow.findMany({
       where: { followingId: targetId },
       include: {
-        follower: {
+        Actor_ActorFollow_followerIdToActor: {
           select: {
             id: true,
             name: true,
@@ -93,7 +83,7 @@ export const GET = withErrorHandling(async (
         actorId: targetId,
       },
       include: {
-        user: {
+        User: {
           select: {
             id: true,
             displayName: true,
@@ -139,23 +129,23 @@ export const GET = withErrorHandling(async (
 
     followers = [
       ...actorFollowers.map(f => ({
-        id: f.follower.id,
-        displayName: f.follower.name,
-        username: f.follower.id,
-        profileImageUrl: f.follower.profileImageUrl || null,
-        bio: f.follower.description || '',
+        id: f.Actor_ActorFollow_followerIdToActor.id,
+        displayName: f.Actor_ActorFollow_followerIdToActor.name,
+        username: f.Actor_ActorFollow_followerIdToActor.id,
+        profileImageUrl: f.Actor_ActorFollow_followerIdToActor.profileImageUrl || null,
+        bio: f.Actor_ActorFollow_followerIdToActor.description || '',
         followedAt: f.createdAt.toISOString(),
         isActor: true,
-        tier: f.follower.tier || undefined,
+        tier: f.Actor_ActorFollow_followerIdToActor.tier || undefined,
       })),
       ...userActorFollowers
-        .filter(f => !!f.user)
+        .filter(f => !!f.User)
         .map(f => ({
-          id: f.user!.id,
-          displayName: f.user!.displayName || '',
-          username: f.user!.username || null,
-          profileImageUrl: f.user!.profileImageUrl || null,
-          bio: f.user!.bio || '',
+          id: f.User!.id,
+          displayName: f.User!.displayName || '',
+          username: f.User!.username || null,
+          profileImageUrl: f.User!.profileImageUrl || null,
+          bio: f.User!.bio || '',
           followedAt: f.createdAt.toISOString(),
           isActor: false,
         })),
@@ -182,7 +172,7 @@ export const GET = withErrorHandling(async (
     const follows = await prisma.follow.findMany({
       where: { followingId: targetId },
       include: {
-        follower: {
+        User_Follow_followerIdToUser: {
           select: {
             id: true,
             displayName: true,
@@ -221,11 +211,11 @@ export const GET = withErrorHandling(async (
 
     followers = [
       ...follows.map(f => ({
-        id: f.follower.id,
-        displayName: f.follower.displayName || '',
-        username: f.follower.username || null,
-        profileImageUrl: f.follower.profileImageUrl || null,
-        bio: f.follower.bio || '',
+        id: f.User_Follow_followerIdToUser.id,
+        displayName: f.User_Follow_followerIdToUser.displayName || '',
+        username: f.User_Follow_followerIdToUser.username || null,
+        profileImageUrl: f.User_Follow_followerIdToUser.profileImageUrl || null,
+        bio: f.User_Follow_followerIdToUser.bio || '',
         followedAt: f.createdAt.toISOString(),
         isActor: false,
       })),

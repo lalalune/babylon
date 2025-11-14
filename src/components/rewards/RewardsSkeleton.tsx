@@ -83,12 +83,12 @@ export function RewardsSkeleton() {
                   key={i}
                   className="flex items-center gap-4 p-4 rounded-lg border bg-sidebar-accent/50 border-border"
                 >
-                  <SkeletonBox className="w-6 h-6 flex-shrink-0" />
+                  <SkeletonBox className="w-6 h-6 shrink-0" />
                   <div className="flex-1 min-w-0 space-y-2">
                     <SkeletonText className="w-32 h-4" />
                     <SkeletonText className="w-48 h-3" />
                   </div>
-                  <div className="flex-shrink-0 text-right space-y-1">
+                  <div className="shrink-0 text-right space-y-1">
                     <SkeletonText className="w-12 h-4" />
                     <SkeletonText className="w-12 h-3" />
                   </div>
@@ -144,7 +144,7 @@ export function RewardsSkeleton() {
                   key={i}
                   className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg border border-border"
                 >
-                  <SkeletonBox className="w-10 h-10 rounded-full flex-shrink-0" />
+                  <SkeletonBox className="w-10 h-10 rounded-full shrink-0" />
                   <div className="flex-1 min-w-0 space-y-2">
                     <SkeletonText className="w-32 h-4" />
                     <SkeletonText className="w-24 h-3" />
@@ -211,12 +211,12 @@ export function RewardsSkeleton() {
                   key={i}
                   className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 border-border"
                 >
-                  <SkeletonBox className="w-5 h-5 flex-shrink-0" />
+                  <SkeletonBox className="w-5 h-5 shrink-0" />
                   <div className="flex-1 min-w-0 space-y-2">
                     <SkeletonText className="w-28 h-4" />
                     <SkeletonText className="w-40 h-3" />
                   </div>
-                  <SkeletonText className="w-12 h-4 flex-shrink-0" />
+                  <SkeletonText className="w-12 h-4 shrink-0" />
                 </div>
               ))}
             </div>
@@ -245,7 +245,7 @@ export function RewardsSkeleton() {
             <div className="space-y-3">
               <div className="flex gap-2">
                 <SkeletonBox className="flex-1 min-w-0 h-10 rounded-lg" />
-                <SkeletonBox className="w-12 h-10 rounded-lg flex-shrink-0" />
+                <SkeletonBox className="w-12 h-10 rounded-lg shrink-0" />
               </div>
               <SkeletonBox className="w-full h-10 rounded-lg" />
             </div>
@@ -266,7 +266,7 @@ export function RewardsSkeleton() {
                   key={i}
                   className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg border border-border"
                 >
-                  <SkeletonBox className="w-10 h-10 rounded-full flex-shrink-0" />
+                  <SkeletonBox className="w-10 h-10 rounded-full shrink-0" />
                   <div className="flex-1 min-w-0 space-y-2">
                     <SkeletonText className="w-32 h-4" />
                     <SkeletonText className="w-24 h-3" />

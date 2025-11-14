@@ -8,7 +8,6 @@ import type {
   UserBalanceData,
   PredictionPosition,
   UserProfileStats,
-  ProfileWidgetPoolDeposit,
   PerpPositionFromAPI,
 } from '@/types/profile'
 
@@ -93,7 +92,6 @@ interface ProfileWidgetData {
   balance: UserBalanceData | null
   predictions: PredictionPosition[]
   perps: PerpPositionFromAPI[]
-  pools: ProfileWidgetPoolDeposit[]
   stats: UserProfileStats | null
 }
 

@@ -3,7 +3,7 @@
  */
 
 import { describe, test, expect, beforeEach } from 'bun:test'
-import { IPFSPublisher, type AgentMetadata } from '../IPFSPublisher'
+import { IPFSPublisher, AgentMetadataSchema, type AgentMetadata } from '../IPFSPublisher'
 
 describe('IPFSPublisher', () => {
   let publisher: IPFSPublisher
@@ -41,14 +41,17 @@ describe('IPFSPublisher', () => {
       },
       capabilities: {
         markets: ['prediction'],
-        actions: ['trade'],
-        version: '1.0.0'
+        actions: ['trade']
       }
     }
     
     expect(metadata.name).toBe('Test Agent')
     expect(metadata.endpoints.a2a).toBe('wss://test.com/ws')
     expect(metadata.capabilities.markets).toContain('prediction')
+    
+    // Check against Zod schema to ensure it's valid
+    const validation = AgentMetadataSchema.safeParse(metadata);
+    expect(validation.success).toBe(true);
   })
   
   test('publishMetadata is deprecated and directs to Agent0 SDK', async () => {
@@ -60,7 +63,7 @@ describe('IPFSPublisher', () => {
         description: 'Test',
         version: '1.0.0',
         endpoints: {},
-        capabilities: { markets: [], actions: [], version: '1.0.0' }
+        capabilities: { markets: [], actions: [] }
       })
     ).rejects.toThrow('Use Agent0Client.registerAgent() instead')
   })

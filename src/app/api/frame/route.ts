@@ -10,52 +10,34 @@ import { logger } from '@/lib/logger'
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-    
-    logger.info('Frame action received', { body }, 'FrameAPI')
+  const body = await request.json()
+  
+  logger.info('Frame action received', { body }, 'FrameAPI')
 
-    // Validate Frame message
-    const { untrustedData, trustedData } = body
+  const { untrustedData } = body
 
-    if (!untrustedData || !trustedData) {
-      return NextResponse.json(
-        { error: 'Invalid frame message' },
-        { status: 400 }
-      )
-    }
+  const buttonIndex = untrustedData.buttonIndex
+  const fid = untrustedData.fid
 
-    // Get the action from the button index
-    const buttonIndex = untrustedData.buttonIndex
-    const fid = untrustedData.fid
+  logger.info('Processing frame action', { 
+    buttonIndex, 
+    fid,
+    castId: untrustedData.castId 
+  }, 'FrameAPI')
 
-    logger.info('Processing frame action', { 
-      buttonIndex, 
-      fid,
-      castId: untrustedData.castId 
-    }, 'FrameAPI')
-
-    // Build the frame response
-    const frameResponse = {
-      version: 'next',
-      image: 'https://babylon.market/assets/images/og-image.png',
-      buttons: [
-        {
-          label: 'Open Babylon',
-          action: 'link',
-          target: `https://babylon.market?fid=${fid}&fc_frame=true`,
-        },
-      ],
-    }
-
-    return NextResponse.json(frameResponse)
-  } catch (error) {
-    logger.error('Frame action error', { error }, 'FrameAPI')
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+  const frameResponse = {
+    version: 'next',
+    image: 'https://babylon.market/assets/images/og-image.png',
+    buttons: [
+      {
+        label: 'Open Babylon',
+        action: 'link',
+        target: `https://babylon.market?fid=${fid}&fc_frame=true`,
+      },
+    ],
   }
+
+  return NextResponse.json(frameResponse)
 }
 
 export async function GET() {

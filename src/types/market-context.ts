@@ -20,7 +20,7 @@ export interface PerpMarketSnapshot {
 }
 
 export interface PredictionMarketSnapshot {
-  id: number;
+  id: string; // Market ID is a Snowflake string, not an integer
   text: string;
   yesPrice: number;
   noPrice: number;
@@ -33,7 +33,7 @@ export interface NPCPosition {
   id: string;
   marketType: MarketType;
   ticker?: string;
-  marketId?: number;
+  marketId?: string; // Market ID is a Snowflake string, not an integer
   side: string;
   entryPrice: number;
   currentPrice: number;

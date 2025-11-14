@@ -1,7 +1,7 @@
 /**
  * LLM Client for Babylon Game Generation
- * Supports Groq (fast) and OpenAI (fallback)
- * Wrapper with retry logic and error handling
+ * Supports multiple providers with intelligent fallback
+ * Priority: Wandb > Groq > Claude > OpenAI
  * 
  * IMPORTANT: Always requires an API key - never falls back to mock mode
  */
@@ -10,8 +10,10 @@ import OpenAI from 'openai';
 import 'dotenv/config';
 import type { JsonValue } from '@/types/common';
 import { logger } from '@/lib/logger';
+import { parseContinuationContent, cleanMarkdownCodeBlocks, extractJsonFromText } from './json-continuation-parser';
+import { parseXML } from './xml-parser';
 
-type LLMProvider = 'groq' | 'openai';
+type LLMProvider = 'wandb' | 'groq' | 'claude' | 'openai';
 
 /**
  * Simple JSON schema for validation
@@ -31,23 +33,49 @@ interface JsonSchemaProperty {
 export class BabylonLLMClient {
   private client: OpenAI;
   private provider: LLMProvider;
+  private wandbKey: string | undefined;
   private groqKey: string | undefined;
+  private claudeKey: string | undefined;
   private openaiKey: string | undefined;
-  private readonly maxAttempts = 3;
-  private readonly maxBackoffMs = 5000;
+  private wandbModel: string | undefined;
   
-  constructor(apiKey?: string) {
-    // Priority: Groq > OpenAI
+  constructor(apiKey?: string, wandbModelOverride?: string, forceProvider?: LLMProvider) {
+    // Priority: Wandb > Groq > Claude > OpenAI (unless forceProvider is set)
+    this.wandbKey = process.env.WANDB_API_KEY;
     this.groqKey = process.env.GROQ_API_KEY;
+    this.claudeKey = process.env.ANTHROPIC_API_KEY;
     this.openaiKey = apiKey || process.env.OPENAI_API_KEY;
+    this.wandbModel = wandbModelOverride || process.env.WANDB_MODEL || undefined; // Can be configured via admin
     
-    if (this.groqKey) {
-      logger.info('Using Groq (primary, fast inference)', undefined, 'BabylonLLMClient');
+    // Force specific provider if requested (for game NPCs to use Groq even when wandb is available)
+    if (forceProvider === 'groq' && this.groqKey) {
+      logger.info('Using Groq (forced for game NPCs)', undefined, 'BabylonLLMClient');
       this.client = new OpenAI({
         apiKey: this.groqKey,
         baseURL: 'https://api.groq.com/openai/v1',
       });
       this.provider = 'groq';
+    } else if (this.wandbKey && !forceProvider) {
+      logger.info('Using Weights & Biases inference API (primary)', { model: this.wandbModel || 'default' }, 'BabylonLLMClient');
+      this.client = new OpenAI({
+        apiKey: this.wandbKey,
+        baseURL: 'https://api.inference.wandb.ai/v1',
+      });
+      this.provider = 'wandb';
+    } else if (this.groqKey) {
+      logger.info('Using Groq (fast inference)', undefined, 'BabylonLLMClient');
+      this.client = new OpenAI({
+        apiKey: this.groqKey,
+        baseURL: 'https://api.groq.com/openai/v1',
+      });
+      this.provider = 'groq';
+    } else if (this.claudeKey) {
+      logger.info('Using Claude via OpenAI-compatible API', undefined, 'BabylonLLMClient');
+      this.client = new OpenAI({
+        apiKey: this.claudeKey,
+        baseURL: 'https://api.anthropic.com/v1',
+      });
+      this.provider = 'claude';
     } else if (this.openaiKey) {
       logger.info('Using OpenAI (fallback)', undefined, 'BabylonLLMClient');
       this.client = new OpenAI({ apiKey: this.openaiKey });
@@ -55,15 +83,20 @@ export class BabylonLLMClient {
     } else {
       throw new Error(
         '❌ No API key found!\n' +
-        '   Set GROQ_API_KEY (primary) or OPENAI_API_KEY (fallback) environment variable.\n' +
-        '   Example: export GROQ_API_KEY=your_key_here'
+        '   Set one of these environment variables (in priority order):\n' +
+        '   - WANDB_API_KEY (Weights & Biases inference)\n' +
+        '   - GROQ_API_KEY (fast inference)\n' +
+        '   - ANTHROPIC_API_KEY (Claude)\n' +
+        '   - OPENAI_API_KEY (fallback)\n' +
+        '   Example: export WANDB_API_KEY=your_key_here'
       );
     }
   }
 
   /**
-   * Generate completion with JSON response
+   * Generate completion with structured response (XML or JSON)
    * ALWAYS retries on failure - never gives up without exhausting all retries
+   * Defaults to XML for more robust parsing
    */
   async generateJSON<T>(
     prompt: string,
@@ -72,101 +105,154 @@ export class BabylonLLMClient {
       model?: string;
       temperature?: number;
       maxTokens?: number;
+      format?: 'xml' | 'json'; // Default to XML for robustness
     } = {}
   ): Promise<T> {
-    let attempt = 0;
-    let lastError: unknown;
+    const defaultModel = this.getDefaultModel();
 
-    while (attempt < this.maxAttempts) {
-      attempt++;
-      try {
-        const defaultModel = this.provider === 'groq'
-          ? 'llama-3.3-70b-versatile'
-          : 'gpt-4o-mini';
+    const {
+      model = defaultModel,
+      temperature = 0.7,
+      maxTokens = 16000,
+      format = 'xml', // Default to XML for more robust parsing
+    } = options;
 
-        const {
-          model = defaultModel,
-          temperature = 0.7,
-          maxTokens = 16000,
-        } = options;
+    // OpenAI can enforce JSON mode, but we default to XML for robustness
+    const useJsonFormat = (this.provider === 'openai' && format === 'json') 
+      ? { type: 'json_object' as const } 
+      : undefined;
 
-        const useJsonFormat = this.provider === 'openai' ? { type: 'json_object' as const } : undefined;
+    const systemContent = format === 'xml'
+      ? 'You are an XML-only assistant. CRITICAL: Respond ONLY with valid XML. Do NOT write explanations, do NOT use markdown code blocks, do NOT write JSON. Start your response with < and end with >. Close all tags.'
+      : 'You are a JSON-only assistant. You must respond ONLY with valid JSON. No explanations, no markdown, no other text.';
 
-        const messages = [
+    const messages = [
+      {
+        role: 'system' as const,
+        content: systemContent,
+      },
+      {
+        role: 'user' as const,
+        content: prompt,
+      },
+    ];
+
+    const response = await this.client.chat.completions.create({
+      model,
+      messages,
+      ...(useJsonFormat ? { response_format: useJsonFormat } : {}),
+      temperature,
+      max_tokens: maxTokens,
+    });
+
+    let content = response.choices[0]!.message.content!;
+    let finishReason = response.choices[0]!.finish_reason;
+
+    // Handle truncation by continuing generation (for models with 32k+ context)
+    if (finishReason === 'length') {
+      logger.warn('Response truncated, attempting continuation', { 
+        model, 
+        tokensUsed: maxTokens 
+      }, 'BabylonLLMClient');
+      
+      // Try to continue generation up to 2 more times
+      let continuationAttempts = 0;
+      const maxContinuations = 2;
+      
+      while (finishReason === 'length' && continuationAttempts < maxContinuations) {
+        continuationAttempts++;
+        
+        // Create continuation prompt
+        const continuationMessages = [
+          ...messages,
           {
-            role: 'system' as const,
-            content: 'You are a JSON-only assistant. You must respond ONLY with valid JSON. No explanations, no markdown, no other text.',
+            role: 'assistant' as const,
+            content: content,
           },
           {
             role: 'user' as const,
-            content: prompt,
+            content: 'Continue from where you left off. Complete the remaining JSON array entries.',
           },
         ];
-
-        const response = await this.client.chat.completions.create({
+        
+        logger.info(`Continuation attempt ${continuationAttempts}/${maxContinuations}`, { 
+          contentLength: content.length 
+        }, 'BabylonLLMClient');
+        
+        const continuationResponse = await this.client.chat.completions.create({
           model,
-          messages,
+          messages: continuationMessages,
           ...(useJsonFormat ? { response_format: useJsonFormat } : {}),
           temperature,
           max_tokens: maxTokens,
         });
-
-        const content = response.choices[0]?.message.content;
-        const finishReason = response.choices[0]?.finish_reason;
-
-        if (finishReason === 'length') {
-          throw new Error(`Response truncated at ${maxTokens} tokens.`);
-        }
-
-        if (!content) {
-          throw new Error('Empty response from LLM');
-        }
-
-        let jsonContent = content.trim();
-        if (jsonContent.startsWith('```')) {
-          const lines = jsonContent.split('\n');
-          const jsonStartIndex = lines.findIndex(line => line.trim().startsWith('{') || line.trim().startsWith('['));
-          if (jsonStartIndex !== -1) {
-            jsonContent = lines.slice(jsonStartIndex).join('\n');
-          }
-          jsonContent = jsonContent.replace(/```\s*$/, '').trim();
-        }
-
-        if (!jsonContent.startsWith('{') && !jsonContent.startsWith('[')) {
-          const jsonMatch = jsonContent.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-          if (jsonMatch && jsonMatch[1]) {
-            jsonContent = jsonMatch[1];
-          }
-        }
-
-        const parsed: Record<string, JsonValue> = JSON.parse(jsonContent);
-
-        if (schema && !this.validateSchema(parsed, schema)) {
-          throw new Error(`Response does not match schema. Missing required fields: ${schema.required?.join(', ')}`);
-        }
-
-        return parsed as T;
-      } catch (error) {
-        lastError = error;
-
-        if (this.switchToFallbackProvider()) {
-          logger.warn('LLM request failed on Groq, switching to OpenAI fallback', { attempt }, 'BabylonLLMClient');
-          attempt--;
-          continue;
-        }
-
-        if (attempt >= this.maxAttempts) {
+        
+        const continuationContent = continuationResponse.choices[0]!.message.content!;
+        finishReason = continuationResponse.choices[0]!.finish_reason;
+        
+        // Append continuation to content
+        content += continuationContent;
+        
+        if (finishReason !== 'length') {
+          logger.info('Continuation successful', { 
+            attempts: continuationAttempts,
+            finalLength: content.length 
+          }, 'BabylonLLMClient');
           break;
         }
-
-        const delay = Math.min(2 ** (attempt - 1) * 500, this.maxBackoffMs);
-        logger.warn('LLM request failed, retrying with backoff', { attempt, delay }, 'BabylonLLMClient');
-        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      
+      // If still truncated after max continuations, throw error
+      if (finishReason === 'length') {
+        throw new Error(`Response truncated at ${maxTokens} tokens after ${continuationAttempts} continuation attempts.`);
       }
     }
 
-    const errorMessage = lastError instanceof Error ? lastError.message : String(lastError);
-    throw new Error(`LLM request failed after ${this.maxAttempts} attempts: ${errorMessage}`);
+    // Parse based on requested format
+    if (format === 'xml') {
+      // Use XML parser (more robust, handles malformed content better)
+      const xmlResult = parseXML(content);
+      
+      if (!xmlResult.success) {
+        throw new Error(`Failed to parse XML: ${xmlResult.error}`);
+      }
+      
+      logger.debug('Successfully parsed XML response', {
+        hasData: xmlResult.data !== null,
+        isArray: Array.isArray(xmlResult.data),
+      }, 'BabylonLLMClient');
+      
+      return xmlResult.data as T;
+    } else {
+      // Use JSON parser (legacy)
+      // If we had a continuation, use the advanced parser
+      if (content.includes('Continue from where you left off')) {
+        const parsed = parseContinuationContent(content);
+        if (parsed !== null) {
+          logger.info('Successfully parsed continuation content', { 
+            isArray: Array.isArray(parsed),
+            items: Array.isArray(parsed) ? parsed.length : 'N/A'
+          }, 'BabylonLLMClient');
+          return parsed as T;
+        } else {
+          logger.error('Failed to parse continuation content, attempting fallback', {
+            contentPreview: content.substring(0, 200)
+          }, 'BabylonLLMClient');
+        }
+      }
+
+      // Standard JSON parsing for non-continuation responses
+      let jsonContent = cleanMarkdownCodeBlocks(content);
+      jsonContent = extractJsonFromText(jsonContent);
+      
+      const parsed: Record<string, JsonValue> = JSON.parse(jsonContent);
+
+      if (schema && !this.validateSchema(parsed, schema)) {
+        throw new Error(`Response does not match schema. Missing required fields: ${schema.required?.join(', ')}`);
+      }
+
+      return parsed as T;
+    }
   }
 
   /**
@@ -186,30 +272,56 @@ export class BabylonLLMClient {
   }
 
   /**
-   * Attempt to switch to the fallback provider (OpenAI) when Groq fails.
+   * Get the default model for the current provider
    */
-  private switchToFallbackProvider(): boolean {
-    if (this.provider === 'groq' && this.openaiKey) {
-      this.client = new OpenAI({ apiKey: this.openaiKey });
-      this.provider = 'openai';
-      return true;
+  private getDefaultModel(): string {
+    switch (this.provider) {
+      case 'wandb':
+        // Use configured model or default to our trained Qwen model
+        // Content generation code explicitly specifies moonshotai/Kimi-K2-Instruct-0905 when needed
+        return this.wandbModel || 'OpenPipe/Qwen3-14B-Instruct';
+      case 'groq':
+        // Use qwen3-32b as workhorse model for most operations
+        return 'qwen/qwen3-32b';
+      case 'claude':
+        return 'claude-3-5-sonnet-20241022';
+      case 'openai':
+        return 'gpt-4o-mini';
+      default:
+        return 'gpt-4o-mini';
     }
-    return false;
   }
 
   /**
-   * Get provider info
+   * Get current provider information
    */
   getProvider(): LLMProvider {
     return this.provider;
   }
 
   /**
-   * Get token usage stats
+   * Get the current wandb model if using wandb
    */
+  getWandbModel(): string | undefined {
+    return this.provider === 'wandb' ? this.wandbModel : undefined;
+  }
+
+  /**
+   * Set wandb model (useful for dynamic configuration)
+   */
+  setWandbModel(model: string): void {
+    if (this.provider === 'wandb') {
+      this.wandbModel = model;
+      logger.info('Updated wandb model', { model }, 'BabylonLLMClient');
+    } else {
+      logger.warn('Cannot set wandb model - not using wandb provider', undefined, 'BabylonLLMClient');
+    }
+  }
+
   getStats() {
     return {
       provider: this.provider,
+      model: this.getDefaultModel(),
       totalTokens: 0,
       totalCost: 0,
     };
