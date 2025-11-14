@@ -122,13 +122,29 @@ export async function authenticate(request: NextRequest): Promise<AuthenticatedU
         select: { id: true, walletAddress: true },
       });
 
+      let reLinked = false;
       if (!dbUser) {
         dbUser = await reconcilePrivyIdentity(claims.userId, identityTokenHeader);
+
+        if (dbUser) {
+          reLinked = true;
+          logger.info(
+            'Authenticated user re-linked to existing account',
+            { privyId: claims.userId, userId: dbUser.id },
+            'authenticate'
+          );
+        }
       }
 
       if (dbUser) {
         dbUserId = dbUser.id;
         walletAddress = dbUser.walletAddress ?? undefined;
+      } else if (!reLinked) {
+        logger.info(
+          'Authenticated user has no existing DB record (new user)',
+          { privyId: claims.userId },
+          'authenticate'
+        );
       }
     } catch (lookupError) {
       logger.warn('Failed to resolve database user after Privy auth', { privyId: claims.userId, error: lookupError }, 'authenticate');
@@ -233,7 +249,11 @@ async function reconcilePrivyIdentity(privyUserId: string, identityToken?: strin
   }
 
   // Try wallet-based reconciliation first (most reliable & unique)
-  for (const walletAddress of extractWalletAddresses(privyProfile)) {
+  const walletAddresses = extractWalletAddresses(privyProfile);
+  const emails = extractEmailCandidates(privyProfile);
+  const farcasterHandles = extractFarcasterHandles(privyProfile);
+
+  for (const walletAddress of walletAddresses) {
     const existing = await prisma.user.findFirst({
       where: {
         walletAddress,
@@ -255,8 +275,7 @@ async function reconcilePrivyIdentity(privyUserId: string, identityToken?: strin
     }
   }
 
-  // Fall back to email matches when wallets are unavailable
-  for (const email of extractEmailCandidates(privyProfile)) {
+  for (const email of emails) {
     const existing = await prisma.user.findFirst({
       where: {
         isActor: false,
@@ -275,6 +294,31 @@ async function reconcilePrivyIdentity(privyUserId: string, identityToken?: strin
       logger.info(
         'Re-linked user to updated Privy app via email',
         { userId: existing.id, email, privyUserId },
+        'authenticate'
+      );
+      return existing;
+    }
+  }
+
+  for (const farcaster of farcasterHandles) {
+    const existing = await prisma.user.findFirst({
+      where: {
+        isActor: false,
+        farcasterUsername: {
+          equals: farcaster,
+          mode: 'insensitive',
+        },
+      },
+      select: {
+        id: true,
+        walletAddress: true,
+      },
+    });
+
+    if (existing && (await attachPrivyId(existing.id, privyUserId))) {
+      logger.info(
+        'Re-linked user to updated Privy app via farcaster',
+        { userId: existing.id, farcaster, privyUserId },
         'authenticate'
       );
       return existing;
@@ -373,6 +417,43 @@ function extractEmailCandidates(privyUser: PrivyUser): string[] {
   }
 
   return Array.from(emails);
+}
+
+function extractFarcasterHandles(privyUser: PrivyUser): string[] {
+  const handles = new Set<string>();
+  const push = (value?: string | null) => {
+    if (value) {
+      handles.add(value.trim().toLowerCase());
+    }
+  };
+
+  push(privyUser.farcaster?.username ?? privyUser.farcaster?.displayName ?? null);
+
+  for (const account of privyUser.linkedAccounts ?? []) {
+    if (
+      account &&
+      typeof account === 'object' &&
+      'type' in account &&
+      account.type === 'farcaster' &&
+      'username' in account &&
+      typeof account.username === 'string'
+    ) {
+      push(account.username);
+    }
+
+    if (
+      account &&
+      typeof account === 'object' &&
+      'type' in account &&
+      account.type === 'farcaster' &&
+      'displayName' in account &&
+      typeof account.displayName === 'string'
+    ) {
+      push(account.displayName);
+    }
+  }
+
+  return Array.from(handles);
 }
 
 /**
