@@ -174,15 +174,6 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   })
 
   if (!oauthState || !oauthState.codeVerifier) {
-    // Return debug info in URL
-    const debugInfo = encodeURIComponent(JSON.stringify({
-      receivedState: state.substring(0, 30) + '...',
-      userId,
-      allStatesCount: allStates.length,
-      latestState: allStates[0]?.state?.substring(0, 30) + '...',
-      statesMatch: allStates[0]?.state === state,
-    }))
-    
     logger.warn('Twitter callback missing or expired PKCE state', { 
       state, 
       userId, 
@@ -191,7 +182,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     }, 'TwitterCallback')
     
     return NextResponse.redirect(
-      new URL(`/rewards?error=invalid_state&debug=${debugInfo}`, request.url)
+      new URL(`/rewards?error=invalid_stat`, request.url)
     )
   }
 
