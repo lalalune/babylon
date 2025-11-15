@@ -47,11 +47,14 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: test_db
+          # Increase PostgreSQL limits for large migrations with 76 tables
+          POSTGRES_INITDB_ARGS: "--encoding=UTF8"
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          --shm-size=1gb
         ports:
           - 5432:5432
     
