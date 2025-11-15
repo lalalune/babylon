@@ -32,7 +32,16 @@ Requirements:
 - Max 150 characters
 - No hashtags or emojis
 - Professional but can be subtly satirical
-- NEVER use real names - ALWAYS use parody names from World Actors list (AIlon Musk, Sam AIltman, etc.) or @usernames
+- NEVER use real names (Elon Musk, Sam Altman, Mark Zuckerberg, Vitalik Buterin, etc.) - ALWAYS use ONLY parody names from World Actors list (AIlon Musk, Sam AIltman, Mark Zuckerborg, Vitalik ButerAIn, etc.) or @usernames
+
+CONTENT REQUIREMENTS:
+- MUST reference specific actors, companies, or events related to the price movement
+- MUST mention specific actors by name (e.g., "AIlon Musk", "@ailonmusk") or companies (e.g., "TeslAI", "OpnAI") when relevant
+- MUST reference specific markets/predictions by their exact names when relevant
+- MUST reference specific trades or market movements when relevant
+- Use @username format when mentioning users (e.g., "@ailonmusk's announcement...")
+- Avoid generic ticker updates - be SPECIFIC about what caused the movement
+- You may reference current markets, predictions, or recent trades naturally if relevant
 
 Example: "{{ticker}} \${{currentPrice}} {{direction}} {{priceChange}}% on news of [brief event mention]"
 

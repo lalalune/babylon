@@ -35,38 +35,83 @@ export function MarketsPanel() {
   const { registerRefresh, unregisterRefresh } = useWidgetRefresh()
 
   const fetchMarkets = useCallback(async () => {
-    // Fetch prediction markets
-    const response = await fetch('/api/feed/widgets/markets')
-    const data = await response.json()
-    if (data.success) {
-      setMarkets(data.markets || [])
-    }
-
-    // Fetch perp markets for trending tokens
-    const perpResponse = await fetch('/api/markets/perps')
-    const perpData = await perpResponse.json()
-    
-    if (perpData.markets && Array.isArray(perpData.markets)) {
-      // Map and normalize the data (same as TopMoversPanel)
-      const normalizedMarkets = perpData.markets.map((m: {
-        ticker: string
-        name: string
-        currentPrice?: number
-        change24h?: number
-        changePercent24h?: number
-        volume24h?: number
-      }) => ({
-        ticker: m.ticker,
-        name: m.name,
-        currentPrice: m.currentPrice || 0,
-        change24h: m.change24h || 0,
-        changePercent24h: m.changePercent24h || 0,
-        volume24h: m.volume24h,
-      }))
+    try {
+      // Fetch prediction markets
+      const response = await fetch('/api/feed/widgets/markets')
       
-      setPerpMarkets(normalizedMarkets)
+      if (!response.ok) {
+        console.error('Failed to fetch markets:', response.status, response.statusText)
+        setMarkets([])
+      } else {
+        const text = await response.text()
+        if (!text) {
+          console.error('Empty response from markets API')
+          setMarkets([])
+        } else {
+          try {
+            const data = JSON.parse(text)
+            if (data.success) {
+              setMarkets(data.markets || [])
+            } else {
+              setMarkets([])
+            }
+          } catch (parseError) {
+            console.error('Failed to parse markets response:', parseError)
+            setMarkets([])
+          }
+        }
+      }
+
+      // Fetch perp markets for trending tokens
+      const perpResponse = await fetch('/api/markets/perps')
+      
+      if (!perpResponse.ok) {
+        console.error('Failed to fetch perp markets:', perpResponse.status, perpResponse.statusText)
+        setPerpMarkets([])
+      } else {
+        const perpText = await perpResponse.text()
+        if (!perpText) {
+          console.error('Empty response from perp markets API')
+          setPerpMarkets([])
+        } else {
+          try {
+            const perpData = JSON.parse(perpText)
+            
+            if (perpData.markets && Array.isArray(perpData.markets)) {
+              // Map and normalize the data (same as TopMoversPanel)
+              const normalizedMarkets = perpData.markets.map((m: {
+                ticker: string
+                name: string
+                currentPrice?: number
+                change24h?: number
+                changePercent24h?: number
+                volume24h?: number
+              }) => ({
+                ticker: m.ticker,
+                name: m.name,
+                currentPrice: m.currentPrice || 0,
+                change24h: m.change24h || 0,
+                changePercent24h: m.changePercent24h || 0,
+                volume24h: m.volume24h,
+              }))
+              
+              setPerpMarkets(normalizedMarkets)
+            } else {
+              setPerpMarkets([])
+            }
+          } catch (parseError) {
+            console.error('Failed to parse perp markets response:', parseError)
+            setPerpMarkets([])
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching markets:', error)
+      setMarkets([])
+      setPerpMarkets([])
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   useEffect(() => {

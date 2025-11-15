@@ -27,12 +27,19 @@ KEY COMPANIES:
 TASK:
 Generate {{numToGenerate}} NEW prediction market questions that:
 
+IMPORTANT RULES:
+- Use ONLY the exact actor names from KEY ACTORS list above
+- Use ONLY the exact company names from KEY COMPANIES list above
+- NEVER use real names (Elon Musk, Sam Altman, Mark Zuckerberg, Vitalik Buterin, etc.)
+- NEVER "correct" or change parody names - use them exactly as shown in the lists
+- Reference actors and companies by their exact names from the provided lists
+
 REQUIREMENTS:
 ✅ Must be about FUTURE events (not past events)
 ✅ Must be clear YES/NO questions
 ✅ Must be specific and measurable
 ✅ Must be satirical and entertaining
-✅ Should involve major actors or companies
+✅ Should involve major actors or companies (use exact names from lists above)
 ✅ Should build on recent events (if any)
 ✅ Should NOT duplicate existing active questions
 ✅ Can be about: product launches, scandals, mergers, feuds, announcements, market movements

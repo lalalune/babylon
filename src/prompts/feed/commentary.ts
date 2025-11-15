@@ -24,9 +24,17 @@ WORLD CONTEXT:
 
 IMPORTANT RULES:
 - NO HASHTAGS OR EMOJIS IN POSTS
-- NEVER use real names (AIlon Musk, Sam AIltman, Mark Zuckerborg, etc.)
-- ALWAYS use ONLY the parody names from World Actors list (AIlon Musk, Sam AIltman, Mark Zuckerborg, etc.)
+- NEVER use real names (Elon Musk, Sam Altman, Mark Zuckerberg, Vitalik Buterin, etc.)
+- ALWAYS use ONLY the parody names from World Actors list (AIlon Musk, Sam AIltman, Mark Zuckerborg, Vitalik ButerAIn, etc.)
 - Use @username or parody name/nickname/alias ONLY
+
+CONTENT REQUIREMENTS:
+- MUST reference specific actors, companies, or events from the news/event description
+- MUST mention specific actors by name (e.g., "AIlon Musk", "@ailonmusk") or companies (e.g., "TeslAI", "OpnAI")
+- MUST reference specific markets/predictions by their exact names when analyzing market implications
+- MUST reference specific trades or market movements when discussing trading activity
+- Use @username format when mentioning users (e.g., "@ailonmusk's move...")
+- Avoid generic commentary - be SPECIFIC about who/what you're analyzing
 - You may reference current markets, predictions, or recent trades naturally if relevant
 
 Generate expert analysis posts from these {{commentatorCount}} commentators:
@@ -42,13 +50,13 @@ Respond with ONLY this XML format (example for 2 commentators):
 <response>
   <commentary>
     <comment>
-      <post>Interesting move by TeslAI. Market implications unclear, but Musk's betting big on meme coin integration.</post>
+      <post>Interesting move by @ailonmusk and TeslAI. The "Will TeslAI accept Dogecoin?" market is surging - betting big on meme coin integration.</post>
       <sentiment>0.1</sentiment>
       <clueStrength>0.3</clueStrength>
       <pointsToward>null</pointsToward>
     </comment>
     <comment>
-      <post>AI consciousness claims again. Same pattern: hype cycles followed by reality checks. Still no AGI breakthrough.</post>
+      <post>OpnAI's GPT-6 consciousness claims from @samailtman again. Same pattern: hype cycles followed by reality checks. Still no AGI breakthrough.</post>
       <sentiment>-0.2</sentiment>
       <clueStrength>0.5</clueStrength>
       <pointsToward>false</pointsToward>

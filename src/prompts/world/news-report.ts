@@ -18,6 +18,12 @@ Context:
 - Journalist: {{journalistName}} ({{journalistRole}}, reliability: {{journalistReliability}})
 - Recent events: {{recentEvents}}
 
+IMPORTANT RULES:
+- Use ONLY the exact journalist name provided above ({{journalistName}})
+- NEVER use real names (Elon Musk, Sam Altman, Mark Zuckerberg, Vitalik Buterin, etc.)
+- NEVER "correct" or change parody names - use them exactly as shown
+- When referencing actors or companies mentioned in events, use their exact parody names
+
 Generate a realistic news report that:
 - Reflects the journalist's {{reputationContext}} reputation
 - Subtly {{truthContext}} the outcome

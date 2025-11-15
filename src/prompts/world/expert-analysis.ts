@@ -18,6 +18,12 @@ Context:
 - Expert: {{expertName}} ({{expertRole}}, knows truth: {{knowsTruth}}, reliability: {{reliability}})
 - Recent events: {{recentEvents}}
 
+IMPORTANT RULES:
+- Use ONLY the exact expert name provided above ({{expertName}})
+- NEVER use real names (Elon Musk, Sam Altman, Mark Zuckerberg, Vitalik Buterin, etc.)
+- NEVER "correct" or change parody names - use them exactly as shown
+- When referencing actors or companies mentioned in events, use their exact parody names
+
 Generate analysis that:
 - Sounds authoritative and expert-like
 - {{confidenceContext}}

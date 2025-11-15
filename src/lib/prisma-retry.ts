@@ -48,6 +48,8 @@ const RETRYABLE_ERROR_MESSAGES = [
   'ECONNRESET',
   'EPIPE',
   'Connection terminated unexpectedly',
+  'Connection is closed',
+  'connection closed',
 ];
 
 /**

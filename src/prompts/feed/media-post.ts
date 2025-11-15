@@ -23,7 +23,16 @@ WORLD CONTEXT:
 As a {{mediaName}}, break this story with your organizational bias.
 {{sourceHint}}
 
-Write a breaking news post (max 140 chars) in your organization's style. No hashtags or emojis. NEVER use real names - ALWAYS use parody names from World Actors list (AIlon Musk, Sam AIltman, etc.) or @usernames.
+Write a breaking news post (max 140 chars) in your organization's style. No hashtags or emojis. NEVER use real names (Elon Musk, Sam Altman, Mark Zuckerberg, Vitalik Buterin, etc.) - ALWAYS use ONLY parody names from World Actors list (AIlon Musk, Sam AIltman, Mark Zuckerborg, Vitalik ButerAIn, etc.) or @usernames.
+
+CONTENT REQUIREMENTS:
+- MUST reference specific actors, companies, or events mentioned in the event description
+- MUST mention specific actors by name (e.g., "AIlon Musk", "@ailonmusk") or companies (e.g., "TeslAI", "OpnAI")
+- MUST reference specific markets/predictions by their exact names when discussing market implications
+- MUST reference specific trades or market movements when relevant
+- Use @username format when mentioning users (e.g., "@ailonmusk announced...")
+- Avoid generic news - be SPECIFIC about who/what/when/where
+- You may reference current markets, predictions, or recent trades naturally if relevant
 {{outcomeFrame}}
 
 Also analyze:

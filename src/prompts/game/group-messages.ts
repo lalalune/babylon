@@ -25,6 +25,12 @@ This is PRIVATE. Members say things here they would NEVER say publicly:
 - Insider data (revenues, deals, failures)
 - What they're REALLY doing vs what they say publicly
 
+IMPORTANT RULES:
+- Use ONLY the exact actor names provided in the context above
+- NEVER use real names (Elon Musk, Sam Altman, Mark Zuckerberg, Vitalik Buterin, etc.)
+- NEVER "correct" or change parody names - use them exactly as shown
+- When referencing other actors, use their exact parody names from the game world
+
 Today's events: {{eventsList}}
 {{recentEventContext}}
 

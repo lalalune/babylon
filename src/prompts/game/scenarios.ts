@@ -15,16 +15,23 @@ Create 3 dramatic, satirical scenarios for these main actors:
 MAIN ACTORS:
 {{mainActorsList}}
 {{organizationContext}}
+
+IMPORTANT RULES:
+- Use ONLY the exact actor names provided in MAIN ACTORS list above
+- NEVER use real names (Elon Musk, Sam Altman, Mark Zuckerberg, Vitalik Buterin, etc.)
+- NEVER "correct" or change the provided parody names - use them exactly as shown
+- Use ONLY the exact organization names provided in ORGANIZATIONS IN PLAY (if any)
+
 Each scenario should:
-- Involve 2-3 of the main actors
-- Include their affiliated organizations when relevant
+- Involve 2-3 of the main actors (use their exact names from the list above)
+- Include their affiliated organizations when relevant (use exact organization names)
 - Be absurd yet plausible
 - Lead to interesting yes/no questions
 - Involve tech, politics, crypto, or culture wars
 - Have high stakes
 - Be satirical/darkly funny
 
-Examples:
+Examples (note: these use parody names, NOT real names):
 - "Ailon Muskannounces plan to upload consciousness to TeslAI, Xitter crashes from announcement traffic"
 - "Scam AIltman's AGI becomes self-aware, OpenLIE issues crisis management statement"
 - "Vitamin Uterin proposes Etherai-foundation runs for President, MSDNC breaks exclusive interview"

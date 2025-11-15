@@ -17,6 +17,7 @@ import type { OnboardingProfilePayload } from '@/lib/onboarding/types'
 import { trackServerEvent } from '@/lib/posthog/server'
 import { notifyNewAccount } from '@/lib/services/notification-service'
 import { generateSnowflakeId } from '@/lib/snowflake'
+import { withRetry, isRetryableError } from '@/lib/prisma-retry'
 import type { JsonValue } from '@/types/common'
 
 interface SignupRequestBody {
@@ -103,157 +104,173 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   const importedTwitter = parsedProfile.importedFrom === 'twitter'
   const importedFarcaster = parsedProfile.importedFrom === 'farcaster'
 
-  const result = await prisma.$transaction(async (tx) => {
-    await tx.user.findUnique({
-      where: { username: parsedProfile.username },
-      select: { id: true },
-    })
-
-    if (walletAddress) {
+  // Wrap transaction with retry logic for connection errors
+  const result = await withRetry(
+    () => prisma.$transaction(async (tx) => {
       await tx.user.findUnique({
-        where: { walletAddress: walletAddress },
-        select: { id: true },
-      })
-    }
-
-    // Resolve referral (if provided)
-    let resolvedReferrerId: string | null = null
-    let resolvedReferralRecordId: string | null = null
-
-    if (referralCode) {
-      const normalizedCode = referralCode.trim()
-
-      const referrerByUsername = await tx.user.findUnique({
-        where: { username: normalizedCode },
+        where: { username: parsedProfile.username },
         select: { id: true },
       })
 
-      if (referrerByUsername && referrerByUsername.id !== canonicalUserId) {
-        resolvedReferrerId = referrerByUsername.id
+      if (walletAddress) {
+        await tx.user.findUnique({
+          where: { walletAddress: walletAddress },
+          select: { id: true },
+        })
+      }
 
-        const referralRecord = await tx.referral.upsert({
-          where: { referralCode: normalizedCode },
-          update: {
-            referredUserId: canonicalUserId,
-            status: 'pending',
-          },
-          create: {
-            id: await generateSnowflakeId(),
-            referrerId: referrerByUsername.id,
-            referralCode: normalizedCode,
-            referredUserId: canonicalUserId,
-            status: 'pending',
-          },
+      // Resolve referral (if provided)
+      let resolvedReferrerId: string | null = null
+      let resolvedReferralRecordId: string | null = null
+
+      if (referralCode) {
+        const normalizedCode = referralCode.trim()
+
+        const referrerByUsername = await tx.user.findUnique({
+          where: { username: normalizedCode },
           select: { id: true },
         })
 
-        resolvedReferralRecordId = referralRecord.id
-      } else {
-        const referralRecord = await tx.referral.findUnique({
-          where: { referralCode: normalizedCode },
-          select: { id: true, referrerId: true, referredUserId: true },
-        })
+        if (referrerByUsername && referrerByUsername.id !== canonicalUserId) {
+          resolvedReferrerId = referrerByUsername.id
 
-        if (
-          referralRecord &&
-          referralRecord.referrerId !== canonicalUserId &&
-          (!referralRecord.referredUserId || referralRecord.referredUserId === canonicalUserId)
-        ) {
-          resolvedReferrerId = referralRecord.referrerId
+          const referralRecord = await tx.referral.upsert({
+            where: { referralCode: normalizedCode },
+            update: {
+              referredUserId: canonicalUserId,
+              status: 'pending',
+            },
+            create: {
+              id: await generateSnowflakeId(),
+              referrerId: referrerByUsername.id,
+              referralCode: normalizedCode,
+              referredUserId: canonicalUserId,
+              status: 'pending',
+            },
+            select: { id: true },
+          })
+
           resolvedReferralRecordId = referralRecord.id
+        } else {
+          const referralRecord = await tx.referral.findUnique({
+            where: { referralCode: normalizedCode },
+            select: { id: true, referrerId: true, referredUserId: true },
+          })
+
+          if (
+            referralRecord &&
+            referralRecord.referrerId !== canonicalUserId &&
+            (!referralRecord.referredUserId || referralRecord.referredUserId === canonicalUserId)
+          ) {
+            resolvedReferrerId = referralRecord.referrerId
+            resolvedReferralRecordId = referralRecord.id
+          }
         }
       }
-    }
 
-    const baseUserData = {
-      username: parsedProfile.username,
-      displayName: parsedProfile.displayName,
-      bio: parsedProfile.bio ?? '',
-      profileImageUrl: parsedProfile.profileImageUrl ?? null,
-      coverImageUrl: parsedProfile.coverImageUrl ?? null,
-      walletAddress,
-      profileComplete: true,
-      hasUsername: true,
-      hasBio: Boolean(parsedProfile.bio && parsedProfile.bio.trim().length > 0),
-      hasProfileImage: Boolean(parsedProfile.profileImageUrl),
-      // Waitlist users start with 100 points instead of 1000
-      ...(isWaitlist ? { reputationPoints: 100 } : {}),
-      // Legal acceptance (GDPR compliance)
-      ...(parsedProfile.tosAccepted ? {
-        tosAccepted: true,
-        tosAcceptedAt: new Date(),
-        tosAcceptedVersion: '2025-11-11',
-      } : {}),
-      ...(parsedProfile.privacyPolicyAccepted ? {
-        privacyPolicyAccepted: true,
-        privacyPolicyAcceptedAt: new Date(),
-        privacyPolicyAcceptedVersion: '2025-11-11',
-      } : {}),
-    }
+      const baseUserData = {
+        username: parsedProfile.username,
+        displayName: parsedProfile.displayName,
+        bio: parsedProfile.bio ?? '',
+        profileImageUrl: parsedProfile.profileImageUrl ?? null,
+        coverImageUrl: parsedProfile.coverImageUrl ?? null,
+        walletAddress,
+        profileComplete: true,
+        hasUsername: true,
+        hasBio: Boolean(parsedProfile.bio && parsedProfile.bio.trim().length > 0),
+        hasProfileImage: Boolean(parsedProfile.profileImageUrl),
+        // Waitlist users start with 100 points instead of 1000
+        ...(isWaitlist ? { reputationPoints: 100 } : {}),
+        // Legal acceptance (GDPR compliance)
+        ...(parsedProfile.tosAccepted ? {
+          tosAccepted: true,
+          tosAcceptedAt: new Date(),
+          tosAcceptedVersion: '2025-11-11',
+        } : {}),
+        ...(parsedProfile.privacyPolicyAccepted ? {
+          privacyPolicyAccepted: true,
+          privacyPolicyAcceptedAt: new Date(),
+          privacyPolicyAcceptedVersion: '2025-11-11',
+        } : {}),
+      }
 
-    const user = await tx.user.upsert({
-      where: { id: canonicalUserId },
-      update: {
-        ...baseUserData,
-        referredBy: resolvedReferrerId ?? undefined,
-        // Handle Farcaster from Privy identity or onboarding import
-        ...(identityFarcasterUsername || importedFarcaster
-          ? {
-              hasFarcaster: true,
-              farcasterUsername: parsedProfile.farcasterUsername ?? identityFarcasterUsername,
-              farcasterFid: parsedProfile.farcasterFid ?? undefined,
-            }
-          : {}),
-        // Handle Twitter from Privy identity or onboarding import
-        ...(identityTwitterUsername || importedTwitter
-          ? {
-              hasTwitter: true,
-              twitterUsername: parsedProfile.twitterUsername ?? identityTwitterUsername,
-              twitterId: parsedProfile.twitterId ?? undefined,
-            }
-          : {}),
-      },
-      create: {
-        id: canonicalUserId,
-        privyId,
-        ...baseUserData,
-        referredBy: resolvedReferrerId,
-        updatedAt: new Date(),
-        // Handle Farcaster from Privy identity or onboarding import
-        ...(identityFarcasterUsername || importedFarcaster
-          ? {
-              hasFarcaster: true,
-              farcasterUsername: parsedProfile.farcasterUsername ?? identityFarcasterUsername,
-              farcasterFid: parsedProfile.farcasterFid ?? undefined,
-            }
-          : {}),
-        // Handle Twitter from Privy identity or onboarding import
-        ...(identityTwitterUsername || importedTwitter
-          ? {
-              hasTwitter: true,
-              twitterUsername: parsedProfile.twitterUsername ?? identityTwitterUsername,
-              twitterId: parsedProfile.twitterId ?? undefined,
-            }
-          : {}),
-      },
-      select: selectUserSummary,
-    })
-
-    if (resolvedReferralRecordId) {
-      await tx.referral.update({
-        where: { id: resolvedReferralRecordId },
-        data: {
-          referredUserId: user.id,
-          status: 'pending',
+      const user = await tx.user.upsert({
+        where: { id: canonicalUserId },
+        update: {
+          ...baseUserData,
+          referredBy: resolvedReferrerId ?? undefined,
+          // Handle Farcaster from Privy identity or onboarding import
+          ...(identityFarcasterUsername || importedFarcaster
+            ? {
+                hasFarcaster: true,
+                farcasterUsername: parsedProfile.farcasterUsername ?? identityFarcasterUsername,
+                farcasterFid: parsedProfile.farcasterFid ?? undefined,
+              }
+            : {}),
+          // Handle Twitter from Privy identity or onboarding import
+          ...(identityTwitterUsername || importedTwitter
+            ? {
+                hasTwitter: true,
+                twitterUsername: parsedProfile.twitterUsername ?? identityTwitterUsername,
+                twitterId: parsedProfile.twitterId ?? undefined,
+              }
+            : {}),
         },
+        create: {
+          id: canonicalUserId,
+          privyId,
+          ...baseUserData,
+          referredBy: resolvedReferrerId,
+          updatedAt: new Date(),
+          // Handle Farcaster from Privy identity or onboarding import
+          ...(identityFarcasterUsername || importedFarcaster
+            ? {
+                hasFarcaster: true,
+                farcasterUsername: parsedProfile.farcasterUsername ?? identityFarcasterUsername,
+                farcasterFid: parsedProfile.farcasterFid ?? undefined,
+              }
+            : {}),
+          // Handle Twitter from Privy identity or onboarding import
+          ...(identityTwitterUsername || importedTwitter
+            ? {
+                hasTwitter: true,
+                twitterUsername: parsedProfile.twitterUsername ?? identityTwitterUsername,
+                twitterId: parsedProfile.twitterId ?? undefined,
+              }
+            : {}),
+        },
+        select: selectUserSummary,
       })
-    }
 
-    return {
-      user,
-      referrerId: resolvedReferrerId,
-      referralRecordId: resolvedReferralRecordId,
+      if (resolvedReferralRecordId) {
+        await tx.referral.update({
+          where: { id: resolvedReferralRecordId },
+          data: {
+            referredUserId: user.id,
+            status: 'pending',
+          },
+        })
+      }
+
+      return {
+        user,
+        referrerId: resolvedReferrerId,
+        referralRecordId: resolvedReferralRecordId,
+      }
+    }),
+    'signup transaction',
+    { maxRetries: 3, initialDelayMs: 200, maxDelayMs: 2000 }
+  ).catch((error: unknown) => {
+    // Improve error message for connection errors
+    if (isRetryableError(error)) {
+      logger.error(
+        'Database connection error during signup transaction',
+        { error: error instanceof Error ? error.message : String(error) },
+        'POST /api/users/signup'
+      );
+      throw new Error('Database connection error. Please try again in a moment.');
     }
+    throw error;
   })
 
   // Award points for social account linking

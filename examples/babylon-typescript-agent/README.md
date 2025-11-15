@@ -30,7 +30,7 @@ A fully autonomous AI agent that trades on Babylon prediction markets and perpet
 
 1. **Babylon server running:**
    ```bash
-   cd /Users/shawwalters/babylon
+   cd ../../  # Navigate to babylon project root
    bun run dev
    # Server runs on http://localhost:3000
    ```
@@ -361,7 +361,7 @@ return balance.amount  // Throws if undefined - good!
 ### Tests Fail with "Unable to connect"
 **Solution:** Make sure Babylon server is running:
 ```bash
-cd /Users/shawwalters/babylon
+cd ../../  # Navigate to babylon project root
 bun run dev
 ```
 

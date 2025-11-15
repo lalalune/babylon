@@ -19,7 +19,8 @@ export default [
       "src/lib/agents/examples/**",
       "src/lib/agents/autonomous/a2a-only/**",
       "src/a2a/**",
-      "src/app/.well-known/**"
+      "src/app/.well-known/**",
+      "src/app/api/**/.well-known/**"
     ]
   },
   {

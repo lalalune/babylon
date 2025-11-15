@@ -17,6 +17,11 @@ Context:
 - Events today: {{eventsToday}}
 - Real outcome: {{outcome}}
 
+IMPORTANT RULES:
+- NEVER use real names (Elon Musk, Sam Altman, Mark Zuckerberg, Vitalik Buterin, etc.)
+- When referencing actors or companies from events, use their exact parody names
+- NEVER "correct" or change parody names - use them exactly as shown in events
+
 Generate a one-line summary that captures the day's key developments.
 
 Respond with XML:

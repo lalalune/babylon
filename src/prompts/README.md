@@ -1,73 +1,174 @@
 # Babylon Prompt System
 
-Centralized prompt management for LLM-driven game generation.
+Centralized prompt management for LLM-driven game generation using TypeScript.
 
 ## Structure
 
 ```
 prompts/
 ├── feed/          # Feed post generation prompts
-│   ├── world-events.md
-│   ├── news-posts.md
-│   ├── reactions.md
-│   ├── conspiracy.md
-│   ├── commentary.md
-│   ├── threads.md
-│   └── replies.md
+│   ├── news-posts.ts
+│   ├── reactions.ts
+│   ├── conspiracy.ts
+│   ├── commentary.ts
+│   ├── replies.ts
+│   ├── ambient-posts.ts
+│   └── ...
 ├── game/          # Game setup prompts
-│   ├── scenarios.md
-│   ├── questions.md
-│   ├── rankings.md
-│   ├── group-chat-names.md
-│   ├── event-descriptions.md
-│   └── group-messages.md
-└── image/         # Image generation prompts
-    ├── actor-images.md
-    └── organization-logos.md
+│   ├── scenarios.ts
+│   ├── questions.ts
+│   ├── day-transition.ts
+│   └── ...
+└── world/         # World generation prompts
+    ├── news-report.ts
+    ├── rumor.ts
+    ├── npc-conversation.ts
+    └── ...
 ```
 
 ## File Format
 
-Each `.md` file contains one or more prompt templates with YAML frontmatter:
+Each `.ts` file exports prompt definitions using `definePrompt()`:
 
-```markdown
----
-id: world-events
-version: 1.0.0
-category: feed
-description: Generates world events that actors react to
-temperature: 0.8
-max_tokens: 2000
----
+```typescript
+import { definePrompt } from '../define-prompt';
 
-# World Events Prompt
+export const newsPosts = definePrompt({
+  id: 'news-posts',
+  version: '2.0.0',
+  category: 'feed',
+  description: 'Generates breaking news posts from media entities',
+  temperature: 0.8,
+  maxTokens: 2000,
+  template: `
+You must respond with valid XML only.
 
-You must respond with valid JSON only.
+Event: {{eventDescription}}
+Type: {{eventType}}
 
-Generate {{count}} realistic world events...
+WORLD CONTEXT:
+{{worldActors}}
+{{currentMarkets}}
+{{activePredictions}}
+{{recentTrades}}
 
-## Variables
-- {{count}}: Number of events to generate
-- {{context}}: Additional context about the game world
+IMPORTANT RULES:
+- NO HASHTAGS OR EMOJIS IN POSTS
+- NEVER use real names (Elon Musk, Sam Altman, etc.)
+- ALWAYS use ONLY parody names from World Actors list (AIlon Musk, Sam AIltman, etc.)
+
+Generate breaking news posts...
+  `.trim()
+});
 ```
 
 ## Usage
 
-```typescript
-import { loadPrompt } from '@/prompts/loader';
+### Basic Usage
 
-const prompt = await loadPrompt('feed/world-events', {
-  count: 5,
-  context: gameContext
+```typescript
+import { renderPrompt, getPromptParams, newsPosts } from '@/prompts';
+
+// Render prompt with variables
+const prompt = renderPrompt(newsPosts, {
+  eventDescription: 'TeslAI announces new product',
+  eventType: 'product-launch',
+  worldActors: '...',
+  currentMarkets: '...',
+  // ... other variables
 });
 
-const result = await llm.generateJSON(prompt);
+// Get LLM parameters from prompt definition
+const params = getPromptParams(newsPosts);
+// { temperature: 0.8, maxTokens: 2000 }
+
+// Use with LLM client
+const response = await llm.generateJSON(prompt, undefined, params);
 ```
+
+### With World Context
+
+```typescript
+import { generateWorldContext } from '@/lib/prompts/world-context';
+import { renderPrompt, getPromptParams, reactions } from '@/prompts';
+
+// Generate world context once per day
+const worldContext = await generateWorldContext({ maxActors: 50 });
+
+// Render prompt with world context
+const prompt = renderPrompt(reactions, {
+  eventDescription: '...',
+  actorsList: '...',
+  ...worldContext  // Spreads worldActors, currentMarkets, etc.
+});
+
+// Use prompt parameters
+const params = getPromptParams(reactions);
+const response = await llm.generateJSON(prompt, undefined, params);
+```
+
+## Key Features
+
+### Prompt Definition Interface
+
+```typescript
+interface PromptDefinition {
+  id: string;              // Unique identifier
+  version: string;          // Semantic version
+  category: string;        // 'feed' | 'game' | 'world'
+  description: string;     // Human-readable description
+  temperature?: number;    // LLM temperature (0-2)
+  maxTokens?: number;      // Maximum tokens for response
+  template: string;         // Template with {{variables}}
+}
+```
+
+### Variable Substitution
+
+Variables are substituted using `{{variableName}}` syntax:
+
+```typescript
+renderPrompt(newsPosts, {
+  eventDescription: 'Breaking news',
+  worldActors: 'AIlon Musk, Sam AIltman...',
+  // All {{variableName}} in template are replaced
+});
+```
+
+### LLM Parameters
+
+Use `getPromptParams()` to extract temperature and maxTokens from prompt definitions:
+
+```typescript
+const params = getPromptParams(newsPosts);
+// Ensures consistency - single source of truth
+// Prevents mismatches between template and usage
+```
+
+## Important Rules
+
+All prompts must follow these rules:
+
+1. **NEVER use real names** - Always use parody names (AIlon Musk, Sam AIltman, etc.)
+2. **NO hashtags or emojis** - Keep content clean and professional
+3. **World Context** - Include `{{worldActors}}`, `{{currentMarkets}}`, etc. when available
+4. **XML Output** - Most prompts require XML-formatted responses
+5. **Post-processing** - All outputs are post-processed to replace any real names that slip through
 
 ## Benefits
 
 - ✅ **Centralized** - All prompts in one place
+- ✅ **Type-safe** - TypeScript ensures correctness
 - ✅ **Versionable** - Track prompt changes over time
 - ✅ **Testable** - Easy to A/B test prompts
 - ✅ **Maintainable** - Separate concerns from code
+- ✅ **Consistent** - Single source of truth for parameters
 - ✅ **Optimizable** - Reduce retry loops and improve quality
+
+## Best Practices
+
+1. **Always use `getPromptParams()`** - Don't hardcode temperature/maxTokens
+2. **Include world context** - Spread `worldContext` into all renderPrompt calls
+3. **Post-process outputs** - Use `characterMappingService.transformText()` on all LLM outputs
+4. **Update version** - Increment version when making significant changes
+5. **Document variables** - Comment what each variable does in the template

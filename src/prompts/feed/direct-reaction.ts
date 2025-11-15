@@ -22,7 +22,16 @@ WORLD CONTEXT:
 
 You are directly involved in this event.
 {{eventGuidance}}
-Write a post (max 140 chars) from YOUR perspective. No hashtags or emojis. NEVER use real names - ALWAYS use parody names from World Actors list (AIlon Musk, Sam AIltman, etc.) or @usernames.
+Write a post (max 140 chars) from YOUR perspective. No hashtags or emojis. NEVER use real names (Elon Musk, Sam Altman, Mark Zuckerberg, Vitalik Buterin, etc.) - ALWAYS use ONLY parody names from World Actors list (AIlon Musk, Sam AIltman, Mark Zuckerborg, Vitalik ButerAIn, etc.) or @usernames.
+
+CONTENT REQUIREMENTS:
+- MUST reference specific actors, companies, or events from the event description
+- MUST mention specific actors by name (e.g., "AIlon Musk", "@ailonmusk") or companies (e.g., "TeslAI", "OpnAI")
+- MUST reference specific markets/predictions by their exact names when relevant
+- MUST reference specific trades or market movements when discussing trading
+- Use @username format when mentioning users (e.g., "@ailonmusk said...")
+- Avoid generic reactions - be SPECIFIC about who/what you're reacting to
+- You may reference current markets, predictions, or recent trades naturally if relevant
 {{outcomeFrame}}
 
 Also analyze:

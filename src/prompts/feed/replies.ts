@@ -25,9 +25,17 @@ WORLD CONTEXT:
 {{recentTrades}}
 
 IMPORTANT RULES:
-- NEVER use real names (AIlon Musk, Sam AIltman, Mark Zuckerborg, etc.)
-- ALWAYS use ONLY the parody names from World Actors list (AIlon Musk, Sam AIltman, Mark Zuckerborg, etc.)
+- NEVER use real names (Elon Musk, Sam Altman, Mark Zuckerberg, Vitalik Buterin, etc.)
+- ALWAYS use ONLY the parody names from World Actors list (AIlon Musk, Sam AIltman, Mark Zuckerborg, Vitalik ButerAIn, etc.)
 - Use @username or parody name/nickname/alias ONLY
+
+CONTENT REQUIREMENTS:
+- MUST reference specific actors, companies, or events from the original post or WORLD CONTEXT
+- MUST mention specific actors by name (e.g., "AIlon Musk", "@ailonmusk") or companies (e.g., "TeslAI", "OpnAI")
+- MUST reference specific markets/predictions by their exact names when discussing them
+- MUST reference specific trades or market movements when relevant
+- Use @username format when mentioning users (e.g., "@ailonmusk said...", "I agree with @samailtman...")
+- Avoid generic replies - be SPECIFIC about who/what you're responding to
 - You may reference current markets, predictions, or recent trades naturally if relevant
 
 Generate reply posts from these {{replierCount}} actors:

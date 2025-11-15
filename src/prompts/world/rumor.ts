@@ -17,6 +17,11 @@ Context:
 - Real outcome: {{outcome}}
 - Recent events: {{recentEvents}}
 
+IMPORTANT RULES:
+- NEVER use real names (Elon Musk, Sam Altman, Mark Zuckerberg, Vitalik Buterin, etc.)
+- When referencing actors or companies from recent events, use their exact parody names
+- NEVER "correct" or change parody names - use them exactly as shown in events
+
 Generate a realistic rumor that:
 - Sounds like internet gossip or leaked information
 - May or may not be accurate

@@ -13,14 +13,10 @@ export type { PromptDefinition } from './define-prompt';
 // Prompts by category
 // Feed prompts
 export { governmentPosts } from './feed/government-posts';
-export { ambientInstruction } from './feed/ambient-instruction';
 export { companyPost } from './feed/company-post';
-export { reactionInstruction } from './feed/reaction-instruction';
-export { governmentInstruction } from './feed/government-instruction';
 export { newsPosts } from './feed/news-posts';
 export { conspiracyPost } from './feed/conspiracy-post';
 export { analystReaction } from './feed/analyst-reaction';
-export { companyInstruction } from './feed/company-instruction';
 export { governmentPost } from './feed/government-post';
 export { expertCommentary } from './feed/expert-commentary';
 export { ambientPost } from './feed/ambient-post';
@@ -33,7 +29,6 @@ export { replies } from './feed/replies';
 export { directReaction } from './feed/direct-reaction';
 export { journalistPost } from './feed/journalist-post';
 export { conspiracy } from './feed/conspiracy';
-export { journalistInstruction } from './feed/journalist-instruction';
 export { reactions } from './feed/reactions';
 export { companyPosts } from './feed/company-posts';
 export { journalistPosts } from './feed/journalist-posts';

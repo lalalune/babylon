@@ -73,7 +73,7 @@ Hosted URL: https://api.farcaster.xyz/miniapps/hosted-manifest/abc123xyz
 
 ### Step 7: Update next.config.mjs
 
-Edit `/Users/shawwalters/babylon/next.config.mjs`:
+Edit `next.config.mjs` in the project root:
 
 ```javascript
 const nextConfig = {

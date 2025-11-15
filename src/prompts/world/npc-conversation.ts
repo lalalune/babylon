@@ -18,6 +18,12 @@ Context:
 - Participants: {{participants}}
 - Recent events: {{recentEvents}}
 
+IMPORTANT RULES:
+- Use ONLY the exact participant names provided above ({{participants}})
+- NEVER use real names (Elon Musk, Sam Altman, Mark Zuckerberg, Vitalik Buterin, etc.)
+- NEVER "correct" or change parody names - use them exactly as shown
+- When referencing other actors mentioned in events, use their exact parody names
+
 Generate a natural conversation where:
 - Insiders hint at what they know
 - Outsiders speculate

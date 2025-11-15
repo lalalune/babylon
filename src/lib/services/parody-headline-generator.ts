@@ -84,20 +84,30 @@ export class ParodyHeadlineGenerator {
       ? response.response
       : response as { parodyTitle: string; parodyContent?: string };
 
-    // Combine mappings from title and content
+    // Post-process LLM output to fix any real names that slipped through
+    const processedTitle = await characterMappingService.transformText(parodyData.parodyTitle);
+    const processedContent = parodyData.parodyContent
+      ? await characterMappingService.transformText(parodyData.parodyContent)
+      : null;
+
+    // Combine mappings from title, content, and post-processing
     const allCharacterMappings = {
       ...titleReplacement.characterMappings,
       ...(contentReplacement?.characterMappings || {}),
+      ...processedTitle.characterMappings,
+      ...(processedContent?.characterMappings || {}),
     };
 
     const allOrganizationMappings = {
       ...titleReplacement.organizationMappings,
       ...(contentReplacement?.organizationMappings || {}),
+      ...processedTitle.organizationMappings,
+      ...(processedContent?.organizationMappings || {}),
     };
 
     return {
-      parodyTitle: parodyData.parodyTitle,
-      parodyContent: parodyData.parodyContent,
+      parodyTitle: processedTitle.transformedText,
+      parodyContent: processedContent?.transformedText,
       characterMappings: allCharacterMappings,
       organizationMappings: allOrganizationMappings,
     };

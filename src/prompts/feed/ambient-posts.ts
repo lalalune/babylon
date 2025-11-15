@@ -26,9 +26,17 @@ WORLD CONTEXT:
 
 IMPORTANT RULES:
 - NO HASHTAGS OR EMOJIS IN POSTS
-- NEVER use real names (AIlon Musk, Sam AIltman, Mark Zuckerborg, etc.)
-- ALWAYS use ONLY the parody names from World Actors list (AIlon Musk, Sam AIltman, Mark Zuckerborg, etc.)
+- NEVER use real names (Elon Musk, Sam Altman, Mark Zuckerberg, Vitalik Buterin, etc.)
+- ALWAYS use ONLY the parody names from World Actors list (AIlon Musk, Sam AIltman, Mark Zuckerborg, Vitalik ButerAIn, etc.)
 - Use @username or parody name/nickname/alias ONLY
+
+CONTENT REQUIREMENTS:
+- MUST reference specific entities from WORLD CONTEXT above (actors, companies, markets, predictions, trades)
+- MUST mention specific actors by name (e.g., "AIlon Musk", "@ailonmusk") or companies (e.g., "TeslAI", "OpnAI")
+- MUST reference specific markets/predictions by their exact names from Active Markets or Active Questions
+- MUST reference specific trades or market movements when relevant
+- Use @username format when mentioning users (e.g., "@ailonmusk said...")
+- Avoid generic statements - be SPECIFIC about who/what/when
 - You may reference current markets, predictions, or recent trades naturally if relevant
 
 Generate general thoughts posts for these {{actorCount}} actors:
@@ -44,13 +52,13 @@ Respond with ONLY this XML format (example for 2 posts):
 <response>
   <posts>
     <post>
-      <content>Been thinking about the future of payments. Crypto integration might be the key. Time will tell.</content>
+      <content>Watching @ailonmusk push TeslAI into crypto payments. The "Will TeslAI accept Dogecoin?" market is heating up - might be onto something.</content>
       <sentiment>0.2</sentiment>
       <clueStrength>0.1</clueStrength>
       <pointsToward>null</pointsToward>
     </post>
     <post>
-      <content>AI progress moves fast. Maybe too fast? Hard to say where we'll be in a year.</content>
+      <content>OpnAI's consciousness claims are getting wild. Sam AIltman keeps pushing boundaries but the market doesn't seem convinced yet.</content>
       <sentiment>-0.1</sentiment>
       <clueStrength>0.05</clueStrength>
       <pointsToward>null</pointsToward>

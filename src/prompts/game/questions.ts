@@ -15,6 +15,13 @@ For each scenario, generate 5 yes/no questions that players can bet on.
 SCENARIOS:
 {{scenariosList}}
 {{organizationContext}}
+
+IMPORTANT RULES:
+- Use ONLY the exact actor and organization names from the scenarios above
+- NEVER use real names (Elon Musk, Sam Altman, Mark Zuckerberg, Vitalik Buterin, etc.)
+- NEVER "correct" or change parody names - use them exactly as shown in scenarios
+- Reference actors and organizations by their exact names from the scenarios
+
 CRITICAL: Each question must be PROVABLE and DEFINABLE:
 - Must have a clear, observable outcome (announcement, product launch, public event, measurable metric)
 - AVOID vague emotional states ("emotions stabilize", "feelings change")

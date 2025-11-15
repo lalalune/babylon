@@ -57,6 +57,7 @@
  */
 
 import { daySummary, expertAnalysis, newsReport, npcConversation, renderPrompt, rumor } from '@/prompts';
+import { characterMappingService } from '@/lib/services/character-mapping-service';
 import type { JsonValue } from '@/types/common';
 import { EventEmitter } from 'events';
 import { generateSnowflakeId } from '@/lib/snowflake';
@@ -731,7 +732,11 @@ export class GameWorld extends EventEmitter implements TypedGameWorldEmitter {
       ? rawResponse.response
       : rawResponse as { headline: string; report: string };
     
-    return `${response.headline}\n\n${response.report}`;
+    // Post-process to fix any real names that slipped through
+    const processedHeadline = await characterMappingService.transformText(response.headline);
+    const processedReport = await characterMappingService.transformText(response.report);
+    
+    return `${processedHeadline.transformedText}\n\n${processedReport.transformedText}`;
   }
 
   private async generateRumor(day: number, events: WorldEvent[]): Promise<string> {
@@ -761,7 +766,9 @@ export class GameWorld extends EventEmitter implements TypedGameWorldEmitter {
       ? rawResponse.response
       : rawResponse as { rumor: string };
     
-    return response.rumor;
+    // Post-process to fix any real names that slipped through
+    const processed = await characterMappingService.transformText(response.rumor);
+    return processed.transformedText;
   }
 
   private async generateNPCConversation(day: number, npcs: NPC[], events: WorldEvent[]): Promise<string> {
@@ -787,7 +794,9 @@ export class GameWorld extends EventEmitter implements TypedGameWorldEmitter {
       ? rawResponse.response
       : rawResponse as { conversation: string };
     
-    return response.conversation;
+    // Post-process to fix any real names that slipped through
+    const processed = await characterMappingService.transformText(response.conversation);
+    return processed.transformedText;
   }
 
   private async generateExpertAnalysis(expert: NPC, events: WorldEvent[]): Promise<string> {
@@ -817,7 +826,9 @@ export class GameWorld extends EventEmitter implements TypedGameWorldEmitter {
       ? rawResponse.response
       : rawResponse as { analysis: string };
     
-    return `${expert.name}: ${response.analysis}`;
+    // Post-process to fix any real names that slipped through
+    const processed = await characterMappingService.transformText(response.analysis);
+    return `${expert.name}: ${processed.transformedText}`;
   }
 
   private async generateDaySummary(day: number, events: WorldEvent[]): Promise<string> {
@@ -843,7 +854,9 @@ export class GameWorld extends EventEmitter implements TypedGameWorldEmitter {
       ? rawResponse.response
       : rawResponse as { summary: string };
     
-    return response.summary;
+    // Post-process to fix any real names that slipped through
+    const processed = await characterMappingService.transformText(response.summary);
+    return processed.transformedText;
   }
 
   private calculateFeedSentiment(feedPosts: FeedEvent[]): number {

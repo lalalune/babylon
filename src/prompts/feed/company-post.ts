@@ -26,7 +26,16 @@ This is a {{postType}}.
 
 Write ONE corporate post (max 140 chars).
 Professional, on-brand corporate speak.
-NO hashtags or emojis. NEVER use real names - ALWAYS use parody names from World Actors list (AIlon Musk, Sam AIltman, etc.) or @usernames.
+NO hashtags or emojis. NEVER use real names (Elon Musk, Sam Altman, Mark Zuckerberg, Vitalik Buterin, etc.) - ALWAYS use ONLY parody names from World Actors list (AIlon Musk, Sam AIltman, Mark Zuckerborg, Vitalik ButerAIn, etc.) or @usernames.
+
+CONTENT REQUIREMENTS:
+- MUST reference specific actors, companies, or events mentioned in the event description
+- MUST mention specific actors by name (e.g., "AIlon Musk", "@ailonmusk") or companies (e.g., "TeslAI", "OpnAI")
+- MUST reference specific markets/predictions by their exact names when discussing market impact
+- MUST reference specific trades or market movements when relevant
+- Use @username format when mentioning users (e.g., "@ailonmusk announced...")
+- Avoid generic corporate speak - be SPECIFIC about who/what/when
+- You may reference current markets, predictions, or recent trades naturally if relevant
 
 Respond with ONLY this XML format:
 <response>
