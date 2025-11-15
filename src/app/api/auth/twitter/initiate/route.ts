@@ -77,14 +77,15 @@ export async function GET(request: NextRequest) {
   const authUser = await authenticate(request)
   const userId = authUser.userId
 
-  const state = `${userId}:${Date.now()}:${Math.random().toString(36).substring(7)}`
+  // Use | as separator instead of : to avoid conflicts with Privy DIDs (did:privy:...)
+  const state = `${userId}|${Date.now()}|${Math.random().toString(36).substring(7)}`
   
   // Generate PKCE parameters
   const codeVerifier = generateCodeVerifier()
   const codeChallenge = generateCodeChallenge(codeVerifier)
   
   // Store code verifier temporarily (expires in 10 minutes)
-  await prisma.oAuthState.create({
+  const oauthRecord = await prisma.oAuthState.create({
     data: {
       id: await generateSnowflakeId(),
       userId,
@@ -95,6 +96,13 @@ export async function GET(request: NextRequest) {
     },
   })
 
+  logger.info('Created OAuth state record', { 
+    userId, 
+    state, 
+    oauthRecordId: oauthRecord.id,
+    expiresAt: oauthRecord.expiresAt.toISOString()
+  }, 'TwitterInitiate')
+
   const authUrl = new URL('https://twitter.com/i/oauth2/authorize')
   authUrl.searchParams.set('response_type', 'code')
   authUrl.searchParams.set('client_id', process.env.TWITTER_CLIENT_ID!)
@@ -104,7 +112,7 @@ export async function GET(request: NextRequest) {
   authUrl.searchParams.set('code_challenge', codeChallenge)
   authUrl.searchParams.set('code_challenge_method', 'S256')
 
-  logger.info('Initiating Twitter OAuth with PKCE', { userId }, 'TwitterInitiate')
+  logger.info('Initiating Twitter OAuth with PKCE', { userId, state: state.substring(0, 20) + '...' }, 'TwitterInitiate')
 
   return NextResponse.redirect(authUrl.toString())
 }

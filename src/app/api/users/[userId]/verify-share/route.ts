@@ -93,10 +93,10 @@ export const POST = withErrorHandling(async (
 
   if (platform === 'twitter') {
     // Twitter verification - STRICT MODE
-    // Extract tweet ID from URL (e.g., https://twitter.com/user/status/1234567890 or https://x.com/user/status/1234567890)
-    const tweetIdMatch = postUrl.match(/(?:twitter\.com|x\.com)\/[^/]+\/status\/(\d+)/);
+    // Extract tweet ID and username from URL (e.g., https://twitter.com/user/status/1234567890 or https://x.com/user/status/1234567890)
+    const tweetMatch = postUrl.match(/(?:twitter\.com|x\.com)\/([^/]+)\/status\/(\d+)/);
     
-    if (!tweetIdMatch || !tweetIdMatch[1]) {
+    if (!tweetMatch || !tweetMatch[1] || !tweetMatch[2]) {
       verificationError = 'Invalid Twitter/X URL format. Expected: https://twitter.com/username/status/123456789';
       logger.warn(
         `Invalid Twitter URL format: ${shareId}`,
@@ -104,7 +104,8 @@ export const POST = withErrorHandling(async (
         'POST /api/users/[userId]/verify-share'
       );
     } else {
-      const tweetId = tweetIdMatch[1];
+      const tweetUsername = tweetMatch[1]; // Username from URL
+      const tweetId = tweetMatch[2]; // Tweet ID
       
       // Check if Twitter API is configured
       if (!process.env.TWITTER_BEARER_TOKEN) {
@@ -146,51 +147,66 @@ export const POST = withErrorHandling(async (
                   'POST /api/users/[userId]/verify-share'
                 );
               } else {
-                // VALIDATION 2: Verify tweet contains the shared URL
-                const tweetText = (tweetData.data.text || '').toLowerCase();
-                const sharedUrl = shareAction.url?.toLowerCase() || '';
-                
-                // Check if the tweet contains the shared URL or its domain
-                const urlDomain = sharedUrl ? new URL(sharedUrl).hostname : '';
-                const containsUrl = sharedUrl && (
-                  tweetText.includes(sharedUrl) || 
-                  tweetText.includes(urlDomain)
-                );
+                // VALIDATION 2: Verify tweet author matches user's Twitter account
+                const userTwitterUsername = user.twitterUsername.toLowerCase().replace('@', '');
+                const urlTwitterUsername = tweetUsername.toLowerCase();
 
-                if (!containsUrl && sharedUrl) {
-                  verificationError = `This tweet does not contain the shared link (${urlDomain}). Please paste the tweet where you actually shared the link.`;
+                if (userTwitterUsername !== urlTwitterUsername) {
+                  verificationError = `This tweet is from @${tweetUsername}, but your linked account is @${user.twitterUsername}. You can only verify your own tweets.`;
                   logger.warn(
-                    `Tweet does not contain shared URL: ${shareId}`,
+                    `Tweet author mismatch: ${shareId}`,
                     { 
                       shareId, 
-                      tweetText: tweetText.substring(0, 100),
-                      expectedUrl: sharedUrl,
+                      expectedUsername: userTwitterUsername,
+                      actualUsername: urlTwitterUsername,
                     },
                     'POST /api/users/[userId]/verify-share'
                   );
                 } else {
-                  // Note: Twitter API v2 doesn't return username directly with tweets
-                  // We would need to expand author data or use a separate API call
-                  // For now, we validate by URL content only
-                  // TODO: Add author verification when Twitter API access is expanded
+                  // VALIDATION 3: Verify tweet contains the shared URL
+                  const tweetText = (tweetData.data.text || '').toLowerCase();
+                  const sharedUrl = shareAction.url?.toLowerCase() || '';
                   
-                  verified = true;
-                  verificationDetails = {
-                    tweetId,
-                    tweetUrl: postUrl,
-                    verificationMethod: 'twitter_api_v2',
-                    verified: true,
-                    tweetText: tweetData.data.text || '',
-                    tweetAuthorId: tweetData.data.author_id || '',
-                    verifiedAt: new Date().toISOString(),
-                    urlMatch: containsUrl,
-                  };
-                  
-                  logger.info(
-                    `Twitter share verified via API: ${shareId}`,
-                    { shareId, tweetId, userId: canonicalUserId },
-                    'POST /api/users/[userId]/verify-share'
+                  // Check if the tweet contains the shared URL or its domain
+                  const urlDomain = sharedUrl ? new URL(sharedUrl).hostname : '';
+                  const containsUrl = sharedUrl && (
+                    tweetText.includes(sharedUrl) || 
+                    tweetText.includes(urlDomain)
                   );
+
+                  if (!containsUrl && sharedUrl) {
+                    verificationError = `This tweet does not contain the shared link (${urlDomain}). Please paste the tweet where you actually shared the link.`;
+                    logger.warn(
+                      `Tweet does not contain shared URL: ${shareId}`,
+                      { 
+                        shareId, 
+                        tweetText: tweetText.substring(0, 100),
+                        expectedUrl: sharedUrl,
+                      },
+                      'POST /api/users/[userId]/verify-share'
+                    );
+                  } else {
+                    // All validations passed!
+                    verified = true;
+                    verificationDetails = {
+                      tweetId,
+                      tweetUrl: postUrl,
+                      tweetUsername,
+                      verificationMethod: 'twitter_api_v2_with_url_verification',
+                      verified: true,
+                      tweetText: tweetData.data.text || '',
+                      tweetAuthorId: tweetData.data.author_id || '',
+                      verifiedAt: new Date().toISOString(),
+                      urlMatch: containsUrl,
+                      authorMatch: true,
+                    };
+                    
+                    logger.info(
+                      `Twitter share verified via API: ${shareId}`,
+                      { shareId, tweetId, tweetUsername, userId: canonicalUserId },
+                      'POST /api/users/[userId]/verify-share'
+                    );
+                  }
                 }
               }
             } else {
