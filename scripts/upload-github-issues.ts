@@ -179,9 +179,9 @@ async function main() {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    
-    if (!row.Title || !row.Title.trim()) {
-      console.log(`⏭️  Skipping row ${i + 1}: No title`);
+
+    if (!row || !row.Title || !row.Title.trim()) {
+      console.log(`⏭️  Skipping row ${i + 1}: No title or empty row`);
       continue;
     }
 

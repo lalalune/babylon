@@ -542,6 +542,16 @@ export interface GeneratedGame {
 export interface ActorsDatabase {
   actors: ActorData[];
   organizations: Organization[];
+  relationships?: Array<{
+    actor1Id: string;
+    actor2Id: string;
+    relationshipType: string;
+    strength: number;
+    sentiment: number;
+    history: string;
+    actor1FollowsActor2: boolean;
+    actor2FollowsActor1: boolean;
+  }>;
 }
 
 /**
