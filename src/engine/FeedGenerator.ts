@@ -1357,7 +1357,8 @@ Trending system not initialized yet.
   public async generateMediaPost(
     media: Organization,
     event: WorldEvent,
-    allActors: Actor[]
+    allActors: Actor[],
+    outcome: boolean
   ): Promise<{ post: string; sentiment: number; clueStrength: number; pointsToward: boolean | null }> {
     if (!this.llm) {
       throw new Error('LLM client required for feed generation');
@@ -1507,7 +1508,7 @@ Trending system not initialized yet.
   private async generateGovernmentPost(
     govt: Organization,
     event: WorldEvent,
-    allActors: Actor[],
+    _allActors: Actor[],
     outcome: boolean
   ): Promise<{ post: string; sentiment: number; clueStrength: number; pointsToward: boolean | null }> {
     if (!this.llm) {
@@ -1576,7 +1577,8 @@ Trending system not initialized yet.
    */
   public async generateDirectReaction(
     actor: Actor,
-    event: WorldEvent
+    event: WorldEvent,
+    outcome: boolean
   ): Promise<{ post: string; sentiment: number; clueStrength: number; pointsToward: boolean | null }> {
     if (!this.llm) {
       throw new Error('LLM client required for feed generation');
@@ -1653,7 +1655,8 @@ Trending system not initialized yet.
    */
   public async generateCommentary(
     actor: Actor,
-    event: WorldEvent
+    event: WorldEvent,
+    outcome: boolean
   ): Promise<{ post: string; sentiment: number; clueStrength: number; pointsToward: boolean | null }> {
     if (!this.llm) {
       throw new Error('LLM client required for feed generation');
@@ -1727,7 +1730,8 @@ Trending system not initialized yet.
    */
   public async generateConspiracyPost(
     actor: Actor,
-    event: WorldEvent
+    event: WorldEvent,
+    outcome: boolean
   ): Promise<{ post: string; sentiment: number; clueStrength: number; pointsToward: boolean | null }> {
     if (!this.llm) {
       throw new Error('LLM client required for feed generation');
