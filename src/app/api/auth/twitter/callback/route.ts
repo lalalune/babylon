@@ -111,8 +111,8 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   }
 
   // Verify state and get user ID from it
-  // State format: "userId:timestamp:random"
-  const stateParts = state.split(':')
+  // State format: "userId|timestamp|random" (using | to avoid conflicts with Privy DIDs)
+  const stateParts = state.split('|')
   if (stateParts.length < 2) {
     logger.warn('Twitter callback invalid state format', { state }, 'TwitterCallback')
     return NextResponse.redirect(
@@ -156,10 +156,33 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     },
   })
 
+  // Debug: Check all records without filters
+  const allStates = await prisma.oAuthState.findMany({
+    where: {
+      userId,
+    },
+    select: {
+      state: true,
+      returnPath: true,
+      expiresAt: true,
+      createdAt: true,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    take: 3,
+  })
+
   if (!oauthState || !oauthState.codeVerifier) {
-    logger.warn('Twitter callback missing or expired PKCE state', { state, userId }, 'TwitterCallback')
+    logger.warn('Twitter callback missing or expired PKCE state', { 
+      state, 
+      userId, 
+      allStates,
+      found: !!oauthState 
+    }, 'TwitterCallback')
+    
     return NextResponse.redirect(
-      new URL('/rewards?error=invalid_state', request.url)
+      new URL(`/rewards?error=invalid_stat`, request.url)
     )
   }
 

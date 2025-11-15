@@ -41,37 +41,47 @@ export function ShareVerificationModal({
       headers['Authorization'] = `Bearer ${token}`
     }
 
-    const response = await fetch(`/api/users/${encodeURIComponent(userId)}/verify-share`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        shareId,
-        platform,
-        postUrl: postUrl.trim(),
-      }),
-    })
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(userId)}/verify-share`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          shareId,
+          platform,
+          postUrl: postUrl.trim(),
+        }),
+      })
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Failed to verify share' }))
+      const data = await response.json()
+
+      if (!response.ok) {
+        toast.error(data.message || data.error || 'Failed to verify share')
+        setVerifying(false)
+        return
+      }
+
+      if (data.verified) {
+        const pointsMessage = data.points?.awarded > 0 
+          ? `Share verified! You earned ${data.points.awarded} points.` 
+          : 'Share verified! Thank you for sharing!'
+        toast.success(pointsMessage)
+        onClose()
+        // Reload the page to update points display
+        window.location.reload()
+      } else {
+        toast.error(data.message || 'Could not verify your post. Please check the URL.')
+      }
+    } catch (error) {
+      toast.error(`An error occurred while verifying. Please try again. ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
       setVerifying(false)
-      throw new Error(error.error || 'Failed to verify share')
     }
-
-    const data = await response.json()
-
-    if (data.verified) {
-      toast.success('Share verified! Thank you for sharing!')
-      onClose()
-    } else {
-      toast.error(data.message || 'Could not verify your post. Please check the URL.')
-    }
-    setVerifying(false)
   }
 
   const platformName = platform === 'twitter' ? 'X' : 'Farcaster'
   const placeholderUrl = platform === 'twitter' 
     ? 'https://twitter.com/username/status/1234567890'
-    : 'https://warpcast.com/username/0xabcdef...'
+    : 'https://warpcast.com/username/0x1234abcd'
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">

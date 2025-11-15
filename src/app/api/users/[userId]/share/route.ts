@@ -11,7 +11,6 @@ import { prisma } from '@/lib/prisma'
 import { AuthorizationError } from '@/lib/errors'
 import { withErrorHandling } from '@/lib/errors/error-handler'
 import { logger } from '@/lib/logger'
-import { PointsService } from '@/lib/services/points-service'
 import { UserIdParamSchema, SnowflakeIdSchema } from '@/lib/validation/schemas'
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
@@ -49,7 +48,7 @@ export const POST = withErrorHandling(async (
   const body = await request.json();
   const { platform, contentType, contentId, url } = ShareRequestSchema.parse(body);
 
-  // Create share action record
+  // Create share action record (points will be awarded after verification)
   const shareAction = await prisma.shareAction.create({
     data: {
       id: await generateSnowflakeId(),
@@ -59,37 +58,23 @@ export const POST = withErrorHandling(async (
       contentId,
       url,
       pointsAwarded: false,
+      verified: false, // Must be verified before points are awarded
     },
   });
 
-  // Award points for the share
-  const pointsResult = await PointsService.awardShareAction(
-    canonicalUserId,
-    platform,
-    contentType,
-    contentId
-  );
-
-  // Update share action to mark points as awarded
-  if (pointsResult.success && pointsResult.pointsAwarded > 0) {
-    await prisma.shareAction.update({
-      where: { id: shareAction.id },
-      data: { pointsAwarded: true },
-    });
-  }
-
   logger.info(
-    `User ${canonicalUserId} shared ${contentType} on ${platform}`,
-    { userId: canonicalUserId, platform, contentType, contentId, pointsAwarded: pointsResult.pointsAwarded },
+    `User ${canonicalUserId} initiated share for ${contentType} on ${platform} (pending verification)`,
+    { userId: canonicalUserId, platform, contentType, contentId, shareId: shareAction.id },
     'POST /api/users/[userId]/share'
   );
 
   return successResponse({
     shareAction,
     points: {
-      awarded: pointsResult.pointsAwarded,
-      newTotal: pointsResult.newTotal,
-      alreadyAwarded: pointsResult.alreadyAwarded,
+      awarded: 0, // Points will be awarded after verification
+      newTotal: 0,
+      alreadyAwarded: false,
     },
+    message: 'Share action created. Please verify your post to earn points.',
   });
 });
