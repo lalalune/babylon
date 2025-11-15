@@ -81,7 +81,7 @@ export function ShareVerificationModal({
   const platformName = platform === 'twitter' ? 'X' : 'Farcaster'
   const placeholderUrl = platform === 'twitter' 
     ? 'https://twitter.com/username/status/1234567890'
-    : 'https://warpcast.com/username/0xabcdef...'
+    : 'https://warpcast.com/username/0x1234abcd'
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">

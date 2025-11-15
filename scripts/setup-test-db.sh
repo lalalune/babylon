@@ -16,6 +16,15 @@ echo "📊 Database URL: ${DATABASE_URL}"
 echo "🔧 Generating Prisma client..."
 bunx prisma generate
 
+# Check PostgreSQL version and configuration
+echo "🔍 Checking PostgreSQL version and settings..."
+bunx prisma db execute --url="$DATABASE_URL" --stdin <<EOF
+SELECT version();
+SHOW max_locks_per_transaction;
+SHOW shared_buffers;
+SHOW max_connections;
+EOF
+
 # Use prisma migrate reset which properly handles schema recreation
 echo "🗄️ Resetting database and applying all migrations..."
 if [ "$SKIP_SEED" == "true" ]; then
@@ -36,6 +45,13 @@ else
   }
 fi
 
+# Check migration completion immediately
+echo "🔍 Checking migration results immediately..."
+bunx prisma db execute --url="$DATABASE_URL" --stdin <<EOF
+SELECT COUNT(*) as migration_count FROM _prisma_migrations WHERE finished_at IS NOT NULL;
+SELECT COUNT(*) as table_count FROM pg_tables WHERE schemaname = 'public';
+EOF
+
 # Verify critical tables exist
 echo "🔍 Verifying database tables..."
 bunx prisma db execute --url="$DATABASE_URL" --stdin <<EOF
@@ -51,6 +67,18 @@ bunx prisma db execute --url="$DATABASE_URL" --stdin <<EOF
 SELECT tablename FROM pg_tables
 WHERE schemaname = 'public'
 ORDER BY tablename;
+EOF
+
+# Show the last few tables that were created to identify where migration stops
+echo "🔍 Checking table creation order (last 10 tables by OID):"
+bunx prisma db execute --url="$DATABASE_URL" --stdin <<EOF
+SELECT c.relname as table_name, c.oid
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public'
+  AND c.relkind = 'r'
+ORDER BY c.oid DESC
+LIMIT 10;
 EOF
 
 # Count tables to ensure migration succeeded
