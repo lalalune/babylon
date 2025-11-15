@@ -30,5 +30,6 @@ export type PointsReason =
   | 'admin_deduction'
   | 'purchase'
   | 'transfer_sent'
-  | 'transfer_received'; // x402 payment purchase
+  | 'transfer_received'
+  | 'report_reward'; // Reward for successful reporting of CSAM/scammer
 

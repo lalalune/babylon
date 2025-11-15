@@ -33,7 +33,7 @@ describe('Autonomous Coordinator', () => {
         autonomousDMs: true,
         autonomousGroupChats: true,
         agentSystem: 'You are a test agent',
-        agentModelTier: 'free',
+        agentModelTier: 'lite',
         virtualBalance: 10000,
         reputationPoints: 1000,
         agentPointsBalance: 1000,

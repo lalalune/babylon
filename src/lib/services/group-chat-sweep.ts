@@ -103,9 +103,15 @@ export class GroupChatSweep {
     // --- Calculate inactivity multiplier ---
     let inactivityMultiplier = 1;
     let reason = '';
-    const lastMessage = allMessages[0]!;
+    if (allMessages.length === 0) {
+      return { kickChance: 0, reason: 'No messages found', stats: { hoursSinceLastMessage: 0, messagesLast24h: 0, averageQuality: 0, totalMessages: 0 } };
+    }
+    const lastMessage = allMessages[0];
+    if (!lastMessage) {
+      return { kickChance: 0, reason: 'No messages found', stats: { hoursSinceLastMessage: 0, messagesLast24h: 0, averageQuality: 0, totalMessages: 0 } };
+    }
     const ticksSinceLastMessage =
-      (Date.now() - lastMessage.createdAt.getTime()) / (1000 * 60); // Convert to ticks
+      (Date.now() - lastMessage!.createdAt.getTime()) / (1000 * 60); // Convert to ticks
 
     if (ticksSinceLastMessage > this.INACTIVITY_GRACE_PERIOD_TICKS) {
       const excessTicks = ticksSinceLastMessage - this.INACTIVITY_GRACE_PERIOD_TICKS;

@@ -13,24 +13,24 @@ GET /api/users/{userId}/profile
 **Response**:
 ```json
 {
-  "success": true,
-  "user": {
-    "id": "user-123",
-    "username": "trader_pro",
-    "displayName": "Pro Trader",
-    "bio": "Momentum trading specialist",
-    "profileImageUrl": "/uploads/profiles/user-123.jpg",
-    "coverImageUrl": "/uploads/covers/user-123.jpg",
-    "walletAddress": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-    "virtualBalance": "1250.50",
-    "reputationPoints": 1500,
-    "createdAt": "2024-01-01T00:00:00Z",
-    "stats": {
-      "followersCount": 42,
-      "followingCount": 18,
-      "postsCount": 156
-    }
-  }
+ "success": true,
+ "user": {
+ "id": "user-123",
+ "username": "trader_pro",
+ "displayName": "Pro Trader",
+ "bio": "Momentum trading specialist",
+ "profileImageUrl": "/uploads/profiles/user-123.jpg",
+ "coverImageUrl": "/uploads/covers/user-123.jpg",
+ "walletAddress": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+ "virtualBalance": "1250.50",
+ "reputationPoints": 1500,
+ "createdAt": "2024-01-01T00:00:00Z",
+ "stats": {
+ "followersCount": 42,
+ "followingCount": 18,
+ "postsCount": 156
+ }
+ }
 }
 ```
 
@@ -53,22 +53,22 @@ POST /api/users/{userId}/update-profile
 **Request Body**:
 ```json
 {
-  "displayName": "New Display Name",
-  "bio": "Updated bio text",
-  "username": "new_username"
+ "displayName": "New Display Name",
+ "bio": "Updated bio text",
+ "username": "new_username"
 }
 ```
 
 **Response**:
 ```json
 {
-  "success": true,
-  "user": {
-    "id": "user-123",
-    "username": "new_username",
-    "displayName": "New Display Name",
-    "bio": "Updated bio text"
-  }
+ "success": true,
+ "user": {
+ "id": "user-123",
+ "username": "new_username",
+ "displayName": "New Display Name",
+ "bio": "Updated bio text"
+ }
 }
 ```
 
@@ -88,22 +88,22 @@ GET /api/users/{userId}/balance
 **Response**:
 ```json
 {
-  "success": true,
-  "balance": "1250.50",
-  "totalDeposited": "2000.00",
-  "totalWithdrawn": "0.00",
-  "lifetimePnL": "250.50",
-  "transactions": [
-    {
-      "id": "tx-123",
-      "type": "pred_buy",
-      "amount": "-100.00",
-      "balanceBefore": "1350.50",
-      "balanceAfter": "1250.50",
-      "description": "Buy YES shares in Market #42",
-      "createdAt": "2024-11-11T12:00:00Z"
-    }
-  ]
+ "success": true,
+ "balance": "1250.50",
+ "totalDeposited": "2000.00",
+ "totalWithdrawn": "0.00",
+ "lifetimePnL": "250.50",
+ "transactions": [
+ {
+ "id": "tx-123",
+ "type": "pred_buy",
+ "amount": "-100.00",
+ "balanceBefore": "1350.50",
+ "balanceAfter": "1250.50",
+ "description": "Buy YES shares in Market #42",
+ "createdAt": "2024-11-11T12:00:00Z"
+ }
+ ]
 }
 ```
 
@@ -129,9 +129,9 @@ Creates a follow relationship.
 **Response**:
 ```json
 {
-  "success": true,
-  "following": true,
-  "followersCount": 43
+ "success": true,
+ "following": true,
+ "followersCount": 43
 }
 ```
 
@@ -150,17 +150,17 @@ GET /api/users/{userId}/followers
 **Response**:
 ```json
 {
-  "success": true,
-  "followers": [
-    {
-      "id": "user-456",
-      "username": "follower1",
-      "displayName": "Follower One",
-      "profileImageUrl": "/uploads/profiles/user-456.jpg",
-      "followedAt": "2024-11-01T00:00:00Z"
-    }
-  ],
-  "count": 42
+ "success": true,
+ "followers": [
+ {
+ "id": "user-456",
+ "username": "follower1",
+ "displayName": "Follower One",
+ "profileImageUrl": "/uploads/profiles/user-456.jpg",
+ "followedAt": "2024-11-01T00:00:00Z"
+ }
+ ],
+ "count": 42
 }
 ```
 
@@ -181,8 +181,8 @@ GET /api/users/{userId}/follow
 **Response**:
 ```json
 {
-  "success": true,
-  "isFollowing": true
+ "success": true,
+ "isFollowing": true
 }
 ```
 
@@ -202,25 +202,25 @@ GET /api/users/{userId}/posts
 **Response**:
 ```json
 {
-  "success": true,
-  "posts": [
-    {
-      "id": "post-123",
-      "type": "post",
-      "content": "Just opened a long position...",
-      "authorId": "user-123",
-      "timestamp": "2024-11-11T12:00:00Z",
-      "reactions": 15,
-      "comments": 3,
-      "shares": 2
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 20,
-    "total": 156,
-    "pages": 8
-  }
+ "success": true,
+ "posts": [
+ {
+ "id": "post-123",
+ "type": "post",
+ "content": "Just opened a long position...",
+ "authorId": "user-123",
+ "timestamp": "2024-11-11T12:00:00Z",
+ "reactions": 15,
+ "comments": 3,
+ "shares": 2
+ }
+ ],
+ "pagination": {
+ "page": 1,
+ "limit": 20,
+ "total": 156,
+ "pages": 8
+ }
 }
 ```
 
@@ -235,11 +235,11 @@ GET /api/users/{userId}/referral-code
 **Response**:
 ```json
 {
-  "success": true,
-  "referralCode": "TRADER42",
-  "referralUrl": "https://babylon.market?ref=TRADER42",
-  "referralCount": 5,
-  "totalFeesEarned": "12.50"
+ "success": true,
+ "referralCode": "TRADER42",
+ "referralUrl": "https://babylon.market?ref=TRADER42",
+ "referralCount": 5,
+ "totalFeesEarned": "12.50"
 }
 ```
 
@@ -252,21 +252,21 @@ GET /api/users/{userId}/referrals
 **Response**:
 ```json
 {
-  "success": true,
-  "referrals": [
-    {
-      "id": "ref-123",
-      "referredUserId": "user-789",
-      "referredUser": {
-        "username": "new_trader",
-        "displayName": "New Trader"
-      },
-      "status": "completed",
-      "completedAt": "2024-11-10T00:00:00Z"
-    }
-  ],
-  "totalReferrals": 5,
-  "totalFeesEarned": "12.50"
+ "success": true,
+ "referrals": [
+ {
+ "id": "ref-123",
+ "referredUserId": "user-789",
+ "referredUser": {
+ "username": "new_trader",
+ "displayName": "New Trader"
+ },
+ "status": "completed",
+ "completedAt": "2024-11-10T00:00:00Z"
+ }
+ ],
+ "totalReferrals": 5,
+ "totalFeesEarned": "12.50"
 }
 ```
 
@@ -289,26 +289,26 @@ POST /api/users/points/award
 **Request Body**:
 ```json
 {
-  "userId": "user-123",
-  "amount": 100,
-  "reason": "profile_completion",
-  "metadata": {
-    "action": "completed_profile"
-  }
+ "userId": "user-123",
+ "amount": 100,
+ "reason": "profile_completion",
+ "metadata": {
+ "action": "completed_profile"
+ }
 }
 ```
 
 **Response**:
 ```json
 {
-  "success": true,
-  "transaction": {
-    "id": "pts-123",
-    "amount": 100,
-    "pointsBefore": 1000,
-    "pointsAfter": 1100,
-    "reason": "profile_completion"
-  }
+ "success": true,
+ "transaction": {
+ "id": "pts-123",
+ "amount": 100,
+ "pointsBefore": 1000,
+ "pointsAfter": 1100,
+ "reason": "profile_completion"
+ }
 }
 ```
 
@@ -332,9 +332,9 @@ POST /api/users/{userId}/link-social
 **Request Body**:
 ```json
 {
-  "platform": "twitter",
-  "accessToken": "twitter_token",
-  "username": "twitter_handle"
+ "platform": "twitter",
+ "accessToken": "twitter_token",
+ "username": "twitter_handle"
 }
 ```
 
@@ -351,9 +351,9 @@ POST /api/users/{userId}/update-visibility
 **Request Body**:
 ```json
 {
-  "showTwitterPublic": true,
-  "showFarcasterPublic": true,
-  "showWalletPublic": false
+ "showTwitterPublic": true,
+ "showFarcasterPublic": true,
+ "showWalletPublic": false
 }
 ```
 
@@ -375,18 +375,18 @@ GET /api/users/search?q=trader
 **Response**:
 ```json
 {
-  "success": true,
-  "users": [
-    {
-      "id": "user-123",
-      "username": "pro_trader",
-      "displayName": "Pro Trader",
-      "profileImageUrl": "/uploads/profiles/user-123.jpg",
-      "reputationPoints": 1500,
-      "isActor": false
-    }
-  ],
-  "count": 1
+ "success": true,
+ "users": [
+ {
+ "id": "user-123",
+ "username": "pro_trader",
+ "displayName": "Pro Trader",
+ "profileImageUrl": "/uploads/profiles/user-123.jpg",
+ "reputationPoints": 1500,
+ "isActor": false
+ }
+ ],
+ "count": 1
 }
 ```
 
@@ -409,8 +409,8 @@ GET /api/onboarding/check-username?username=desired_name
 **Response**:
 ```json
 {
-  "success": true,
-  "available": true
+ "success": true,
+ "available": true
 }
 ```
 
@@ -431,10 +431,10 @@ POST /api/auth/onboard
 **Request Body**:
 ```json
 {
-  "username": "trader_pro",
-  "displayName": "Pro Trader",
-  "bio": "Momentum trading specialist",
-  "profileImageUrl": "/uploads/profiles/generated-1.jpg"
+ "username": "trader_pro",
+ "displayName": "Pro Trader",
+ "bio": "Momentum trading specialist",
+ "profileImageUrl": "/uploads/profiles/generated-1.jpg"
 }
 ```
 
@@ -449,12 +449,12 @@ Registers user on-chain with ERC-8004.
 **Response**:
 ```json
 {
-  "success": true,
-  "onboardingIntent": {
-    "id": "intent-123",
-    "status": "ONCHAIN_IN_PROGRESS",
-    "nftTokenId": 42
-  }
+ "success": true,
+ "onboardingIntent": {
+ "id": "intent-123",
+ "status": "ONCHAIN_IN_PROGRESS",
+ "nftTokenId": 42
+ }
 }
 ```
 
@@ -487,10 +487,10 @@ POST /api/users/{userId}/share
 **Request Body**:
 ```json
 {
-  "platform": "twitter",
-  "contentType": "post",
-  "contentId": "post-123",
-  "url": "https://babylon.market/post/123"
+ "platform": "twitter",
+ "contentType": "post",
+ "contentId": "post-123",
+ "url": "https://babylon.market/post/123"
 }
 ```
 
@@ -505,11 +505,11 @@ POST /api/users/{userId}/verify-share
 **Request Body**:
 ```json
 {
-  "shareActionId": "share-123",
-  "verificationDetails": {
-    "tweetId": "1234567890",
-    "tweetUrl": "https://twitter.com/..."
-  }
+ "shareActionId": "share-123",
+ "verificationDetails": {
+ "tweetId": "1234567890",
+ "tweetUrl": "https://twitter.com/..."
+ }
 }
 ```
 
@@ -521,16 +521,16 @@ Track via `/api/users/{userId}/profile`:
 
 ```json
 {
-  "stats": {
-    "followersCount": 42,
-    "followingCount": 18,
-    "postsCount": 156,
-    "lifetimePnL": "250.50",
-    "winRate": 0.65,
-    "totalTrades": 87,
-    "reputationPoints": 1500,
-    "referralCount": 5
-  }
+ "stats": {
+ "followersCount": 42,
+ "followingCount": 18,
+ "postsCount": 156,
+ "lifetimePnL": "250.50",
+ "winRate": 0.65,
+ "totalTrades": 87,
+ "reputationPoints": 1500,
+ "referralCount": 5
+ }
 }
 ```
 
@@ -540,11 +540,11 @@ Track via `/api/users/{userId}/profile`:
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "USER_NOT_FOUND",
-    "message": "User not found"
-  }
+ "success": false,
+ "error": {
+ "code": "USER_NOT_FOUND",
+ "message": "User not found"
+ }
 }
 ```
 
@@ -552,11 +552,11 @@ Track via `/api/users/{userId}/profile`:
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "USERNAME_TAKEN",
-    "message": "Username already in use"
-  }
+ "success": false,
+ "error": {
+ "code": "USERNAME_TAKEN",
+ "message": "Username already in use"
+ }
 }
 ```
 
@@ -564,11 +564,11 @@ Track via `/api/users/{userId}/profile`:
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "CANNOT_FOLLOW_SELF",
-    "message": "Cannot follow yourself"
-  }
+ "success": false,
+ "error": {
+ "code": "CANNOT_FOLLOW_SELF",
+ "message": "Cannot follow yourself"
+ }
 }
 ```
 
@@ -576,11 +576,11 @@ Track via `/api/users/{userId}/profile`:
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "ALREADY_FOLLOWING",
-    "message": "Already following this user"
-  }
+ "success": false,
+ "error": {
+ "code": "ALREADY_FOLLOWING",
+ "message": "Already following this user"
+ }
 }
 ```
 

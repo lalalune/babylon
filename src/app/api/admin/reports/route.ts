@@ -89,8 +89,28 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     prisma.report.count({ where }),
   ]);
 
+  // Parse evaluation from resolution field if it exists
+  const reportsWithEvaluation = reports.map(report => {
+    let evaluation = null;
+    if (report.resolution) {
+      try {
+        const parsed = JSON.parse(report.resolution);
+        // Check if it's an evaluation object (has outcome, confidence, etc.)
+        if (parsed.outcome && typeof parsed.confidence === 'number') {
+          evaluation = parsed;
+        }
+      } catch {
+        // Not JSON, treat as plain text resolution
+      }
+    }
+    return {
+      ...report,
+      evaluation,
+    };
+  });
+
   return successResponse({
-    reports,
+    reports: reportsWithEvaluation,
     pagination: {
       limit: params.limit,
       offset: params.offset,

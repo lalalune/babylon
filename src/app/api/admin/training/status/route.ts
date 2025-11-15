@@ -18,7 +18,7 @@ export async function GET() {
   // Get readiness check
   const readiness = await automationPipeline.checkTrainingReadiness();
   
-  // TODO: These models require trajectory schema to be merged into main Prisma schema
+  // Note: Trajectory schema models require trajectory schema to be merged into main Prisma schema
   // Returning stub data until then
   const recentJobs: Array<Record<string, unknown>> = [];
   const models: Array<Record<string, unknown>> = [];

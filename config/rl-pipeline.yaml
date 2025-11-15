@@ -1,0 +1,95 @@
+# Continuous RL Training Pipeline Configuration
+# Unified configuration for benchmark generation, trajectory collection, training, and deployment
+
+# Benchmark Configuration
+benchmark:
+  duration_minutes: 10080  # 1 week (7 days * 24 hours * 60 minutes)
+  tick_interval_seconds: 60
+  num_prediction_markets: 10
+  num_perpetual_markets: 5
+  num_agents: 8
+  seed: 12345  # For reproducibility
+  output_dir: "./benchmarks"
+  idempotent: true  # Skip if benchmark already exists
+
+# Baseline Models
+baselines:
+  models:
+    - name: "qwen"
+      model_id: "qwen/qwen3-32b"
+      display_name: "Qwen 32B"
+      output_file: "baseline-qwen.json"
+    - name: "llama8b"
+      model_id: "llama-3.1-8b-instant"
+      display_name: "LLaMA 8B Instant"
+      output_file: "baseline-llama8b.json"
+  output_dir: "./benchmarks/baselines"
+  run_if_exists: false  # Skip if baseline already exists
+
+# Agent Configuration
+agents:
+  test_agent_count: 3
+  autonomous_features:
+    trading: true
+    posting: true
+    commenting: true
+    dms: false
+    group_chats: false
+  create_if_missing: true
+  agent_config:
+    virtual_balance: 10000
+    agent_points_balance: 1000
+    agent_model_tier: "lite"
+    agent_system: "You are an autonomous trading agent on Babylon prediction markets. Make smart trading decisions based on market analysis."
+
+# Trajectory Collection
+trajectory:
+  window_duration_hours: 1
+  min_actions_per_trajectory: 5
+  min_trajectories_per_window: 3
+  record_correctness: true  # Track prediction market correctness
+  record_sentiment: true  # Track sentiment analysis accuracy
+  record_perp_correctness: true  # Track perp trade correctness vs sentiment
+  sampling_rate: 1.0  # 1.0 = record all trajectories
+  save_to_database: true
+  save_to_file: false  # Set to true for debugging
+
+# GRPO Training
+training:
+  check_frequency_minutes: 60  # Check for new trajectories every hour
+  min_trajectories_per_batch: 10
+  batch_size: 4
+  learning_rate: 1e-6
+  kl_penalty: 0.05
+  iterations_per_window: 10
+  warmup_steps: 10
+  max_grad_norm: 1.0
+  gamma: 0.99
+  checkpoint_frequency: 5  # Save checkpoint every 5 windows
+  wandb_project: "babylon-rl-continuous"
+  wandb_entity: null  # Use default from env
+
+# Model Deployment
+deployment:
+  auto_deploy: true
+  verify_usage: true
+  benchmark_after_deploy: true
+  min_improvement_threshold: 0.0  # Minimum improvement to deploy (0 = deploy if not worse)
+  update_database: true
+  mark_as_ready: true
+
+# Verification
+verification:
+  assert_model_usage: true  # Assert agents use trained model
+  log_model_per_inference: true  # Log which model is used for each LLM call
+  compare_against_baselines: true  # Compare trained model against baselines
+  run_benchmark_after_training: true  # Run benchmark with trained model
+  assert_improvement: false  # Assert improvement (set to true for strict mode)
+
+# Pipeline Execution
+pipeline:
+  idempotent: true  # Skip steps if already done
+  continue_on_error: false  # Stop on first error
+  log_level: "info"  # debug, info, warn, error
+  save_intermediate_results: true  # Save results at each step
+

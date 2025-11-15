@@ -12,6 +12,7 @@ import { asUser } from '@/lib/db/context'
 import { z } from 'zod'
 import { nanoid } from 'nanoid'
 import { notifyUserGroupInvite } from '@/lib/services/notification-service'
+import { Prisma } from '@prisma/client'
 
 const AddMemberSchema = z.object({
   userId: z.string(),
@@ -76,18 +77,43 @@ export const POST = withErrorHandling(
       })
       groupName = group?.name || 'Unknown'
 
-      // Create invite
+      // Create invite - handle unique constraint race condition
       inviteId = nanoid()
-      await db.userGroupInvite.create({
-        data: {
-          id: inviteId,
-          groupId,
-          invitedUserId: data.userId,
-          invitedBy: user.userId,
-          status: 'pending',
-          invitedAt: new Date(),
-        },
-      })
+      try {
+        await db.userGroupInvite.create({
+          data: {
+            id: inviteId,
+            groupId,
+            invitedUserId: data.userId,
+            invitedBy: user.userId,
+            status: 'pending',
+            invitedAt: new Date(),
+          },
+        })
+      } catch (error: unknown) {
+        // Handle unique constraint violation (race condition)
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          const target = error.meta?.target as string[] | undefined
+          if (target?.includes('groupId') && target?.includes('invitedUserId')) {
+          // Check if there's now a pending invite (another request created it)
+          const raceConditionInvite = await db.userGroupInvite.findUnique({
+            where: {
+              groupId_invitedUserId: {
+                groupId,
+                invitedUserId: data.userId,
+              },
+            },
+          })
+            if (raceConditionInvite?.status === 'pending') {
+              inviteId = raceConditionInvite.id
+              throw new ApiError('User already has a pending invite', 400)
+            }
+            // If it's not pending, we can retry or handle differently
+            throw new ApiError('Failed to create invite due to existing record', 400)
+          }
+        }
+        throw error
+      }
     })
 
     // Send notification to the invited user (outside of asUser context)

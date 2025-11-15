@@ -12,6 +12,7 @@ import {
   DecimalPercentageSchema,
   TimeFrameSchema
 } from './common';
+import { JsonValueSchema } from '@/types/common';
 
 /**
  * Create trade order schema
@@ -104,7 +105,7 @@ export const TradeSignalSchema = z.object({
   takeProfit: z.number().positive().optional(),
   timeframe: TimeFrameSchema.optional(),
   reasoning: z.string().max(1000).optional(),
-  metadata: z.record(z.string(), z.unknown()).optional()
+  metadata: z.record(z.string(), JsonValueSchema).optional()
 });
 
 /**

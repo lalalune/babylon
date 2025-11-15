@@ -71,6 +71,7 @@ import { renderPrompt, npcMarketDecisions } from '@/prompts';
 import type { TradingDecision } from '@/types/market-decisions';
 import type { NPCMarketContext } from '@/types/market-context';
 import { countTokensSync, getSafeContextLimit, truncateToTokenLimitSync } from '@/lib/token-counter';
+import type { JsonValue } from '@/types/common';
 
 /**
  * Token management configuration
@@ -198,7 +199,7 @@ export class MarketDecisionEngine {
       model,
       maxContextTokens: getSafeContextLimit(model, maxOutputTokens),
       maxOutputTokens,
-      tokensPerNPC: 400, // Reduced from 800 to avoid token limit errors
+      tokensPerNPC: 800, // Actual average is ~780 tokens per NPC based on measurements
     };
     
     logger.info('MarketDecisionEngine initialized', {
@@ -268,7 +269,12 @@ export class MarketDecisionEngine {
     // Calculate how many NPCs we can process per batch
     // For OpenAI models, be more conservative due to combined input+output limits
     const isOpenAIModel = this.tokenConfig.model.toLowerCase().includes('gpt') || this.llm.getProvider() === 'openai';
-    let maxNPCsPerBatch = Math.max(1, Math.floor(this.tokenConfig.maxContextTokens / this.tokenConfig.tokensPerNPC));
+    
+    // Use a conservative estimate with safety margin (reserve 20% for prompt structure and variations)
+    const safetyMargin = 0.8; // Use only 80% of available tokens
+    let maxNPCsPerBatch = Math.max(1, Math.floor(
+      (this.tokenConfig.maxContextTokens * safetyMargin) / this.tokenConfig.tokensPerNPC
+    ));
     
     // Reduce batch size for OpenAI models to account for combined input+output limits
     if (isOpenAIModel) {
@@ -371,12 +377,14 @@ export class MarketDecisionEngine {
       }, 'MarketDecisionEngine');
       
       // Truncate the npcsList section while preserving prompt structure
+      // Reserve extra buffer (10%) to account for token counting inaccuracies
       const promptPrefix = renderPrompt(npcMarketDecisions, {
         npcCount: contexts.length.toString(),
         npcsList: '',
       });
       const prefixTokens = countTokensSync(promptPrefix);
-      const availableForNPCs = this.tokenConfig.maxContextTokens - prefixTokens;
+      const bufferTokens = Math.floor(this.tokenConfig.maxContextTokens * 0.1); // 10% buffer
+      const availableForNPCs = this.tokenConfig.maxContextTokens - prefixTokens - bufferTokens;
       
       const truncated = truncateToTokenLimitSync(npcsList, availableForNPCs, { ellipsis: true });
       npcsList = truncated.text;
@@ -391,6 +399,7 @@ export class MarketDecisionEngine {
       logger.info('Truncated prompt to fit limit', {
         newTokens: promptTokens,
         truncatedChars: npcsList.length,
+        bufferTokens,
       }, 'MarketDecisionEngine');
     }
     
@@ -515,7 +524,7 @@ export class MarketDecisionEngine {
           response = decisionsObj;
         } else if (decisionsObj && typeof decisionsObj === 'object' && 'decision' in decisionsObj) {
           // Nested structure from XML
-          const innerDecisions = (decisionsObj as Record<string, unknown>).decision;
+          const innerDecisions = (decisionsObj as { decision: TradingDecision[] | TradingDecision }).decision;
           response = Array.isArray(innerDecisions) ? innerDecisions : [innerDecisions];
         } else {
           logger.error('Invalid decisions structure', { decisionsObj }, 'MarketDecisionEngine');
@@ -533,7 +542,7 @@ export class MarketDecisionEngine {
           // Single decision object - wrap in array
           response = [decisionData as TradingDecision];
           logger.debug('Wrapped single decision in array', {
-            npcId: (decisionData as Record<string, unknown>).npcId
+            npcId: (decisionData as Record<string, JsonValue>).npcId
           }, 'MarketDecisionEngine');
         } else {
           logger.error('Invalid decision structure', { decisionData }, 'MarketDecisionEngine');
@@ -693,15 +702,45 @@ export class MarketDecisionEngine {
       sampleNpcName: decisions[0]?.npcName
     }, 'MarketDecisionEngine');
     
+    // Create reverse map from npcName to npcId for fallback lookup
+    const nameToIdMap = new Map<string, string>();
+    for (const [id, context] of contexts.entries()) {
+      nameToIdMap.set(context.npcName.toLowerCase(), id);
+      // Also try slugified versions (replace spaces with hyphens, lowercase)
+      const slugified = context.npcName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      if (slugified !== context.npcName.toLowerCase()) {
+        nameToIdMap.set(slugified, id);
+      }
+    }
+    
     const valid: TradingDecision[] = [];
     const rejectionReasons: Record<string, number> = {};
     
     for (const decision of decisions) {
-      const context = contexts.get(decision.npcId);
+      let context = contexts.get(decision.npcId);
+      
+      // Fallback: try to find by name if ID doesn't match
+      if (!context && decision.npcName) {
+        const nameKey = decision.npcName.toLowerCase();
+        const slugifiedKey = nameKey.replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        const foundId = nameToIdMap.get(nameKey) || nameToIdMap.get(slugifiedKey);
+        
+        if (foundId) {
+          context = contexts.get(foundId);
+          if (context) {
+            // Update decision with correct ID
+            decision.npcId = foundId;
+            logger.debug(`Fixed NPC ID mismatch: ${decision.npcName} -> ${foundId}`, {
+              originalId: decision.npcId,
+              correctedId: foundId,
+            }, 'MarketDecisionEngine');
+          }
+        }
+      }
       
       if (!context) {
         rejectionReasons['no_context'] = (rejectionReasons['no_context'] || 0) + 1;
-        logger.warn(`Decision for unknown NPC: ${decision.npcId}`, {}, 'MarketDecisionEngine');
+        logger.warn(`Decision for unknown NPC: ${decision.npcId} (name: ${decision.npcName})`, {}, 'MarketDecisionEngine');
         continue;
       }
       

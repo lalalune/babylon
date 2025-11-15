@@ -9,11 +9,8 @@ import type { AgentAction } from './SimulationEngine';
 import type { GroundTruth } from './BenchmarkDataGenerator';
 import { logger } from '@/lib/logger';
 
-export interface ValidationResult {
-  valid: boolean;
-  errors: string[];
-  warnings: string[];
-}
+// Use shared ValidationResult type
+import type { ValidationResult } from '../training/ConfigValidator';
 
 export class MetricsValidator {
   /**

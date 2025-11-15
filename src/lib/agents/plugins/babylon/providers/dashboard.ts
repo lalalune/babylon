@@ -10,10 +10,7 @@ import { logger } from '@/lib/logger'
 import type { BabylonRuntime } from '../types'
 import type {
   A2ABalanceResponse,
-  A2APositionsResponse,
-  A2APredictionsResponse,
-  A2AFeedResponse,
-  A2AUnreadCountResponse
+  A2APositionsResponse
 } from '@/types/a2a-responses'
 
 /**
@@ -31,28 +28,34 @@ export const dashboardProvider: Provider = {
     
     // A2A is REQUIRED
     if (!babylonRuntime.a2aClient?.isConnected()) {
-      logger.error('A2A client not connected - dashboard provider requires A2A protocol', { 
-        agentId: runtime.agentId 
-      })
+      logger.error('A2A client not connected - dashboard provider requires A2A protocol', undefined, runtime.agentId)
       return { text: 'ERROR: A2A client not connected. Cannot load dashboard. Please ensure A2A server is running.' }
     }
     
-    // Fetch all dashboard data via A2A protocol
-    const [balance, positions, predictions, feed, unreadCount] = await Promise.all([
+    // Fetch ALL dashboard data via A2A protocol
+    const [balance, positions, predictions, feed, chats, notifications] = await Promise.all([
       babylonRuntime.a2aClient.sendRequest('a2a.getBalance', {}),
       babylonRuntime.a2aClient.sendRequest('a2a.getPositions', { userId: agentUserId }),
-      babylonRuntime.a2aClient.sendRequest('a2a.getPredictions', { status: 'active' }),
-      babylonRuntime.a2aClient.sendRequest('a2a.getFeed', { limit: 5, offset: 0 }),
-      babylonRuntime.a2aClient.sendRequest('a2a.getUnreadCount', {})
+      babylonRuntime.a2aClient.getPredictions({ status: 'active' }).catch(() => ({ predictions: [] })),
+      babylonRuntime.a2aClient.getFeed({ limit: 5 }).catch(() => ({ posts: [] })),
+      babylonRuntime.a2aClient.getChats('all').catch(() => ({ chats: [] })),
+      babylonRuntime.a2aClient.getNotifications(5).catch(() => ({ notifications: [] }))
     ])
     
+    // Type assertions are necessary here because A2A client returns generic responses
+    // These match the actual response types from the A2A protocol
     const balanceData = balance as A2ABalanceResponse
     const positionsData = positions as A2APositionsResponse
-    const predictionsData = predictions as A2APredictionsResponse
-    const feedData = feed as A2AFeedResponse
-    const unreadData = unreadCount as A2AUnreadCountResponse
+    const predictionsData = predictions as { predictions?: Array<{ id: string; question: string }> }
+    const feedData = feed as { posts?: Array<{ id: string; content: string }> }
+    const chatsData = chats as { chats?: Array<{ id: string; name?: string }> }
+    const notificationsData = notifications as { notifications?: Array<{ id: string; message: string }> }
     
     const totalPositions = (positionsData.marketPositions?.length || 0) + (positionsData.perpPositions?.length || 0)
+    const activeMarkets = predictionsData.predictions?.length || 0
+    const recentPosts = feedData.posts?.length || 0
+    const activeChats = chatsData.chats?.length || 0
+    const unreadNotifications = notificationsData.notifications?.length || 0
     
     const result = `📊 AGENT DASHBOARD
 
@@ -61,26 +64,35 @@ Balance: $${balanceData.balance || 0}
 Points: ${balanceData.reputationPoints || 0} pts
 Open Positions: ${totalPositions}
 
-📈 ACTIVE MARKETS (Top 3)
-${predictionsData.predictions?.slice(0, 3).map((m, i: number) => {
-  const total = m.yesShares + m.noShares
-  const yesPrice = total > 0 ? (m.yesShares / total * 100).toFixed(1) : '50.0'
-  return `${i + 1}. ${m.question}
-   YES: ${yesPrice}% | Liquidity: $${m.liquidity}`
-}).join('\n') || 'No active markets'}
+📈 MARKETS
+Active Markets: ${activeMarkets}
+${predictionsData.predictions && predictionsData.predictions.length > 0 ? 
+  `Recent: ${predictionsData.predictions.slice(0, 3).map(p => p.question.substring(0, 50)).join(', ')}` : 
+  'No active markets'}
 
-📱 SOCIAL FEED (Recent)
-${feedData.posts?.slice(0, 3).map((p, i: number) => 
-  `${i + 1}. @${p.author?.username || 'user'}: ${p.content?.substring(0, 60)}...`
-).join('\n') || 'No recent posts'}
+📱 SOCIAL FEED
+Recent Posts: ${recentPosts}
+${feedData.posts && feedData.posts.length > 0 ? 
+  `Latest: ${feedData.posts[0]?.content.substring(0, 100)}...` : 
+  'No recent posts'}
 
-📬 PENDING
-Unread Messages: ${unreadData.unreadCount || 0}
+💬 MESSAGING
+Active Chats: ${activeChats}
+${chatsData.chats && chatsData.chats.length > 0 ? 
+  `Chats: ${chatsData.chats.slice(0, 3).map(c => c.name || c.id).join(', ')}` : 
+  'No active chats'}
+
+🔔 NOTIFICATIONS
+Unread: ${unreadNotifications}
+${notificationsData.notifications && notificationsData.notifications.length > 0 ? 
+  `Latest: ${notificationsData.notifications[0]?.message.substring(0, 80)}...` : 
+  'No notifications'}
 
 💡 OPPORTUNITIES
 - ${totalPositions > 0 ? 'Monitor open positions' : 'Consider opening positions'}
-- ${feedData.posts && feedData.posts.length > 0 ? 'Engage with recent posts' : 'Create new post'}
-- ${unreadData.unreadCount && unreadData.unreadCount > 0 ? 'Respond to messages' : 'All messages read'}`
+- ${activeMarkets > 0 ? 'Review active markets' : 'Check for new markets'}
+- ${recentPosts > 0 ? 'Engage with recent posts' : 'Create new posts'}
+- ${unreadNotifications > 0 ? 'Review notifications' : 'All caught up'}`
 
     return { text: result }
   }

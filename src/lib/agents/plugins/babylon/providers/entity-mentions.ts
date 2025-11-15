@@ -1,14 +1,15 @@
 /**
  * Entity Mentions Provider
  * Detects and enriches mentions of users, companies, and stocks in messages
- * Uses regex to find mentions and provides context from database
+ * Uses regex to find mentions and provides context via A2A protocol
  */
 
 import type { Provider, IAgentRuntime, Memory, State, ProviderResult } from '@elizaos/core'
 import { logger } from '@/lib/logger'
-import { prisma } from '@/lib/prisma'
+import type { BabylonRuntime } from '../types'
 import type { EntityMention } from '@/types/entities'
 import { isCompanyEntity, isUserEntity, isActorEntity } from '@/types/entities'
+import type { JsonValue } from '@/types/common'
 
 /**
  * Provider: Entity Mentions
@@ -18,7 +19,15 @@ export const entityMentionsProvider: Provider = {
   name: 'BABYLON_ENTITY_MENTIONS',
   description: 'Detects and provides context for mentioned users, companies, and stocks in messages',
   
-  get: async (_runtime: IAgentRuntime, message: Memory, _state: State): Promise<ProviderResult> => {
+  get: async (runtime: IAgentRuntime, message: Memory, _state: State): Promise<ProviderResult> => {
+    const babylonRuntime = runtime as BabylonRuntime
+    
+    // A2A is REQUIRED
+    if (!babylonRuntime.a2aClient?.isConnected()) {
+      logger.error('A2A client not connected - entity mentions provider requires A2A protocol', undefined, runtime.agentId)
+      return { text: '' } // Return empty - don't break the flow, just skip entity enrichment
+    }
+    
     try {
       const messageText = message.content.text || ''
       
@@ -26,8 +35,8 @@ export const entityMentionsProvider: Provider = {
         return { text: '' }
       }
       
-      // Find potential entity mentions using regex
-      const entities = await findEntityMentions(messageText)
+      // Find potential entity mentions using regex and look up via A2A
+      const entities = await findEntityMentions(messageText, babylonRuntime)
       
       if (entities.length === 0) {
         return { text: '' }
@@ -35,7 +44,7 @@ export const entityMentionsProvider: Provider = {
       
       // Build context for each entity
       const entityContexts: string[] = []
-      const entityData: Array<{ type: string; id: string; [key: string]: unknown }> = []
+      const entityData: Array<{ type: string; id: string; [key: string]: JsonValue }> = []
       
       for (const entity of entities) {
         if (entity.type === 'company' && isCompanyEntity(entity.data)) {
@@ -53,9 +62,9 @@ export const entityMentionsProvider: Provider = {
             type: 'company',
             id: company.id,
             name: company.name,
-            ticker: company.ticker,
+            ticker: company.ticker ?? null,
             currentPrice: parseFloat(company.currentPrice?.toString() || '0'),
-            priceChangePercentage: company.priceChangePercentage,
+            priceChangePercentage: company.priceChangePercentage ?? null,
             volume24h: parseFloat(company.volume24h?.toString() || '0')
           })
         } else if (entity.type === 'user' && isUserEntity(entity.data)) {
@@ -70,9 +79,9 @@ export const entityMentionsProvider: Provider = {
             type: 'user',
             id: user.id,
             username: user.username,
-            displayName: user.displayName,
-            isAgent: user.isAgent,
-            reputationPoints: user.reputationPoints
+            displayName: user.displayName ?? null,
+            isAgent: user.isAgent ?? false,
+            reputationPoints: user.reputationPoints ?? null
           })
         } else if (entity.type === 'actor' && isActorEntity(entity.data)) {
           const actor = entity.data
@@ -86,7 +95,7 @@ export const entityMentionsProvider: Provider = {
             type: 'actor',
             id: actor.id,
             name: actor.name,
-            category: actor.category
+            category: actor.category ?? null
           })
         }
       }
@@ -110,9 +119,9 @@ export const entityMentionsProvider: Provider = {
 }
 
 /**
- * Find entity mentions in text and look them up in database
+ * Find entity mentions in text and look them up via A2A protocol
  */
-async function findEntityMentions(text: string): Promise<EntityMention[]> {
+async function findEntityMentions(text: string, runtime: BabylonRuntime): Promise<EntityMention[]> {
   const results: EntityMention[] = []
   
   // Extract potential entity names
@@ -126,100 +135,86 @@ async function findEntityMentions(text: string): Promise<EntityMention[]> {
   const quotedNames = text.match(/"([^"]{2,50})"/g) || []
   const capitalizedNames = text.match(/\b([A-Z][a-z]+(?: [A-Z][a-z]+)+)\b/g) || []
   
-  // Look up usernames
-  if (usernameMentions.length > 0) {
+  // Look up usernames via A2A
+  if (usernameMentions.length > 0 && runtime.a2aClient) {
     const usernames = usernameMentions.map(m => m.substring(1).toLowerCase())
-    const users = await prisma.user.findMany({
-      where: {
-        username: {
-          in: usernames
-        }
-      },
-      select: {
-        id: true,
-        username: true,
-        displayName: true,
-        bio: true,
-        isAgent: true,
-        reputationPoints: true
-      },
-      take: 10
-    })
     
-    results.push(...users.filter(u => u.username).map(u => ({ 
+    // Search for each username via A2A
+    for (const username of usernames.slice(0, 10)) {
+      try {
+        const searchResult = await runtime.a2aClient.searchUsers(username, 5)
+        const users = (searchResult as { users?: Array<{
+          id: string
+          username: string
+          displayName?: string
+          bio?: string
+          isAgent?: boolean
+          reputationPoints?: number
+        }> })?.users || []
+        
+        // Find exact username match
+        const matchedUser = users.find(u => u.username?.toLowerCase() === username)
+        if (matchedUser) {
+          results.push({
       type: 'user' as const, 
       data: { 
-        ...u, 
-        username: u.username!,
-        displayName: u.displayName || null,
-        bio: u.bio || null
+              id: matchedUser.id,
+              username: matchedUser.username,
+              displayName: matchedUser.displayName || null,
+              bio: matchedUser.bio || null,
+              isAgent: matchedUser.isAgent || false,
+              reputationPoints: matchedUser.reputationPoints || null
       } 
-    })))
+          })
+        }
+      } catch (error) {
+        logger.debug(`Failed to search user ${username} via A2A`, { error }, 'EntityMentionsProvider')
+      }
+    }
   }
   
-  // Look up tickers
+  // Look up organizations via A2A
+  if ((tickerMentions.length > 0 || quotedNames.length > 0 || capitalizedNames.length > 0) && runtime.a2aClient) {
+    try {
+      const orgsResult = await runtime.a2aClient.getOrganizations(100)
+      const organizations = (orgsResult as { organizations?: Array<{
+        id: string
+        name: string
+        ticker?: string
+        description?: string
+        currentPrice?: number
+        imageUrl?: string
+      }> })?.organizations || []
+      
+      // Match tickers
   if (tickerMentions.length > 0) {
     const tickers = tickerMentions.map(m => m.substring(1))
-    const companies = await prisma.organization.findMany({
-      where: {
-        OR: [
-          { name: { in: tickers, mode: 'insensitive' } },
-          { name: { in: tickers.map(t => t.toLowerCase()) } }
-        ],
-        type: 'company'
-      },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        currentPrice: true,
-        imageUrl: true
-      },
-      take: 10
-    })
-    
-    results.push(...companies.map(c => ({ type: 'company' as const, data: c })))
+        const matchedOrgs = organizations.filter(org => 
+          tickers.some(t => 
+            org.ticker?.toUpperCase() === t.toUpperCase() || 
+            org.name.toUpperCase().includes(t.toUpperCase())
+          )
+        )
+        results.push(...matchedOrgs.map(c => ({ type: 'company' as const, data: c })))
   }
   
-  // Look up company names
+      // Match names
   const allNames = [...quotedNames.map(n => n.replace(/"/g, '')), ...capitalizedNames]
   if (allNames.length > 0) {
-    const companies = await prisma.organization.findMany({
-      where: {
-        OR: [
-          { name: { in: allNames, mode: 'insensitive' } }
-        ],
-        type: 'company'
-      },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        currentPrice: true,
-        imageUrl: true
-      },
-      take: 10
-    })
-    
-    results.push(...companies.map(c => ({ type: 'company' as const, data: c })))
-    
-    // Also check actors (people)
-    const actors = await prisma.actor.findMany({
-      where: {
-        name: { in: allNames, mode: 'insensitive' }
-      },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        role: true,
-        profileImageUrl: true
-      },
-      take: 10
-    })
-    
-    results.push(...actors.map(a => ({ type: 'actor' as const, data: a })))
+        const matchedOrgs = organizations.filter(org =>
+          allNames.some(name => 
+            org.name.toLowerCase().includes(name.toLowerCase())
+          )
+        )
+        results.push(...matchedOrgs.map(c => ({ type: 'company' as const, data: c })))
+      }
+    } catch (error) {
+      logger.debug('Failed to fetch organizations via A2A', { error }, 'EntityMentionsProvider')
+    }
   }
+  
+  // Note: Actors are not available via A2A, so we skip them
+  // This is acceptable as actors are internal game entities
   
   // Deduplicate by ID
   const seen = new Set<string>()

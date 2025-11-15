@@ -13,6 +13,7 @@ import { prisma } from '@/lib/prisma'
 import { generateSnowflakeId } from '@/lib/snowflake'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
+import { createNotification } from '@/lib/services/notification-service'
 
 const TransferPointsSchema = z.object({
   recipientId: z.string().min(1, 'Recipient ID is required'),
@@ -100,103 +101,112 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   }
 
   // Perform the transfer in a transaction
-  try {
-    const result = await prisma.$transaction(async (tx) => {
-      const senderPointsBefore = sender.reputationPoints
-      const recipientPointsBefore = recipient.reputationPoints
+  const result = await prisma.$transaction(async (tx) => {
+    const senderPointsBefore = sender.reputationPoints
+    const recipientPointsBefore = recipient.reputationPoints
 
-      // Deduct from sender
-      const updatedSender = await tx.user.update({
-        where: { id: senderId },
-        data: {
-          reputationPoints: { decrement: amount },
-        },
-      })
-
-      // Add to recipient
-      const updatedRecipient = await tx.user.update({
-        where: { id: recipientId },
-        data: {
-          reputationPoints: { increment: amount },
-        },
-      })
-
-      // Create transaction record for sender (negative)
-      await tx.pointsTransaction.create({
-        data: {
-          id: await generateSnowflakeId(),
-          userId: senderId,
-          amount: -amount,
-          pointsBefore: senderPointsBefore,
-          pointsAfter: updatedSender.reputationPoints,
-          reason: 'transfer_sent',
-          metadata: JSON.stringify({
-            recipientId,
-            recipientName: recipient.displayName || recipient.username,
-            message,
-          }),
-        },
-      })
-
-      // Create transaction record for recipient (positive)
-      await tx.pointsTransaction.create({
-        data: {
-          id: await generateSnowflakeId(),
-          userId: recipientId,
-          amount: amount,
-          pointsBefore: recipientPointsBefore,
-          pointsAfter: updatedRecipient.reputationPoints,
-          reason: 'transfer_received',
-          metadata: JSON.stringify({
-            senderId,
-            senderName: sender.displayName || sender.username,
-            message,
-          }),
-        },
-      })
-
-      return {
-        sender: updatedSender,
-        recipient: updatedRecipient,
-      }
-    })
-
-    logger.info(
-      `Points transfer: ${sender.username || senderId} sent ${amount} points to ${recipient.username || recipientId}`,
-      {
-        senderId,
-        recipientId,
-        amount,
-        message,
-        senderNewBalance: result.sender.reputationPoints,
-        recipientNewBalance: result.recipient.reputationPoints,
-      },
-      'PointsTransfer'
-    )
-
-    return NextResponse.json({
-      success: true,
-      transfer: {
-        amount,
-        sender: {
-          id: sender.id,
-          name: sender.displayName || sender.username,
-          newBalance: result.sender.reputationPoints,
-        },
-        recipient: {
-          id: recipient.id,
-          name: recipient.displayName || recipient.username,
-          newBalance: result.recipient.reputationPoints,
-        },
-        message,
+    // Deduct from sender
+    const updatedSender = await tx.user.update({
+      where: { id: senderId },
+      data: {
+        reputationPoints: { decrement: amount },
       },
     })
-  } catch (error) {
-    logger.error('Points transfer failed', error, 'PointsTransfer')
-    return NextResponse.json(
-      { error: 'Transfer failed. Please try again.' },
-      { status: 500 }
-    )
-  }
+
+    // Add to recipient
+    const updatedRecipient = await tx.user.update({
+      where: { id: recipientId },
+      data: {
+        reputationPoints: { increment: amount },
+      },
+    })
+
+    // Create transaction record for sender (negative)
+    await tx.pointsTransaction.create({
+      data: {
+        id: await generateSnowflakeId(),
+        userId: senderId,
+        amount: -amount,
+        pointsBefore: senderPointsBefore,
+        pointsAfter: updatedSender.reputationPoints,
+        reason: 'transfer_sent',
+        metadata: JSON.stringify({
+          recipientId,
+          recipientName: recipient.displayName || recipient.username,
+          message,
+        }),
+      },
+    })
+
+    // Create transaction record for recipient (positive)
+    await tx.pointsTransaction.create({
+      data: {
+        id: await generateSnowflakeId(),
+        userId: recipientId,
+        amount: amount,
+        pointsBefore: recipientPointsBefore,
+        pointsAfter: updatedRecipient.reputationPoints,
+        reason: 'transfer_received',
+        metadata: JSON.stringify({
+          senderId,
+          senderName: sender.displayName || sender.username,
+          message,
+        }),
+      },
+    })
+
+    return {
+      sender: updatedSender,
+      recipient: updatedRecipient,
+    }
+  })
+
+  logger.info(
+    `Points transfer: ${sender.username || senderId} sent ${amount} points to ${recipient.username || recipientId}`,
+    {
+      senderId,
+      recipientId,
+      amount,
+      message,
+      senderNewBalance: result.sender.reputationPoints,
+      recipientNewBalance: result.recipient.reputationPoints,
+    },
+    'PointsTransfer'
+  )
+
+  // Send notification to recipient
+  const senderName = sender.displayName || sender.username || 'Someone'
+  const notificationMessage = message 
+    ? `${senderName} sent you ${amount} points: "${message}"` 
+    : `${senderName} sent you ${amount} points`
+  
+  await createNotification({
+    userId: recipientId,
+    type: 'points_received',
+    actorId: senderId,
+    title: `You received ${amount} points`,
+    message: notificationMessage,
+  }).catch(err => {
+    // Log error but don't fail the transfer
+    logger.error('Failed to create notification for points transfer', { error: err, recipientId, senderId }, 'PointsTransfer')
+  })
+
+  return NextResponse.json({
+    success: true,
+    transfer: {
+      amount,
+      sender: {
+        id: sender.id,
+        name: sender.displayName || sender.username,
+        newBalance: result.sender.reputationPoints,
+      },
+      recipient: {
+        id: recipient.id,
+        name: recipient.displayName || recipient.username,
+        newBalance: result.recipient.reputationPoints,
+      },
+      message,
+    },
+  })
 })
 

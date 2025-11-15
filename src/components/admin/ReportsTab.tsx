@@ -13,6 +13,19 @@ import { Skeleton } from '@/components/shared/Skeleton';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
+interface ReportEvaluation {
+  outcome: 'valid_report' | 'invalid_report' | 'abusive_reporter' | 'insufficient_evidence';
+  confidence: number;
+  reasoning: string;
+  recommendedActions: string[];
+  evidenceSummary: {
+    chatMessages: number;
+    posts: number;
+    reportsReceived: number;
+    reportsSent: number;
+  };
+}
+
 interface Report {
   id: string;
   reportType: string;
@@ -22,6 +35,7 @@ interface Report {
   status: string;
   priority: string;
   resolution: string | null;
+  evaluation?: ReportEvaluation | null;
   createdAt: string;
   updatedAt: string;
   resolvedAt: string | null;
@@ -66,6 +80,8 @@ export function ReportsTab() {
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [showActionModal, setShowActionModal] = useState(false);
+  const [showEvaluationModal, setShowEvaluationModal] = useState(false);
+  const [evaluatingReportId, setEvaluatingReportId] = useState<string | null>(null);
   const [, startRefresh] = useTransition();
 
   useEffect(() => {
@@ -122,6 +138,40 @@ export function ReportsTab() {
     setSelectedReport(null);
     fetchReports(true);
     fetchStats();
+  };
+
+  const handleEvaluate = async (reportId: string) => {
+    setEvaluatingReportId(reportId);
+    try {
+      const response = await fetch(`/api/admin/reports/${reportId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'evaluate' }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        toast.error(error.message || 'Failed to evaluate report');
+        return;
+      }
+
+      const data = await response.json();
+      toast.success('Report evaluated successfully');
+      
+      // Refresh reports to show evaluation
+      await fetchReports(true);
+      
+      // Show evaluation modal if we have the report selected
+      const report = reports.find(r => r.id === reportId);
+      if (report && data.evaluation) {
+        setSelectedReport({ ...report, evaluation: data.evaluation });
+        setShowEvaluationModal(true);
+      }
+    } catch {
+      toast.error('Failed to evaluate report');
+    } finally {
+      setEvaluatingReportId(null);
+    }
   };
 
   const formatDate = (date: string) => {
@@ -334,9 +384,31 @@ export function ReportsTab() {
                     {report.reason}
                   </p>
 
+                  {/* Evaluation Badge */}
+                  {report.evaluation && (
+                    <div className="mb-2">
+                      <span className={cn(
+                        'px-2 py-1 text-xs font-medium rounded',
+                        report.evaluation.outcome === 'valid_report' ? 'bg-green-500/20 text-green-500' :
+                        report.evaluation.outcome === 'abusive_reporter' ? 'bg-red-500/20 text-red-500' :
+                        report.evaluation.outcome === 'invalid_report' ? 'bg-yellow-500/20 text-yellow-500' :
+                        'bg-gray-500/20 text-gray-500'
+                      )}>
+                        {report.evaluation.outcome.replace('_', ' ')} ({Math.round(report.evaluation.confidence * 100)}%)
+                      </span>
+                    </div>
+                  )}
+
                   {/* Actions */}
                   {report.status === 'pending' || report.status === 'reviewing' ? (
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        onClick={() => handleEvaluate(report.id)}
+                        disabled={evaluatingReportId === report.id}
+                        className="px-3 py-1 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors disabled:opacity-50"
+                      >
+                        {evaluatingReportId === report.id ? 'Evaluating...' : 'Evaluate'}
+                      </button>
                       <button
                         onClick={() => {
                           setSelectedReport(report);
@@ -355,6 +427,17 @@ export function ReportsTab() {
                     </div>
                   ) : (
                     <div className="text-sm">
+                      {report.evaluation && (
+                        <button
+                          onClick={() => {
+                            setSelectedReport(report);
+                            setShowEvaluationModal(true);
+                          }}
+                          className="text-primary hover:underline text-xs mb-2"
+                        >
+                          View Evaluation Details
+                        </button>
+                      )}
                       {report.resolution && (
                         <div className="text-muted-foreground">
                           <strong>Resolution:</strong> {report.resolution}
@@ -385,6 +468,18 @@ export function ReportsTab() {
           onAction={handleAction}
         />
       )}
+
+      {/* Evaluation Modal */}
+      {showEvaluationModal && selectedReport && selectedReport.evaluation && (
+        <EvaluationModal
+          report={selectedReport}
+          evaluation={selectedReport.evaluation}
+          onClose={() => {
+            setShowEvaluationModal(false);
+            setSelectedReport(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -393,6 +488,107 @@ interface ActionModalProps {
   report: Report;
   onClose: () => void;
   onAction: (reportId: string, action: string, resolution: string) => void;
+}
+
+interface EvaluationModalProps {
+  report: Report;
+  evaluation: ReportEvaluation;
+  onClose: () => void;
+}
+
+function EvaluationModal({ report, evaluation, onClose }: EvaluationModalProps) {
+  const getOutcomeColor = (outcome: string) => {
+    switch (outcome) {
+      case 'valid_report':
+        return 'text-green-500 bg-green-500/10 border-green-500/20';
+      case 'abusive_reporter':
+        return 'text-red-500 bg-red-500/10 border-red-500/20';
+      case 'invalid_report':
+        return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20';
+      default:
+        return 'text-gray-500 bg-gray-500/10 border-gray-500/20';
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-card border border-border rounded-2xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl font-bold mb-4">Report Evaluation</h2>
+
+        {/* Evaluation Outcome */}
+        <div className="mb-4">
+          <div className={cn('px-4 py-3 rounded-lg border', getOutcomeColor(evaluation.outcome))}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-semibold text-lg">
+                {evaluation.outcome.replace('_', ' ').toUpperCase()}
+              </span>
+              <span className="text-sm">
+                Confidence: {Math.round(evaluation.confidence * 100)}%
+              </span>
+            </div>
+            <p className="text-sm mt-2">{evaluation.reasoning}</p>
+          </div>
+        </div>
+
+        {/* Evidence Summary */}
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold mb-2">Evidence Collected</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-muted/50 rounded-lg p-3">
+              <div className="text-xs text-muted-foreground">Chat Messages</div>
+              <div className="text-lg font-bold">{evaluation.evidenceSummary.chatMessages}</div>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-3">
+              <div className="text-xs text-muted-foreground">Posts</div>
+              <div className="text-lg font-bold">{evaluation.evidenceSummary.posts}</div>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-3">
+              <div className="text-xs text-muted-foreground">Reports Received</div>
+              <div className="text-lg font-bold">{evaluation.evidenceSummary.reportsReceived}</div>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-3">
+              <div className="text-xs text-muted-foreground">Reports Sent</div>
+              <div className="text-lg font-bold">{evaluation.evidenceSummary.reportsSent}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Recommended Actions */}
+        {evaluation.recommendedActions.length > 0 && (
+          <div className="mb-4">
+            <h3 className="text-sm font-semibold mb-2">Recommended Actions</h3>
+            <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+              {evaluation.recommendedActions.map((action, index) => (
+                <li key={index}>{action}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Report Details */}
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold mb-2">Report Details</h3>
+          <div className="bg-muted/50 rounded-lg p-3 text-sm">
+            <p><strong>Category:</strong> {report.category.replace('_', ' ')}</p>
+            <p><strong>Reason:</strong> {report.reason}</p>
+            {report.evidence && (
+              <p><strong>Evidence:</strong> <a href={report.evidence} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View</a></p>
+            )}
+          </div>
+        </div>
+
+        {/* Close Button */}
+        <div className="flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ActionModal({ report, onClose, onAction }: ActionModalProps) {
@@ -430,6 +626,19 @@ function ActionModal({ report, onClose, onAction }: ActionModalProps) {
             </p>
           )}
         </div>
+
+        {/* Evaluation Info */}
+        {report.evaluation && (
+          <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+            <div className="text-xs text-muted-foreground mb-1">AI Evaluation</div>
+            <div className="text-sm">
+              <strong>Outcome:</strong> {report.evaluation.outcome.replace('_', ' ')} ({Math.round(report.evaluation.confidence * 100)}% confidence)
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Click "View Evaluation Details" in the report list to see full evaluation
+            </p>
+          </div>
+        )}
 
         {/* Action Selection */}
         <div className="mb-4">

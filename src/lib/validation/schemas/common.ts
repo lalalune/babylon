@@ -4,6 +4,7 @@
 
 import { z } from 'zod';
 import { isValidSnowflakeId } from '@/lib/snowflake';
+import { JsonValueSchema } from '@/types/common';
 
 /**
  * Snowflake ID validation schema
@@ -303,7 +304,7 @@ export const IdParamSchema = z.object({
 
 /**
  * Prediction markets accept both snowflake IDs and UUIDs.
- * TODO: consider migrating prediction markets to snowflake IDs for consistency.
+ * Note: Consider migrating prediction markets to snowflake IDs for consistency in the future.
  */
 export const PredictionMarketIdSchema = z.object({
   id: z.string().min(1),
@@ -311,12 +312,12 @@ export const PredictionMarketIdSchema = z.object({
 
 /**
  * Generic success response schema
- * Uses z.unknown() for data to allow any JSON-serializable value while maintaining type safety
+ * Uses JsonValueSchema for data to allow any JSON-serializable value while maintaining type safety
  */
 export const SuccessResponseSchema = z.object({
   success: z.literal(true),
   message: z.string().optional(),
-  data: z.unknown().optional()
+  data: JsonValueSchema.optional()
 });
 
 /**
@@ -330,7 +331,7 @@ export const ErrorResponseSchema = z.object({
       field: z.string(),
       message: z.string()
     })).optional(),
-    context: z.record(z.string(), z.unknown()).optional()
+    context: z.record(z.string(), JsonValueSchema).optional()
   })
 });
 
@@ -347,8 +348,14 @@ export function createBatchSchema<T extends z.ZodType>(itemSchema: T, maxItems: 
  * Leaderboard query parameters schema
  */
 export const LeaderboardQuerySchema = z.object({
-  page: z.coerce.number().positive().default(1),
-  pageSize: z.coerce.number().positive().max(100).default(100),
+  page: z.coerce.number().int().min(0).default(1).transform((val) => Math.max(1, val)), // Clamp to min 1, default 1
+  pageSize: z.coerce.number().int().nonnegative().default(100).transform((val) => Math.max(1, Math.min(val, 100))), // Clamp to min 1, max 100
   minPoints: z.coerce.number().nonnegative().default(500), // Show all with >500 reputation
-  pointsType: z.enum(['all', 'earned', 'referral']).optional(),
+  pointsType: z.string().optional().transform((val) => {
+    // Default to 'all' if invalid, undefined, or empty
+    if (!val || !['all', 'earned', 'referral'].includes(val)) {
+      return undefined; // Will be handled as 'all' in route handler (pointsType ?? 'all')
+    }
+    return val as 'all' | 'earned' | 'referral';
+  }),
 });

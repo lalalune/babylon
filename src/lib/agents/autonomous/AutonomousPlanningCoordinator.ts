@@ -15,6 +15,8 @@ import type { AgentConstraints, AgentDirective, AgentGoal } from '../types/goals
 import { autonomousBatchResponseService } from './AutonomousBatchResponseService'
 import { autonomousPostingService } from './AutonomousPostingService'
 import { autonomousTradingService } from './AutonomousTradingService'
+import { autonomousCommentingService } from './AutonomousCommentingService'
+import { autonomousDMService } from './AutonomousDMService'
 
 /**
  * Agent interface for planning
@@ -102,9 +104,9 @@ export interface PlanningContext {
 }
 
 /**
- * Execution result
+ * Autonomous action execution result
  */
-export interface ExecutionResult {
+export interface AutonomousExecutionResult {
   planned: number
   executed: number
   successful: number
@@ -267,6 +269,12 @@ export class AutonomousPlanningCoordinator {
       take: 10
     })
     
+    // Detect trading opportunities
+    const tradingOpportunities = await detectTradingOpportunities(agentUserId, Number(agent?.virtualBalance || 0))
+    
+    // Detect social opportunities
+    const socialOpportunities = await detectSocialOpportunities(agentUserId, pendingInteractions)
+    
     return {
       goals: {
         active: activeGoals,
@@ -290,8 +298,8 @@ export class AutonomousPlanningCoordinator {
         author: p.author
       })),
       opportunities: {
-        trading: [],  // TODO: Implement opportunity detection
-        social: []
+        trading: tradingOpportunities,
+        social: socialOpportunities
       },
       recentActions: recentLogs.map(log => ({
         type: log.type,
@@ -556,8 +564,8 @@ Your action plan (JSON only):`
     agentUserId: string,
     runtime: IAgentRuntime,
     plan: ActionPlan
-  ): Promise<ExecutionResult> {
-    const results: ExecutionResult['results'] = []
+  ): Promise<AutonomousExecutionResult> {
+    const results: AutonomousExecutionResult['results'] = []
     const goalsUpdated: Set<string> = new Set()
     
     logger.info(`Executing plan with ${plan.totalActions} actions`, {
@@ -630,8 +638,8 @@ Your action plan (JSON only):`
     try {
       switch (action.type) {
         case 'trade':
-          const trades = await autonomousTradingService.executeTrades(agentUserId, runtime)
-          return { success: trades > 0, data: { trades } }
+          const tradeResult = await autonomousTradingService.executeTrades(agentUserId, runtime)
+          return { success: tradeResult.tradesExecuted > 0, data: { trades: tradeResult.tradesExecuted } }
         
         case 'post':
           const postId = await autonomousPostingService.createAgentPost(agentUserId, runtime)
@@ -642,9 +650,12 @@ Your action plan (JSON only):`
           return { success: responses > 0, data: { responses } }
         
         case 'comment':
+          const commentId = await autonomousCommentingService.createAgentComment(agentUserId, runtime)
+          return { success: !!commentId, data: { commentId } }
+        
         case 'message':
-          // These would be implemented similar to above
-          return { success: false, error: 'Not implemented yet' }
+          const dmResponses = await autonomousDMService.respondToDMs(agentUserId, runtime)
+          return { success: dmResponses > 0, data: { responses: dmResponses } }
         
         default:
           return { success: false, error: `Unknown action type: ${action.type}` }
@@ -709,6 +720,157 @@ Your action plan (JSON only):`
       logger.error('Failed to update goal progress', error, 'PlanningCoordinator')
     }
   }
+}
+
+/**
+ * Detect trading opportunities for an agent
+ */
+async function detectTradingOpportunities(
+  _agentUserId: string,
+  balance: number
+): Promise<Array<{
+  market: string
+  description: string
+  confidence: number
+  expectedValue: number
+}>> {
+  const opportunities: Array<{
+    market: string
+    description: string
+    confidence: number
+    expectedValue: number
+  }> = []
+
+  // Get active prediction markets with high volume
+  const activeMarkets = await prisma.market.findMany({
+    where: {
+      resolved: false,
+      endDate: { gte: new Date() }
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 10
+  })
+
+  for (const market of activeMarkets) {
+    const yesShares = Number(market.yesShares || 0)
+    const noShares = Number(market.noShares || 0)
+    const totalShares = yesShares + noShares
+
+    if (totalShares === 0) continue
+
+    // Calculate implied probability
+    const yesPrice = yesShares / totalShares
+
+    // Look for mispriced markets (one side < 0.3 or > 0.7)
+    if (yesPrice < 0.3 || yesPrice > 0.7) {
+      const confidence = Math.abs(yesPrice - 0.5) * 2 // 0 to 1 scale
+      const expectedValue = confidence * balance * 0.1 // 10% of balance
+
+      opportunities.push({
+        market: market.id,
+        description: `Mispriced market: ${market.question} (YES: ${(yesPrice * 100).toFixed(1)}%)`,
+        confidence,
+        expectedValue
+      })
+    }
+  }
+
+  // Get perp markets with significant price movement
+  const perpMarkets = await prisma.organization.findMany({
+    where: { type: 'company' },
+    take: 10
+  })
+
+  for (const org of perpMarkets) {
+    const currentPrice = Number(org.currentPrice || org.initialPrice || 100)
+    const initialPrice = Number(org.initialPrice || 100)
+    const priceChange = (currentPrice - initialPrice) / initialPrice
+
+    // Look for significant moves (>5% change)
+    if (Math.abs(priceChange) > 0.05) {
+      const confidence = Math.min(Math.abs(priceChange) * 2, 1) // Cap at 1.0
+      const expectedValue = confidence * balance * 0.15 // 15% of balance
+
+      opportunities.push({
+        market: org.id,
+        description: `${org.name} moved ${(priceChange * 100).toFixed(1)}% ($${currentPrice.toFixed(2)})`,
+        confidence,
+        expectedValue
+      })
+    }
+  }
+
+  // Sort by expected value
+  opportunities.sort((a, b) => b.expectedValue - a.expectedValue)
+
+  return opportunities.slice(0, 5) // Top 5 opportunities
+}
+
+/**
+ * Detect social opportunities for an agent
+ */
+async function detectSocialOpportunities(
+  agentUserId: string,
+  pendingInteractions: Array<{ type: string; content: string; author: string }>
+): Promise<Array<{
+  type: string
+  description: string
+  engagementScore: number
+}>> {
+  const opportunities: Array<{
+    type: string
+    description: string
+    engagementScore: number
+  }> = []
+
+  // High-value interactions (direct questions, mentions)
+  for (const interaction of pendingInteractions) {
+    const content = interaction.content.toLowerCase()
+    const isQuestion = content.includes('?')
+    const isMention = content.includes('@') || content.includes(agentUserId)
+    const isDirect = isQuestion || isMention
+
+    if (isDirect) {
+      opportunities.push({
+        type: interaction.type,
+        description: `${interaction.author}: ${interaction.content.substring(0, 60)}...`,
+        engagementScore: 0.8
+      })
+    } else if (interaction.content.length > 50) {
+      // Substantive comment
+      opportunities.push({
+        type: interaction.type,
+        description: `${interaction.author}: ${interaction.content.substring(0, 60)}...`,
+        engagementScore: 0.5
+      })
+    }
+  }
+
+  // Check for trending topics to post about
+  const trendingTags = await prisma.trendingTag.findMany({
+    orderBy: { score: 'desc' },
+    take: 5,
+    include: {
+      Tag: {
+        select: { name: true, displayName: true }
+      }
+    }
+  })
+
+  for (const trending of trendingTags) {
+    if (trending.Tag) {
+      opportunities.push({
+        type: 'post',
+        description: `Trending topic: ${trending.Tag.displayName || trending.Tag.name}`,
+        engagementScore: trending.score / 100 // Normalize score
+      })
+    }
+  }
+
+  // Sort by engagement score
+  opportunities.sort((a, b) => b.engagementScore - a.engagementScore)
+
+  return opportunities.slice(0, 5) // Top 5 opportunities
 }
 
 export const autonomousPlanningCoordinator = new AutonomousPlanningCoordinator()

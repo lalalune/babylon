@@ -1,0 +1,37 @@
+echo "Running pre-push checks..."
+
+# Run TypeScript typecheck
+bun run typecheck
+if [ $? -ne 0 ]; then
+  echo "❌ Typecheck failed. Fix errors before pushing."
+  exit 1
+fi
+
+# Run linting
+bun run lint
+if [ $? -ne 0 ]; then
+  echo "❌ Linting failed. Fix issues before pushing."
+  exit 1
+fi
+
+# Run unit and integration tests (only if DATABASE_URL is set)
+if [ -n "$DATABASE_URL" -o -n "$PRISMA_DATABASE_URL" ]; then
+  echo "Running tests (DATABASE_URL detected)..."
+  bun run test
+  if [ $? -ne 0 ]; then
+    echo "❌ Tests failed. Fix failing tests before pushing."
+    exit 1
+  fi
+else
+  echo "⚠️  Skipping tests (DATABASE_URL not set). Tests will run in CI."
+fi
+
+# Run build
+bun run build
+if [ $? -ne 0 ]; then
+  echo "❌ Build failed. Fix build errors before pushing."
+  exit 1
+fi
+
+echo "✅ All pre-push checks passed!"
+

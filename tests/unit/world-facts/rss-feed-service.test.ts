@@ -1,124 +1,15 @@
 /**
- * RSS Feed Service Tests
+ * RSS Feed Service Unit Tests
+ * 
+ * These are true unit tests that test RSS parsing logic without database access.
+ * For database integration tests, see tests/integration/
  */
 
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { prisma } from '@/lib/prisma';
+import { describe, test, expect } from 'bun:test';
 import { rssFeedService } from '@/lib/services/rss-feed-service';
-import { generateSnowflakeId } from '@/lib/snowflake';
-
-// Check if RSS models are available
-const rssModelsAvailable = !!(prisma && prisma.rSSFeedSource && prisma.rSSHeadline);
 
 describe('RSSFeedService', () => {
-  const testFeedId = 'test-feed-' + Date.now();
-
-  beforeEach(async () => {
-    if (!rssModelsAvailable) return;
-    
-    // Create test feed source
-    await prisma.rSSFeedSource.create({
-      data: {
-        id: testFeedId,
-        name: 'Test Feed',
-        feedUrl: 'https://example.com/test-feed.xml',
-        category: 'test',
-        isActive: false, // Inactive to prevent actual fetching
-      },
-    });
-  });
-
-  afterEach(async () => {
-    if (!prisma) return;
-    // Ensure Prisma is initialized
-    if (!prisma || !prisma.rSSHeadline || !prisma.rSSFeedSource) {
-      console.warn('⚠️ Skipping cleanup - Prisma not initialized');
-      return;
-    }
-    
-    // Cleanup test data
-    await prisma.rSSHeadline.deleteMany({
-      where: {
-        sourceId: testFeedId,
-      },
-    });
-
-    await prisma.rSSFeedSource.deleteMany({
-      where: {
-        id: testFeedId,
-      },
-    });
-  });
-
-  test('should get untransformed headlines', async () => {
-    if (!rssModelsAvailable) return;
-    // Create test headline
-    const headlineId = await generateSnowflakeId();
-    await prisma.rSSHeadline.create({
-      data: {
-        id: headlineId,
-        sourceId: testFeedId,
-        title: 'Test Headline',
-        publishedAt: new Date(),
-        fetchedAt: new Date(),
-      },
-    });
-
-    const headlines = await rssFeedService.getUntransformedHeadlines(10);
-
-    expect(headlines).toBeDefined();
-    expect(Array.isArray(headlines)).toBe(true);
-    expect(headlines.some(h => h.id === headlineId)).toBe(true);
-  });
-
-  test('should cleanup old headlines', async () => {
-    if (!rssModelsAvailable) return;
-    // Create old headline (8 days ago)
-    const oldDate = new Date();
-    oldDate.setDate(oldDate.getDate() - 8);
-
-    const oldHeadlineId = await generateSnowflakeId();
-    await prisma.rSSHeadline.create({
-      data: {
-        id: oldHeadlineId,
-        sourceId: testFeedId,
-        title: 'Old Headline',
-        publishedAt: oldDate,
-        fetchedAt: oldDate,
-      },
-    });
-
-    // Create recent headline
-    const recentHeadlineId = await generateSnowflakeId();
-    await prisma.rSSHeadline.create({
-      data: {
-        id: recentHeadlineId,
-        sourceId: testFeedId,
-        title: 'Recent Headline',
-        publishedAt: new Date(),
-        fetchedAt: new Date(),
-      },
-    });
-
-    const deletedCount = await rssFeedService.cleanupOldHeadlines();
-
-    expect(deletedCount).toBeGreaterThanOrEqual(1);
-
-    // Verify old headline is deleted
-    const oldHeadline = await prisma.rSSHeadline.findUnique({
-      where: { id: oldHeadlineId },
-    });
-    expect(oldHeadline).toBeNull();
-
-    // Verify recent headline still exists
-    const recentHeadline = await prisma.rSSHeadline.findUnique({
-      where: { id: recentHeadlineId },
-    });
-    expect(recentHeadline).not.toBeNull();
-  });
-
   test('should parse RSS 2.0 format', async () => {
-    if (!rssModelsAvailable) return;
     const rssXml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
   <channel>
@@ -160,7 +51,6 @@ describe('RSSFeedService', () => {
   });
 
   test('should handle fetch errors gracefully', async () => {
-    if (!rssModelsAvailable) return;
     // Mock fetch to fail
     const originalFetch = global.fetch;
     global.fetch = Object.assign(
@@ -180,5 +70,9 @@ describe('RSSFeedService', () => {
       global.fetch = originalFetch;
     }
   });
-});
 
+  test('service should be defined with expected methods', () => {
+    expect(rssFeedService).toBeDefined();
+    expect(typeof rssFeedService.fetchFeed).toBe('function');
+  });
+});

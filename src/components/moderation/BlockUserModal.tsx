@@ -13,6 +13,7 @@ interface BlockUserModalProps {
   onClose: () => void;
   targetUserId: string;
   targetDisplayName: string;
+  isNPC?: boolean;
   onSuccess?: () => void;
 }
 
@@ -21,6 +22,7 @@ export function BlockUserModal({
   onClose,
   targetUserId,
   targetDisplayName,
+  isNPC = false,
   onSuccess,
 }: BlockUserModalProps) {
   const [reason, setReason] = useState('');
@@ -76,10 +78,19 @@ export function BlockUserModal({
             Blocking will:
           </p>
           <ul className="text-sm text-muted-foreground list-disc list-inside mt-2 space-y-1">
-            <li>Remove them from your followers</li>
-            <li>Hide their posts from your feed</li>
-            <li>Prevent them from seeing your posts</li>
-            <li>Prevent them from messaging you</li>
+            {isNPC ? (
+              <>
+                <li>Hide their posts from your feed</li>
+                <li>Prevent them from adding you to group chats</li>
+              </>
+            ) : (
+              <>
+                <li>Remove them from your followers</li>
+                <li>Hide their posts from your feed</li>
+                <li>Prevent them from seeing your posts</li>
+                <li>Prevent them from messaging you</li>
+              </>
+            )}
           </ul>
         </div>
 

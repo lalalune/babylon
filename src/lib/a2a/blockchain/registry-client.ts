@@ -216,23 +216,30 @@ export class RegistryClient {
 
   /**
    * Register agent (required by RegistryClient interface)
-   * Note: This is a blockchain-based registry, so registration happens on-chain
-   * This method is provided for interface compatibility but may not be fully implemented
+   * 
+   * NOTE: This client is READ-ONLY. For actual registration, use:
+   * - Agent0Client.registerAgent() - Full Agent0 registration with IPFS publishing
+   * - /api/agents/onboard - On-chain registration endpoint with server wallet
+   * - AgentWalletService.registerAgentOnChain() - Complete registration flow
+   * 
+   * This method exists for interface compatibility only.
+   * Registration requires wallet signing and gas, which are handled by the above methods.
    */
   async register(agentId: string, data: Record<string, JsonValue>): Promise<void> {
-    // Implementation would interact with blockchain to register agent
-    // For now, this is a placeholder for interface compatibility
-    this.logger.info(`Register agent ${agentId}`, { data })
-    throw new Error('On-chain registration not yet implemented - use blockchain directly')
+    this.logger.info(`Register agent ${agentId} (read-only client)`, { data })
+    throw new Error('RegistryClient is read-only. Use Agent0Client.registerAgent() or /api/agents/onboard for registration')
   }
 
   /**
    * Unregister agent (required by RegistryClient interface)
+   * 
+   * NOTE: This client is READ-ONLY. Unregistration requires direct blockchain interaction
+   * with a wallet that owns the agent token. This is not currently implemented as a
+   * server-side operation.
    */
   async unregister(agentId: string): Promise<void> {
-    // Implementation would interact with blockchain to unregister agent
-    this.logger.info(`Unregister agent ${agentId}`)
-    throw new Error('On-chain unregistration not yet implemented - use blockchain directly')
+    this.logger.info(`Unregister agent ${agentId} (read-only client)`)
+    throw new Error('RegistryClient is read-only. Unregistration requires direct blockchain interaction with agent owner wallet')
   }
 
   /**

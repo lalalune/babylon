@@ -17,9 +17,10 @@
  * - 1: Validation errors found (details printed to stderr)
  * 
  * **Data Source:**
- * Reads from `public/data/actors.json` which contains:
- * - Array of actor objects with affiliations
- * - Array of organization objects
+ * Loads from split actor/organization structure:
+ * - `public/data/actors.json` (index file with references)
+ * - `public/data/actors/*.json` (individual actor files)
+ * - `public/data/organizations/*.json` (individual organization files)
  * 
  * @module cli/validate-actors
  * @category CLI - Validation
@@ -30,9 +31,9 @@
  * bun run src/cli/validate-actors.ts
  * 
  * # Successful output:
- * # Validating 50 actors against 25 organizations...
+ * # Validating 64 actors against 52 organizations...
  * # All actor affiliations are valid!
- * # { actorsChecked: 50, organizationsVerified: 25, warnings: 0 }
+ * # { actorsChecked: 64, organizationsVerified: 52, warnings: 0 }
  * 
  * # Failed output (exits with code 1):
  * # VALIDATION ERRORS:
@@ -44,8 +45,7 @@
  * @since v0.1.0
  */
 
-import { readFileSync } from 'fs';
-import { join } from 'path';
+// readFileSync, join - not used
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 
@@ -75,7 +75,7 @@ const ActorsDataSchema = z.object({
  * and checks for missing required fields.
  * 
  * **Validation Process:**
- * 1. Load actors.json from public/data/
+ * 1. Load actors data from split file structure (actors/, organizations/)
  * 2. Parse and validate with Zod schemas
  * 3. Build set of valid organization IDs
  * 4. Check each actor's affiliations
@@ -87,19 +87,27 @@ const ActorsDataSchema = z.object({
  * - Warnings (continue): Missing optional fields
  * 
  * @throws {Error} Exits process with code 1 if validation fails
- * @returns {void} Success (exit code 0) or error (exit code 1)
+ * @returns {Promise<void>} Success (exit code 0) or error (exit code 1)
  * @example
  * ```typescript
  * // Called automatically when script runs
- * validateActors();
+ * await validateActors();
  * // Checks all actors and exits with appropriate code
  * ```
  */
-function validateActors(): void {
-  const actorsPath = join(process.cwd(), 'public', 'data', 'actors.json');
-  const data = ActorsDataSchema.parse(JSON.parse(readFileSync(actorsPath, 'utf-8')));
+async function validateActors(): Promise<void> {
+  let data: unknown;
+  try {
+    // Use the loader which handles the split file structure
+    const { loadActorsData } = await import('@/lib/data/actors-loader');
+    data = loadActorsData();
+  } catch (error) {
+    logger.error('Failed to load actors data', { error }, 'validate-actors')
+    throw new Error(`Failed to load actors data: ${error}`)
+  }
+  const validatedData = ActorsDataSchema.parse(data);
 
-  const { actors, organizations } = data;
+  const { actors, organizations } = validatedData;
   
   // Build a set of valid organization IDs
   const validOrgIds = new Set(organizations.map(org => org.id));
@@ -150,4 +158,7 @@ function validateActors(): void {
 }
 
 // Run validation
-validateActors();
+validateActors().catch((error) => {
+  logger.error('Validation failed', { error }, 'validate-actors');
+  process.exit(1);
+});

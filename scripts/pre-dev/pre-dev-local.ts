@@ -3,6 +3,7 @@
  * Pre-Development Setup for Localnet
  * 
  * Sets up complete local development environment:
+ * - Kills any processes on port 3000
  * - Starts Anvil (local blockchain)
  * - Deploys contracts
  * - Starts PostgreSQL, Redis, MinIO
@@ -17,6 +18,7 @@ import { join } from 'path'
 import { logger } from '../../src/lib/logger'
 import { validateEnvironment, printValidationResult } from '../../src/lib/deployment/env-detection'
 import { loadDeployment } from '../../src/lib/deployment/validation'
+import { killPort } from '../utils/kill-port'
 
 const ANVIL_CONTAINER = 'babylon-anvil'
 const POSTGRES_CONTAINER = 'babylon-postgres'
@@ -25,6 +27,15 @@ const MINIO_CONTAINER = 'babylon-minio'
 
 logger.info('Setting up localnet development environment...', undefined, 'Script')
 logger.info('='.repeat(60), undefined, 'Script')
+
+// 0. Kill any processes on port 3000 to prevent port conflicts
+logger.info('Checking for processes on port 3000...', undefined, 'Script')
+const killedCount = await killPort(3000, process.pid)
+if (killedCount > 0) {
+  logger.info(`✅ Killed ${killedCount} process(es) on port 3000`, undefined, 'Script')
+} else {
+  logger.info('✅ Port 3000 is free', undefined, 'Script')
+}
 
 // Set environment for localnet
 process.env.DEPLOYMENT_ENV = 'localnet'

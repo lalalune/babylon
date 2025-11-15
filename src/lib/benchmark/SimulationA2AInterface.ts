@@ -85,12 +85,20 @@ export class SimulationA2AInterface {
           result = this.handleGetPortfolio(params);
           break;
           
+        case 'a2a.getPositions':
+          result = this.handleGetPositions(params);
+          break;
+          
+        case 'a2a.getDashboard':
+          result = this.handleGetDashboard(params);
+          break;
+          
         default:
           throw new Error(`Unknown A2A method: ${method}`);
       }
       
-      // After agent makes a request, advance tick (fast-forward mode)
-      this.engine.advanceTick();
+      // NOTE: Don't auto-advance tick here - let the benchmark runner control the tick progression
+      // This allows the agent to make multiple A2A calls within a single tick
       
       const duration = Date.now() - actionStart;
       logger.debug('Simulation A2A response', { method, duration });
@@ -356,6 +364,36 @@ export class SimulationA2AInterface {
       balance,
       positions,
       pnl
+    };
+  }
+  
+  /**
+   * Get positions (prediction market + perp positions)
+   */
+  private handleGetPositions(_params: unknown): { predictionPositions: Array<Record<string, unknown>>; perpPositions: Array<Record<string, unknown>> } {
+    // Return empty arrays for simulation
+    // In a real benchmark, we'd track actual positions made by the agent
+    return {
+      predictionPositions: [],
+      perpPositions: []
+    };
+  }
+  
+  /**
+   * Get dashboard data (balance, recent activity, etc)
+   */
+  private handleGetDashboard(_params: unknown): { balance: number; reputation: number; totalPnl: number; activePositions: number } {
+    const state = this.engine.getGameState();
+    const agent = state.agents.find((a: { id: string }) => a.id === this.agentId);
+    
+    const pnl = (agent as { totalPnl?: number } | undefined)?.totalPnl || 0;
+    const balance = 10000 + pnl;
+    
+    return {
+      balance,
+      reputation: 1000,
+      totalPnl: pnl,
+      activePositions: 0
     };
   }
   

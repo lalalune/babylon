@@ -18,6 +18,7 @@ import { trackServerEvent } from '@/lib/posthog/server'
 import { notifyDMMessage, notifyGroupChatMessage } from '@/lib/services/notification-service'
 import { generateSnowflakeId } from '@/lib/snowflake'
 import { checkRateLimitAndDuplicates, RATE_LIMIT_CONFIGS, DUPLICATE_DETECTION_CONFIGS } from '@/lib/rate-limiting'
+import { hasBlocked } from '@/lib/moderation/filters'
 
 /**
  * POST /api/chats/[id]/message
@@ -151,6 +152,19 @@ export const POST = withErrorHandling(async (
       isMember = chat.ChatParticipant.some((p) => p.userId === user.userId)
       if (!isMember) {
         throw new AuthorizationError('You are not a participant in this DM', 'chat', 'write')
+      }
+
+      // Check if users have blocked each other
+      const otherParticipant = chat.ChatParticipant.find((p) => p.userId !== user.userId);
+      if (otherParticipant) {
+        const [isBlocked, hasBlockedMe] = await Promise.all([
+          hasBlocked(user.userId, otherParticipant.userId),
+          hasBlocked(otherParticipant.userId, user.userId),
+        ]);
+
+        if (isBlocked || hasBlockedMe) {
+          throw new BusinessLogicError('Cannot send messages to this user', 'BLOCKED_USER');
+        }
       }
     }
     // For group chats, check GroupChatMembership

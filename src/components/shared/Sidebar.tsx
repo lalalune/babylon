@@ -136,7 +136,7 @@ function SidebarContent() {
       name: 'Agents',
       href: '/agents',
       icon: Bot,
-      color: '#10b981',
+      color: '#0066FF',
       active: pathname === '/agents' || pathname.startsWith('/agents/'),
     },
     {

@@ -450,12 +450,11 @@ export class GameWorld extends EventEmitter implements TypedGameWorldEmitter {
         worldEvents.push(...await this.generateLateWorldEvents(day));
       }
 
-      // Generate feed posts from world events (news, reactions, threads)
+      // Generate feed posts from world events (no outcome parameter - prevents leakage)
       const feedPosts = await this.feedGenerator.generateDayFeed(
         day,
         worldEvents,
-        this.npcs,
-        this.config.outcome
+        this.npcs
       );
 
       // Emit each feed post as it would appear

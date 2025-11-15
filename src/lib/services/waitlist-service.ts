@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { generateSnowflakeId } from '@/lib/snowflake';
 import { nanoid } from 'nanoid';
+import { NotFoundError } from '@/lib/errors';
 
 export interface WaitlistMarkResult {
   success: boolean
@@ -64,7 +65,7 @@ export class WaitlistService {
     })
 
     if (!user) {
-      throw new Error('User not found - must complete onboarding first')
+      throw new NotFoundError('User', userId, 'User must complete onboarding before joining waitlist')
     }
 
     // If user already marked as waitlisted, still check for referral code validation

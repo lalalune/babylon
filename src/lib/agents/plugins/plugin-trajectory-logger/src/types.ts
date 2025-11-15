@@ -9,6 +9,7 @@ export interface LLMCall {
   callId: string;
   timestamp: number;
   model: string;
+  modelVersion?: string; // RL model version if using trained model
   
   // Full prompt context
   systemPrompt: string;

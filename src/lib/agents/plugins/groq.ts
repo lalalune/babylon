@@ -18,6 +18,7 @@ import {
 } from '@elizaos/core'
 import { generateObject, generateText } from 'ai'
 import { type TiktokenModel, encodingForModel } from 'js-tiktoken'
+import type { TrajectoryLoggerService } from './plugin-trajectory-logger/src/TrajectoryLoggerService'
 
 function getBaseURL(runtime: { getSetting: (key: string) => string | undefined }): string {
   return (
@@ -56,9 +57,15 @@ async function generateGroqText(
     frequencyPenalty: number
     presencePenalty: number
     stopSequences: string[]
+    trajectoryLogger?: TrajectoryLoggerService
+    trajectoryId?: string
+    purpose?: 'action' | 'reasoning' | 'evaluation' | 'response' | 'other'
+    actionType?: string
+    modelVersion?: string // RL model version if using trained model
   },
 ) {
-  const { text: groqResponse } = await generateText({
+  const startTime = Date.now()
+  const result = await generateText({
     model: groq.languageModel(model),
     prompt: params.prompt,
     system: params.system,
@@ -68,7 +75,30 @@ async function generateGroqText(
     presencePenalty: params.presencePenalty,
     stopSequences: params.stopSequences,
   })
-  return groqResponse
+  const latencyMs = Date.now() - startTime
+
+  // Log to trajectory if available
+  if (params.trajectoryLogger && params.trajectoryId) {
+    const stepId = params.trajectoryLogger.getCurrentStepId(params.trajectoryId)
+    if (stepId) {
+      params.trajectoryLogger.logLLMCall(stepId, {
+        model,
+        modelVersion: params.modelVersion, // Use passed modelVersion
+        systemPrompt: params.system || '',
+        userPrompt: params.prompt,
+        response: result.text,
+        temperature: params.temperature,
+        maxTokens: params.maxTokens,
+        purpose: params.purpose || 'action',
+        actionType: params.actionType,
+        latencyMs,
+        promptTokens: undefined, // Token counts not available from Groq SDK
+        completionTokens: undefined,
+      })
+    }
+  }
+
+  return result.text
 }
 
 async function generateGroqObject(
@@ -131,6 +161,12 @@ export const groqPlugin: Plugin = {
         runtime.getSetting('SMALL_MODEL') ??
         'llama-3.1-8b-instant'
 
+      // Get trajectory logger from runtime if available
+      const trajectoryLogger = (runtime as unknown as { trajectoryLogger?: TrajectoryLoggerService }).trajectoryLogger
+      const trajectoryId = (runtime as unknown as { currentTrajectoryId?: string }).currentTrajectoryId
+      // Extract model version from runtime if available
+      const modelVersion = (runtime as unknown as { currentModelVersion?: string }).currentModelVersion
+
       return await generateGroqText(groq, model, {
         prompt,
         system: runtime.character.system ?? undefined,
@@ -139,6 +175,10 @@ export const groqPlugin: Plugin = {
         frequencyPenalty: frequency_penalty,
         presencePenalty: presence_penalty,
         stopSequences,
+        trajectoryLogger,
+        trajectoryId,
+        purpose: 'action',
+        modelVersion,
       })
     },
     [ModelType.TEXT_LARGE]: async (
@@ -152,16 +192,69 @@ export const groqPlugin: Plugin = {
         presencePenalty = 0.7,
       }: GenerateTextParams,
     ) => {
-      const model =
-        runtime.getSetting('GROQ_LARGE_MODEL') ??
-        runtime.getSetting('LARGE_MODEL') ??
-        'qwen/qwen3-32b'
-      const baseURL = getBaseURL(runtime)
+      // Check if WANDB is enabled and model is available
+      const wandbEnabled = runtime.getSetting('WANDB_ENABLED') === 'true'
+      const wandbApiKey = runtime.getSetting('WANDB_API_KEY')
+      const wandbModel = runtime.getSetting('WANDB_MODEL')
+      
+      let model: string
+      let baseURL: string
+      let apiKey: string
+      
+      if (wandbEnabled && wandbApiKey && wandbModel) {
+        // Use WANDB inference API
+        model = wandbModel
+        baseURL = 'https://api.inference.wandb.ai/v1'
+        apiKey = wandbApiKey
+      } else {
+        // Fallback to GROQ qwen 32b
+        model = runtime.getSetting('GROQ_LARGE_MODEL') ??
+          runtime.getSetting('LARGE_MODEL') ??
+          'qwen/qwen3-32b'
+        baseURL = getBaseURL(runtime)
+        apiKey = runtime.getSetting('GROQ_API_KEY') || ''
+      }
+      
       const groq = createGroq({
-        apiKey: runtime.getSetting('GROQ_API_KEY'),
+        apiKey,
         fetch: runtime.fetch,
         baseURL,
       })
+      
+      // Determine if using W&B model (before logging)
+      const isWandbModel = wandbEnabled && wandbApiKey && wandbModel;
+      
+      // Verify W&B API is being used
+      if (isWandbModel && baseURL === 'https://api.inference.wandb.ai/v1') {
+        // This confirms we're using W&B inference API, not Groq
+        // The model parameter will be passed to W&B API which expects W&B model identifiers
+      }
+
+      // Get trajectory logger from runtime if available
+      const trajectoryLogger = (runtime as unknown as { trajectoryLogger?: TrajectoryLoggerService }).trajectoryLogger
+      const trajectoryId = (runtime as unknown as { currentTrajectoryId?: string }).currentTrajectoryId
+      // Extract model version from runtime if available
+      const modelVersion = (runtime as unknown as { currentModelVersion?: string }).currentModelVersion
+      
+      // Log which model is being used (for verification)
+      const logger = (await import('@/lib/logger')).logger;
+      
+      // Always log at INFO level for W&B model usage verification
+      if (isWandbModel) {
+        logger.info('Using W&B RL model for inference', {
+          model,
+          modelSource: 'wandb',
+          modelVersion,
+          baseURL,
+          wandbModel,
+        }, 'GroqPlugin');
+      } else {
+        logger.debug('Using Groq model for inference', {
+          model,
+          modelSource: 'groq',
+          groqModel: model,
+        }, 'GroqPlugin');
+      }
 
       return await generateGroqText(groq, model, {
         prompt,
@@ -171,6 +264,10 @@ export const groqPlugin: Plugin = {
         frequencyPenalty,
         presencePenalty,
         stopSequences,
+        trajectoryLogger,
+        trajectoryId,
+        purpose: 'action',
+        modelVersion,
       })
     },
     [ModelType.OBJECT_SMALL]: async (

@@ -16,7 +16,7 @@ import { AgentOnboardSchema } from '@/lib/validation/schemas/agent'
 import { authenticate } from '@/lib/api/auth-middleware'
 import { asUser } from '@/lib/db/context'
 import { logger } from '@/lib/logger'
-import { Agent0Client } from '@/agents/agent0/Agent0Client'
+import { getAgent0Client } from '@/agents/agent0/Agent0Client'
 import type { AgentCapabilities } from '@/types/a2a'
 import { syncAfterAgent0Registration } from '@/lib/reputation/agent0-reputation-sync'
 import { generateSnowflakeId } from '@/lib/snowflake'
@@ -334,27 +334,18 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       }
 
       // Register with Agent0 SDK (handles IPFS publishing internally)
-      // Use Ethereum Sepolia RPC (where Agent0 contracts are deployed)
-      const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || process.env.SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com'
+      const agent0Client = getAgent0Client()
 
-      // Configure IPFS - use Pinata if available, otherwise use public IPFS node
-      const ipfsConfig = process.env.PINATA_JWT
-        ? { ipfsProvider: 'pinata' as const, pinataJwt: process.env.PINATA_JWT }
-        : { ipfsProvider: 'node' as const, ipfsNodeUrl: process.env.IPFS_NODE_URL || 'https://ipfs.io' }
-
-      const agent0Client = new Agent0Client({
-        network: (process.env.AGENT0_NETWORK as 'sepolia' | 'mainnet') || 'sepolia',
-        rpcUrl,
-        privateKey: DEPLOYER_PRIVATE_KEY,
-        ...ipfsConfig
-      })
+      // Use individual agent's A2A endpoint, not the game's endpoint
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const individualAgentA2AEndpoint = endpoint || `${baseUrl}/api/agents/${dbUser.id}/a2a`
 
       const agent0Result = await agent0Client.registerAgent({
         name: name,
         description: dbUser.bio || `Autonomous AI agent: ${agentId}`,
         walletAddress: agentWalletAddress,
         mcpEndpoint: undefined, // Agents don't expose MCP by default
-        a2aEndpoint: endpoint || `wss://babylon.game/ws/a2a`,
+        a2aEndpoint: individualAgentA2AEndpoint,
         capabilities: {
           ...agentMetadata.capabilities,
           platform: 'babylon', // Identify as Babylon agent

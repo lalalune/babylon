@@ -19,6 +19,8 @@ import { prisma } from '@/lib/prisma'
 import { requireUserByIdentifier } from '@/lib/users/user-lookup'
 import { logger } from '@/lib/logger'
 import { generateSnowflakeId } from '@/lib/snowflake'
+import { submitFeedbackToAgent0 } from '@/lib/reputation/agent0-reputation-sync'
+import { updateFeedbackMetrics } from '@/lib/reputation/reputation-service'
 import { z } from 'zod'
 
 const FeedbackSubmitSchema = z.object({
@@ -67,6 +69,18 @@ export async function POST(request: NextRequest) {
     fromUserId: fromUser.id,
     toUserId: toUser.id,
     score,
+  })
+
+  // Update feedback metrics
+  await updateFeedbackMetrics(toUser.id, score)
+
+  // Submit to Agent0 network if recipient is an agent (fire-and-forget with error handling)
+  // Only submit if recipient has Agent0 token ID (checked inside submitFeedbackToAgent0)
+  submitFeedbackToAgent0(feedback.id).catch((error) => {
+    logger.error('Failed to submit feedback to Agent0', {
+      feedbackId: feedback.id,
+      error,
+    })
   })
 
   return NextResponse.json({

@@ -21,7 +21,7 @@
  * 
  * **Requirements:**
  * - `FAL_KEY` environment variable must be set
- * - `public/data/actors.json` must exist and be valid
+ * - Actor data files must exist in `public/data/actors/` and `public/data/organizations/`
  * - Output directories must be writable:
  *   - `public/images/actors/`
  *   - `public/images/actor-banners/`
@@ -47,16 +47,16 @@
  * 
  * # Output:
  * # Checking actor and organization images...
- * # Checking 50 actor profile pictures...
- * # Checking 50 actor banners...
- * # Checking 25 organization logos...
- * # Checking 25 organization banners...
- * # Found 30 images to generate (120 already exist)
+ * # Checking 64 actor profile pictures...
+ * # Checking 64 actor banners...
+ * # Checking 52 organization logos...
+ * # Checking 52 organization banners...
+ * # Found 30 images to generate (202 already exist)
  * # Starting concurrent generation (max 10 at a time)...
  * # ✅ Generated actor-pfp for Actor1
  * # ✅ Generated org-logo for OpenLie
  * # Complete!
- * # { generated: 30, failed: 0, skipped: 120 }
+ * # { generated: 30, failed: 0, skipped: 202 }
  * ```
  * 
  * @see {@link @fal-ai/client} for fal.ai SDK
@@ -68,7 +68,8 @@
  */
 
 import { fal } from "@fal-ai/client";
-import { readFile, writeFile, access } from "fs/promises";
+import { writeFile, access } from "fs/promises";
+// readFile - not used
 import { join } from "path";
 import { config } from "dotenv";
 import { renderPrompt, actorPortrait, actorBanner, organizationLogo, organizationBanner } from "@/prompts";
@@ -551,10 +552,16 @@ async function main() {
     credentials: process.env.FAL_KEY,
   });
 
-  // Load actors database
-  const actorsPath = join(process.cwd(), "public", "data", "actors.json");
-  const actorsData = await readFile(actorsPath, "utf-8");
-  const actorsDb = ActorsDatabaseSchema.parse(JSON.parse(actorsData));
+  // Load actors database using the new loader
+  const { loadActorsData } = await import("@/lib/data/actors-loader");
+  let parsedActors: unknown;
+  try {
+    parsedActors = loadActorsData();
+  } catch (error) {
+    logger.error('Failed to load actors data', { error }, 'generate-actor-images')
+    throw new Error(`Failed to load actors data: ${error}`)
+  }
+  const actorsDb = ActorsDatabaseSchema.parse(parsedActors);
 
   const actorsImagesDir = join(process.cwd(), "public", "images", "actors");
   const actorsBannersDir = join(process.cwd(), "public", "images", "actor-banners");

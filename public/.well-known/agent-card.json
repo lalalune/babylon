@@ -24,15 +24,16 @@
       "version": "1.0.0",
       "endpoint": "/api/a2a",
       "methods": [
+        "a2a.discover",
+        "a2a.getInfo",
         "a2a.getMarketData",
         "a2a.getMarketPrices",
+        "a2a.subscribeMarket",
         "a2a.getBalance",
         "a2a.getPositions",
         "a2a.getUserWallet",
-        "a2a.proposeCoalition",
-        "a2a.shareAnalysis",
-        "a2a.getAnalyses",
-        "a2a.ping"
+        "a2a.paymentRequest",
+        "a2a.paymentReceipt"
       ]
     }
   },

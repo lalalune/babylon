@@ -72,7 +72,7 @@ interface ReferralData {
 }
 
 export default function RewardsPage() {
-  const { ready, authenticated, getAccessToken } = useAuth()
+  const { ready, authenticated, getAccessToken, login } = useAuth()
   const { user } = useAuthStore()
   const [referralData, setReferralData] = useState<ReferralData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -208,8 +208,14 @@ export default function RewardsPage() {
     } else if (action === 'profile-settings') {
       window.location.href = '/settings'
     } else if (action === 'wallet-connect') {
-      // TODO: Implement wallet connect modal/action
-      window.location.href = '/settings'
+      // Trigger Privy login modal for wallet connection
+      if (authenticated) {
+        // If already authenticated, redirect to settings to connect wallet
+        window.location.href = '/settings'
+      } else {
+        // Trigger login modal
+        login()
+      }
     }
   }
 

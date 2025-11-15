@@ -9,6 +9,7 @@ export { portfolioProvider } from './portfolio'
 export { feedProvider, trendingProvider } from './social'
 export { messagesProvider, notificationsProvider } from './messaging'
 export { userWalletProvider } from './user-wallet'
+export { userProfileProvider } from './user-profile'
 
 // New context providers
 export { headlinesProvider } from './headlines'

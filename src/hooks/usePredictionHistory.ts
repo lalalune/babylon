@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { usePredictionMarketStream } from '@/hooks/usePredictionMarketStream';
+import { logger } from '@/lib/logger';
 
 export interface PredictionHistoryPoint {
   time: number;
@@ -63,9 +64,10 @@ export function usePredictionHistory(
   const fallbackFromSeed = useCallback(() => {
     const seed = seedRef.current;
     if (!seed) return [];
-    const totalShares = (seed.yesShares ?? 0) + (seed.noShares ?? 0);
-    const yesPrice =
-      totalShares === 0 ? 0.5 : (seed.yesShares ?? 0) / (seed.yesShares! + seed.noShares!);
+    const yesShares = seed.yesShares ?? 0;
+    const noShares = seed.noShares ?? 0;
+    const totalShares = yesShares + noShares;
+    const yesPrice = totalShares === 0 ? 0.5 : yesShares / totalShares;
     return [
       {
         time: Date.now(),
@@ -91,7 +93,16 @@ export function usePredictionHistory(
       const response = await fetch(
         `/api/markets/predictions/${marketId}/history?limit=${limit}`
       );
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (error) {
+        logger.error('Failed to parse prediction history response', { error, marketId }, 'usePredictionHistory');
+        setError('Failed to parse response');
+        setHistory(fallbackFromSeed());
+        setLoading(false);
+        return;
+      }
 
       if (response.ok && Array.isArray(data.history) && data.history.length > 0) {
         setHistory(formatHistory(data.history));
@@ -99,7 +110,7 @@ export function usePredictionHistory(
         setHistory(fallbackFromSeed());
       }
     } catch (err) {
-      console.error('Failed to fetch prediction price history', err);
+      logger.error('Failed to fetch prediction price history', { error: err, marketId }, 'usePredictionHistory');
       setError('Failed to fetch history');
       setHistory(fallbackFromSeed());
     } finally {
@@ -114,8 +125,9 @@ export function usePredictionHistory(
   const appendPoint = useCallback(
     (yesPrice: number, noPrice: number, liquidity: number | undefined, timestamp: number) => {
       setHistory((prev) => {
-        const normalizedLiquidity = Number.isFinite(liquidity) ? Number(liquidity) : prev.at(-1)?.liquidity ?? 0;
-        const lastLiquidity = prev.length > 0 ? prev[prev.length - 1]!.liquidity : normalizedLiquidity;
+        const lastPoint = prev.length > 0 ? prev[prev.length - 1] : null;
+        const normalizedLiquidity = Number.isFinite(liquidity) ? Number(liquidity) : lastPoint?.liquidity ?? 0;
+        const lastLiquidity = lastPoint?.liquidity ?? normalizedLiquidity;
         const volume = Math.max(0, Math.abs(normalizedLiquidity - lastLiquidity));
         const point: PredictionHistoryPoint = {
           time: timestamp,

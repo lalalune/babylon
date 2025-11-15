@@ -20,10 +20,10 @@ export interface IAgent0Client {
 }
 
 /**
- * Unified Discovery Service Interface
- * Defines the methods available on UnifiedDiscoveryService
+ * Agent Discovery Service Interface
+ * Defines the methods available on AgentDiscoveryService
  */
-export interface IUnifiedDiscoveryService {
+export interface IAgentDiscoveryService {
   discoverAgents(filters: DiscoveryFilters): Promise<AgentProfile[]>
   getAgent(agentId: string): Promise<AgentProfile | null>
 }
@@ -55,9 +55,11 @@ export interface Agent0RegistrationResult {
  */
 export interface Agent0SearchFilters {
   name?: string
+  skills?: string[]  // A2A skills filter
   strategies?: string[]
   markets?: string[]
   minReputation?: number
+  active?: boolean  // Filter by active status
   x402Support?: boolean
   hasX402?: boolean // Legacy, use x402Support instead
   type?: string
@@ -104,7 +106,7 @@ export interface Agent0FeedbackParams {
 }
 
 /**
- * Discovery Filters for UnifiedDiscoveryService
+ * Discovery Filters for AgentDiscoveryService
  */
 export interface DiscoveryFilters {
   strategies?: string[]
@@ -137,4 +139,5 @@ export interface AggregatedReputation {
 export interface IReputationBridge {
   getAggregatedReputation(tokenId: number): Promise<AggregatedReputation>
 }
+
 

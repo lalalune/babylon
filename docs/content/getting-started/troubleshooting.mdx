@@ -49,7 +49,7 @@ psql postgres -c "CREATE DATABASE babylon;"
 psql postgres -c "GRANT ALL PRIVILEGES ON DATABASE babylon TO babylon_user;"
 
 # Run migrations
-bun run prisma:migrate
+bun run db:migrate
 ```
 
 ### Prisma Generate Fails
@@ -63,7 +63,7 @@ bun run prisma:migrate
 rm -rf node_modules/.prisma
 
 # Regenerate
-bun run prisma:generate
+bun install
 
 # If still fails, reinstall
 rm -rf node_modules
@@ -119,7 +119,7 @@ bun run dev
 
 ```bash
 # Regenerate Prisma client
-bun run prisma:generate
+bun install
 
 # Clear TypeScript cache
 rm -rf .next
@@ -176,13 +176,10 @@ bun run build
 **Solution**:
 
 ```bash
-# Reset migrations (caution: loses data)
-bun run db:reset
-
-# Or manual reset:
+# Manual reset (caution: loses data):
 psql babylon -c "DROP SCHEMA public CASCADE;"
 psql babylon -c "CREATE SCHEMA public;"
-bun run prisma:migrate deploy
+bun run db:migrate deploy
 ```
 
 ### Connection Pool Exhausted
@@ -197,8 +194,8 @@ DATABASE_URL="postgresql://user:pass@localhost:5432/babylon?connection_limit=10"
 
 // Or in Prisma schema:
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+ provider = "postgresql"
+ url = env("DATABASE_URL")
 }
 ```
 
@@ -233,19 +230,19 @@ bun run dev
 **Solutions**:
 
 1. **Check App ID**:
-   ```bash
-   echo $NEXT_PUBLIC_PRIVY_APP_ID
-   # Should start with "clp"
-   ```
+ ```bash
+ echo $NEXT_PUBLIC_PRIVY_APP_ID
+ # Should start with "clp"
+ ```
 
 2. **Verify Domains** in Privy Dashboard:
-   - Add `http://localhost:3000`
-   - Add `https://babylon.market`
-   - Add `https://farcaster.xyz` (for mini apps)
+ - Add `http://localhost:3000`
+ - Add `https://babylon.market`
+ - Add `https://farcaster.xyz` (for mini apps)
 
 3. **Check Callback URLs**:
-   - `/api/auth/farcaster/callback`
-   - `/api/auth/twitter/callback`
+ - `/api/auth/farcaster/callback`
+ - `/api/auth/twitter/callback`
 
 ### Token Verification Fails
 
@@ -260,7 +257,7 @@ console.log('Token exists:', !!token);
 
 // Verify header format
 const headers = {
-  'Authorization': `Bearer ${token}` // Must have "Bearer " prefix
+ 'Authorization': `Bearer ${token}` // Must have "Bearer " prefix
 };
 ```
 
@@ -286,8 +283,8 @@ echo $CRON_SECRET | wc -c
 
 # 3. Test authentication endpoint
 curl -X POST http://localhost:3000/api/agents/auth \
-  -H "Content-Type: application/json" \
-  -d '{"agentId":"test","signature":"..."}'
+ -H "Content-Type: application/json" \
+ -d '{"agentId":"test","signature":"..."}'
 ```
 
 ### Agent Not Trading
@@ -297,39 +294,38 @@ curl -X POST http://localhost:3000/api/agents/auth \
 **Checklist**:
 
 1. **Check auto-trading enabled**:
-   ```json
-   // Character file
-   {
-     "settings": {
-       "babylon": {
-         "autoTrading": true  // Must be true
-       }
-     }
-   }
-   ```
+ ```json
+ // Character file
+ {
+ "settings": {
+ "babylon": {
+ "autoTrading": true // Must be true
+ }
+ }
+ }
+ ```
 
 2. **Verify balance**:
-   ```bash
-   bun run status wallet
-   ```
+ ```bash
+ bun run status wallet
+ ```
 
 3. **Check confidence thresholds**:
-   ```json
-   {
-     "settings": {
-       "babylon": {
-         "minConfidence": 0.6  // Lower if too restrictive
-       }
-     }
-   }
-   ```
+ ```json
+ {
+ "settings": {
+ "babylon": {
+ "minConfidence": 0.6 // Lower if too restrictive
+ }
+ }
+ }
+ ```
 
 4. **Review logs**:
-   ```bash
-   # Run agent with verbose logging
-   bun run eliza:alice --auto-trade
-   # Check for trade signals and execution
-   ```
+ ```bash
+# Check agent logs in the application
+# Agents run automatically via the autonomous coordinator
+ ```
 
 ---
 
@@ -341,25 +337,21 @@ curl -X POST http://localhost:3000/api/agents/auth \
 
 **Common Causes**:
 
-1. **Already Registered**:
-   ```bash
-   # Check registration status
-   bun run agent0:check
-   ```
+1. **Already Registered**: Check on block explorer
 
 2. **Insufficient Gas**:
-   ```typescript
-   // Increase gas limit
-   const tx = await contract.registerAgent(..., {
-     gasLimit: 200000
-   });
-   ```
+ ```typescript
+ // Increase gas limit
+ const tx = await contract.registerAgent(..., {
+ gasLimit: 200000
+ });
+ ```
 
 3. **Endpoint Already Taken**:
-   ```typescript
-   // Use unique endpoint
-   const endpoint = `wss://agent-${Date.now()}.example.com/a2a`;
-   ```
+ ```typescript
+ // Use unique endpoint
+ const endpoint = `wss://agent-${Date.now()}.example.com/a2a`;
+ ```
 
 ### Transaction Pending Forever
 
@@ -368,13 +360,12 @@ curl -X POST http://localhost:3000/api/agents/auth \
 **Solutions**:
 
 ```bash
-# 1. Speed up transaction
-bun run agent0:speedup
+# 1. Speed up transaction manually with higher gas
 
 # 2. Or cancel and retry with higher gas
 const tx = await contract.registerAgent(..., {
-  maxFeePerGas: ethers.parseUnits('2', 'gwei'),
-  maxPriorityFeePerGas: ethers.parseUnits('1', 'gwei')
+ maxFeePerGas: ethers.parseUnits('2', 'gwei'),
+ maxPriorityFeePerGas: ethers.parseUnits('1', 'gwei')
 });
 ```
 
@@ -459,7 +450,7 @@ echo $UPSTASH_REDIS_REST_URL
 
 # Test connection
 curl $UPSTASH_REDIS_REST_URL/ping \
-  -H "Authorization: Bearer $UPSTASH_REDIS_REST_TOKEN"
+ -H "Authorization: Bearer $UPSTASH_REDIS_REST_TOKEN"
 
 # Should return: {"result":"PONG"}
 ```
@@ -488,7 +479,7 @@ ps aux | grep "next dev"
 
 # 4. Check cron (production mode)
 curl -X POST http://localhost:3000/api/cron/game-tick \
-  -H "Authorization: Bearer ${CRON_SECRET}"
+ -H "Authorization: Bearer ${CRON_SECRET}"
 ```
 
 ### Daemon Won't Start
@@ -533,17 +524,17 @@ ANALYZE=true bun run build
 ```typescript
 // Add pagination
 const posts = await prisma.post.findMany({
-  take: 20,
-  skip: (page - 1) * 20
+ take: 20,
+ skip: (page - 1) * 20
 });
 
 // Add select (only needed fields)
 const users = await prisma.user.findMany({
-  select: {
-    id: true,
-    username: true,
-    profileImageUrl: true
-  }
+ select: {
+ id: true,
+ username: true,
+ profileImageUrl: true
+ }
 });
 
 // Use caching
@@ -584,24 +575,24 @@ DATABASE_URL="...?connection_limit=10"
 **Common Causes**:
 
 1. **Missing Environment Variables**:
-   ```bash
-   # Add to Vercel dashboard:
-   # Settings → Environment Variables
-   # Add all required vars from .env.example
-   ```
+ ```bash
+ # Add to Vercel dashboard:
+ # Settings → Environment Variables
+ # Add all required vars from .env.example
+ ```
 
 2. **TypeScript Errors**:
-   ```bash
-   # Fix locally first
-   bun run type-check
-   # Fix all errors before deploying
-   ```
+ ```bash
+ # Fix locally first
+ bun run typecheck
+ # Fix all errors before deploying
+ ```
 
 3. **ESLint Errors**:
-   ```bash
-   # Fix linting issues
-   bun run lint:fix
-   ```
+ ```bash
+ # Fix linting issues
+ bun run lint
+ ```
 
 ### Vercel Function Timeout
 
@@ -617,11 +608,11 @@ DATABASE_URL="...?connection_limit=10"
 ```javascript
 // vercel.json
 {
-  "functions": {
-    "src/app/api/cron/game-tick/route.ts": {
-      "maxDuration": 60  // Increase to 60s
-    }
-  }
+ "functions": {
+ "src/app/api/cron/game-tick/route.ts": {
+ "maxDuration": 60 // Increase to 60s
+ }
+ }
 }
 ```
 
@@ -654,7 +645,7 @@ DIRECT_URL="postgresql://...?direct=true"
 const user = await prisma.user.findUnique({ where: { id } });
 
 if (!user) {
-  throw new Error('User not found');
+ throw new Error('User not found');
 }
 
 // Now safe to access
@@ -672,9 +663,9 @@ console.log(user.username);
 ```typescript
 // Use upsert instead of create
 const user = await prisma.user.upsert({
-  where: { username: 'trader' },
-  update: { displayName: 'Updated' },
-  create: { username: 'trader', displayName: 'Trader' }
+ where: { username: 'trader' },
+ update: { displayName: 'Updated' },
+ create: { username: 'trader', displayName: 'Trader' }
 });
 ```
 
@@ -703,14 +694,14 @@ cat tsconfig.json | grep "@/"
 
 Before asking for help, try:
 
-1. ✅ Check error message carefully
-2. ✅ Search this troubleshooting guide
-3. ✅ Check GitHub issues
-4. ✅ Review relevant documentation section
-5. ✅ Try in incognito/private browsing
-6. ✅ Check browser console for errors
-7. ✅ Review server logs
-8. ✅ Test with minimal reproduction
+1. Check error message carefully
+2. Search this troubleshooting guide
+3. Check GitHub issues
+4. Review relevant documentation section
+5. Try in incognito/private browsing
+6. Check browser console for errors
+7. Review server logs
+8. Test with minimal reproduction
 
 ### Collect Debug Information
 
@@ -724,7 +715,7 @@ psql --version
 
 # Environment
 echo $NODE_ENV
-echo $DATABASE_URL  # Redact password!
+echo $DATABASE_URL # Redact password!
 
 # Logs
 # Share relevant error messages
@@ -735,77 +726,27 @@ echo $DATABASE_URL  # Redact password!
 ### Where to Get Help
 
 1. **Documentation**:
-   - Search these docs
-   - Check API reference
-   - Review examples
+ - Search these docs
+ - Check API reference
+ - Review examples
 
 2. **GitHub**:
-   - [Search existing issues](https://github.com/elizaos/babylon/issues)
-   - Open new issue with template
-   - Include debug information
+ - [Search existing issues](https://github.com/elizaos/babylon/issues)
+ - Open new issue with template
+ - Include debug information
 
 3. **Discord**:
-   - [Join Discord](https://discord.gg/babylon)
-   - Ask in #support channel
-   - Share code snippets
+ - [Join Discord](https://discord.gg/babylon)
+ - Ask in #support channel
+ - Share code snippets
 
 4. **Stack Overflow**:
-   - Tag: `babylon` + `prediction-markets`
-   - Include minimal reproduction
+ - Tag: `babylon` + `prediction-markets`
+ - Include minimal reproduction
 
 ---
 
-## Prevention
 
-### Best Practices
-
-1. **Use TypeScript**: Catch errors at compile time
-2. **Add Error Boundaries**: Prevent UI crashes
-3. **Validate Input**: Use Zod schemas
-4. **Test Thoroughly**: Unit + integration tests
-5. **Monitor Production**: Sentry/logging
-6. **Handle Edge Cases**: Null checks, fallbacks
-7. **Document Assumptions**: Comments in code
-
-### Code Quality
-
-```bash
-# Run before committing
-bun run type-check
-bun run lint
-bun run test
-bun run build
-```
-
----
-
-## Quick Fixes
-
-### "It works locally but not in production"
-
-Check:
-- ✅ Environment variables set in Vercel
-- ✅ Database accessible from Vercel
-- ✅ API URLs use HTTPS in production
-- ✅ CORS configured correctly
-
-### "Worked yesterday, broken today"
-
-Check:
-- ✅ Recent git commits
-- ✅ Dependency updates (package.json)
-- ✅ Database migrations
-- ✅ Environment variable changes
-
-### "Works for me but not for others"
-
-Check:
-- ✅ Browser compatibility
-- ✅ Caching issues (try incognito)
-- ✅ User-specific data/permissions
-- ✅ Rate limiting
-
----
 
 ## Next Steps
 

@@ -9,7 +9,7 @@ import { prisma } from '@/lib/prisma';
 import { generateSnowflakeId } from '@/lib/snowflake';
 
 
-export type NotificationType = 'comment' | 'reaction' | 'follow' | 'mention' | 'reply' | 'share' | 'system';
+export type NotificationType = 'comment' | 'reaction' | 'follow' | 'mention' | 'reply' | 'share' | 'system' | 'report_evaluated' | 'appeal_status' | 'points_received';
 
 interface CreateNotificationParams {
   userId: string; // Who receives the notification
@@ -39,6 +39,24 @@ export async function createNotification(params: CreateNotificationParams): Prom
       'NotificationService'
     );
     return;
+  }
+
+  // Check if users have blocked each other (if actorId is provided)
+  if (params.actorId) {
+    const modFilters = await import('@/lib/moderation/filters');
+    const [isBlocked, hasBlockedMe] = await Promise.all([
+      modFilters.hasBlocked(params.userId, params.actorId),
+      modFilters.hasBlocked(params.actorId, params.userId),
+    ]);
+
+    if (isBlocked || hasBlockedMe) {
+      logger.debug(
+        `Skipping notification creation: users have blocked each other`,
+        { userId: params.userId, actorId: params.actorId },
+        'NotificationService'
+      );
+      return;
+    }
   }
 
   await prisma.notification.create({

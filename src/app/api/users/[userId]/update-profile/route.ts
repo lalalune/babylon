@@ -8,7 +8,7 @@ import {
   successResponse
 } from '@/lib/api/auth-middleware';
 import { prisma } from '@/lib/prisma';
-import { AuthorizationError } from '@/lib/errors';
+import { AuthorizationError, BusinessLogicError } from '@/lib/errors';
 import { withErrorHandling } from '@/lib/errors/error-handler';
 import { logger } from '@/lib/logger';
 import { notifyProfileComplete } from '@/lib/services/notification-service';
@@ -21,6 +21,7 @@ import { trackServerEvent } from '@/lib/posthog/server';
 import { updateProfileBackendSigned, isBackendSigningEnabled } from '@/lib/profile/backend-signer';
 import { checkProfileUpdateRateLimit, logProfileUpdate } from '@/lib/profile/rate-limiter';
 import type { Address } from 'viem';
+import type { JsonValue } from '@/types/common';
 
 /**
  * POST /api/users/[userId]/update-profile
@@ -57,12 +58,20 @@ export const POST = withErrorHandling(async (
     onchainTxHash,
   } = parsedBody;
 
-  await prisma.user.findFirst({
-    where: {
-      username: username!.trim(),
-      id: { not: canonicalUserId },
-    },
-  })
+  // Check username uniqueness only if username is being updated
+  if (username !== undefined) {
+    const normalizedUsername = username.trim();
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        username: normalizedUsername,
+        id: { not: canonicalUserId },
+      },
+    });
+
+    if (existingUser) {
+      throw new BusinessLogicError('Username is already taken', 'USERNAME_TAKEN');
+    }
+  }
 
   const currentUser = await prisma.user.findUnique({
     where: { id: canonicalUserId },
@@ -103,7 +112,7 @@ export const POST = withErrorHandling(async (
 
   const requiresOnchainUpdate = hasOnchainProfileChanges && currentUser!.onChainRegistered && currentUser!.nftTokenId
 
-  let onchainMetadata: Record<string, unknown> | null = null
+  let onchainMetadata: Record<string, JsonValue> | null = null
   let backendSignedTxHash: `0x${string}` | undefined
   
   if (requiresOnchainUpdate) {
@@ -130,7 +139,7 @@ export const POST = withErrorHandling(async (
       })
 
       backendSignedTxHash = result.txHash
-      onchainMetadata = result.metadata as unknown as Record<string, unknown>
+      onchainMetadata = result.metadata as unknown as Record<string, JsonValue>
 
       logger.info(
         'Backend-signed profile update successful',
@@ -150,7 +159,7 @@ export const POST = withErrorHandling(async (
         txHash: onchainTxHash! as `0x${string}`,
       })
 
-      onchainMetadata = onchainResult.metadata
+      onchainMetadata = onchainResult.metadata as unknown as Record<string, JsonValue> | null
 
       logger.info(
         'Confirmed user-signed on-chain profile update',

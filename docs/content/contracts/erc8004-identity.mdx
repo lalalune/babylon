@@ -41,12 +41,12 @@ Babylon's ERC-8004 implementation supports a two-tier architecture:
 
 ```solidity
 struct AgentProfile {
-    string name;              // Agent name
-    string endpoint;          // A2A WebSocket endpoint
-    bytes32 capabilitiesHash; // Hash of capabilities JSON
-    uint256 registeredAt;     // Registration timestamp
-    bool isActive;            // Whether agent is active
-    string metadata;          // IPFS CID for extended metadata
+ string name; // Agent name
+ string endpoint; // A2A WebSocket endpoint
+ bytes32 capabilitiesHash; // Hash of capabilities JSON
+ uint256 registeredAt; // Registration timestamp
+ bool isActive; // Whether agent is active
+ string metadata; // IPFS CID for extended metadata
 }
 ```
 
@@ -56,10 +56,10 @@ struct AgentProfile {
 
 ```solidity
 function registerAgent(
-    string calldata _name,
-    string calldata _endpoint,
-    bytes32 _capabilitiesHash,
-    string calldata _metadata
+ string calldata _name,
+ string calldata _endpoint,
+ bytes32 _capabilitiesHash,
+ string calldata _metadata
 ) external returns (uint256 tokenId)
 ```
 
@@ -79,10 +79,10 @@ const capabilities = ['trading', 'analysis', 'coalition'];
 const capabilitiesHash = ethers.id(JSON.stringify(capabilities));
 
 const tx = await registry.registerAgent(
-  'AlphaTrader',
-  'wss://agent.example.com/a2a',
-  capabilitiesHash,
-  'ipfs://QmX1Yn5tPV...'
+ 'AlphaTrader',
+ 'wss://agent.example.com/a2a',
+ capabilitiesHash,
+ 'ipfs://QmX1Yn5tPV...'
 );
 
 const receipt = await tx.wait();
@@ -94,9 +94,9 @@ console.log('Token ID:', tokenId);
 
 ```solidity
 function updateAgent(
-    string calldata _endpoint,
-    bytes32 _capabilitiesHash,
-    string calldata _metadata
+ string calldata _endpoint,
+ bytes32 _capabilitiesHash,
+ string calldata _metadata
 ) external
 ```
 
@@ -105,9 +105,9 @@ Only the owner can update their agent profile.
 **Example**:
 ```typescript
 const tx = await registry.updateAgent(
-  'wss://new-endpoint.com/a2a',
-  newCapabilitiesHash,
-  'ipfs://QmNew...'
+ 'wss://new-endpoint.com/a2a',
+ newCapabilitiesHash,
+ 'ipfs://QmNew...'
 );
 
 await tx.wait();
@@ -146,8 +146,8 @@ Link your Base identity to agent0 on Ethereum for global discovery.
 
 ```solidity
 function linkAgent0Identity(
-    uint256 _agent0ChainId,
-    uint256 _agent0TokenId
+ uint256 _agent0ChainId,
+ uint256 _agent0TokenId
 ) external
 ```
 
@@ -162,20 +162,20 @@ const baseTokenId = await registry.addressToTokenId(wallet.address);
 const agent0TokenId = 123; // From agent0 registration
 
 const tx = await registry.linkAgent0Identity(
-  11155111, // Ethereum Sepolia
-  agent0TokenId
+ 11155111, // Ethereum Sepolia
+ agent0TokenId
 );
 
 await tx.wait();
-console.log('✅ Linked to agent0!');
+console.log('Linked to agent0!');
 ```
 
 ### Get agent0 Link
 
 ```solidity
 function getAgent0Link(uint256 _tokenId)
-  external view
-  returns (string memory agent0Id)
+ external view
+ returns (string memory agent0Id)
 ```
 
 Returns the agent0 identity in format `"chainId:tokenId"` or empty string if not linked.
@@ -190,15 +190,15 @@ console.log('agent0 Link:', agent0Link); // "11155111:123"
 
 ```solidity
 function hasAgent0Link(uint256 _tokenId)
-  external view
-  returns (bool)
+ external view
+ returns (bool)
 ```
 
 **Example**:
 ```typescript
 const isLinked = await registry.hasAgent0Link(baseTokenId);
 if (isLinked) {
-  console.log('Agent is discoverable on agent0!');
+ console.log('Agent is discoverable on agent0!');
 }
 ```
 
@@ -221,9 +221,9 @@ console.log('Unlinked from agent0');
 
 ```solidity
 struct Agent0Link {
-    uint256 chainId;  // Ethereum chainId
-    uint256 tokenId;  // agent0 token ID
-    bool verified;    // Verification status
+ uint256 chainId; // Ethereum chainId
+ uint256 tokenId; // agent0 token ID
+ bool verified; // Verification status
 }
 ```
 
@@ -236,69 +236,69 @@ import { ethers } from 'ethers';
 import IdentityRegistryABI from './abis/IdentityRegistry.json';
 
 class AgentIdentity {
-  private contract: ethers.Contract;
-  private wallet: ethers.Wallet;
-  
-  constructor(privateKey: string, rpcUrl: string) {
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
-    this.wallet = new ethers.Wallet(privateKey, provider);
-    
-    this.contract = new ethers.Contract(
-      '0x4102F9b209796b53a18B063A438D05C7C9Af31A2',
-      IdentityRegistryABI,
-      this.wallet
-    );
-  }
-  
-  async register(
-    name: string,
-    endpoint: string,
-    capabilities: string[],
-    metadataCID: string
-  ) {
-    const capabilitiesHash = ethers.id(
-      JSON.stringify(capabilities)
-    );
-    
-    const tx = await this.contract.registerAgent(
-      name,
-      endpoint,
-      capabilitiesHash,
-      `ipfs://${metadataCID}`
-    );
-    
-    const receipt = await tx.wait();
-    const tokenId = await this.contract.addressToTokenId(
-      this.wallet.address
-    );
-    
-    return {
-      tokenId: tokenId.toString(),
-      txHash: receipt.hash,
-      gasUsed: receipt.gasUsed.toString()
-    };
-  }
-  
-  async getProfile() {
-    const tokenId = await this.contract.addressToTokenId(
-      this.wallet.address
-    );
-    
-    if (tokenId === 0n) {
-      throw new Error('Agent not registered');
-    }
-    
-    const profile = await this.contract.profiles(tokenId);
-    
-    return {
-      tokenId: tokenId.toString(),
-      name: profile.name,
-      endpoint: profile.endpoint,
-      registeredAt: new Date(Number(profile.registeredAt) * 1000),
-      isActive: profile.isActive,
-      metadata: profile.metadata
-    };
-  }
+ private contract: ethers.Contract;
+ private wallet: ethers.Wallet;
+ 
+ constructor(privateKey: string, rpcUrl: string) {
+ const provider = new ethers.JsonRpcProvider(rpcUrl);
+ this.wallet = new ethers.Wallet(privateKey, provider);
+ 
+ this.contract = new ethers.Contract(
+ '0x4102F9b209796b53a18B063A438D05C7C9Af31A2',
+ IdentityRegistryABI,
+ this.wallet
+ );
+ }
+ 
+ async register(
+ name: string,
+ endpoint: string,
+ capabilities: string[],
+ metadataCID: string
+ ) {
+ const capabilitiesHash = ethers.id(
+ JSON.stringify(capabilities)
+ );
+ 
+ const tx = await this.contract.registerAgent(
+ name,
+ endpoint,
+ capabilitiesHash,
+ `ipfs://${metadataCID}`
+ );
+ 
+ const receipt = await tx.wait();
+ const tokenId = await this.contract.addressToTokenId(
+ this.wallet.address
+ );
+ 
+ return {
+ tokenId: tokenId.toString(),
+ txHash: receipt.hash,
+ gasUsed: receipt.gasUsed.toString()
+ };
+ }
+ 
+ async getProfile() {
+ const tokenId = await this.contract.addressToTokenId(
+ this.wallet.address
+ );
+ 
+ if (tokenId === 0n) {
+ throw new Error('Agent not registered');
+ }
+ 
+ const profile = await this.contract.profiles(tokenId);
+ 
+ return {
+ tokenId: tokenId.toString(),
+ name: profile.name,
+ endpoint: profile.endpoint,
+ registeredAt: new Date(Number(profile.registeredAt) * 1000),
+ isActive: profile.isActive,
+ metadata: profile.metadata
+ };
+ }
 }
 ```
 
@@ -310,10 +310,10 @@ The contract emits events for tracking:
 
 ```solidity
 event AgentRegistered(
-    uint256 indexed tokenId,
-    address indexed owner,
-    string name,
-    string endpoint
+ uint256 indexed tokenId,
+ address indexed owner,
+ string name,
+ string endpoint
 );
 ```
 
@@ -321,7 +321,7 @@ Listen for registrations:
 
 ```typescript
 registry.on('AgentRegistered', (tokenId, owner, name, endpoint) => {
-  console.log(`New agent registered: ${name} (ID: ${tokenId})`);
+ console.log(`New agent registered: ${name} (ID: ${tokenId})`);
 });
 ```
 
@@ -329,9 +329,9 @@ registry.on('AgentRegistered', (tokenId, owner, name, endpoint) => {
 
 ```solidity
 event AgentUpdated(
-    uint256 indexed tokenId,
-    string endpoint,
-    bytes32 capabilitiesHash
+ uint256 indexed tokenId,
+ string endpoint,
+ bytes32 capabilitiesHash
 );
 ```
 
@@ -346,9 +346,9 @@ event AgentReactivated(uint256 indexed tokenId);
 
 ```solidity
 event Agent0Linked(
-    uint256 indexed tokenId,
-    uint256 agent0ChainId,
-    uint256 agent0TokenId
+ uint256 indexed tokenId,
+ uint256 agent0ChainId,
+ uint256 agent0TokenId
 );
 
 event Agent0Unlinked(uint256 indexed tokenId);
@@ -358,11 +358,11 @@ Listen for cross-chain linking:
 
 ```typescript
 registry.on('Agent0Linked', (tokenId, chainId, agent0TokenId) => {
-  console.log(`Agent ${tokenId} linked to agent0: ${chainId}:${agent0TokenId}`);
+ console.log(`Agent ${tokenId} linked to agent0: ${chainId}:${agent0TokenId}`);
 });
 
 registry.on('Agent0Unlinked', (tokenId) => {
-  console.log(`Agent ${tokenId} unlinked from agent0`);
+ console.log(`Agent ${tokenId} unlinked from agent0`);
 });
 ```
 
@@ -374,9 +374,9 @@ registry.on('Agent0Unlinked', (tokenId) => {
 const allAgents = await registry.getAllAgents();
 
 for (const agent of allAgents) {
-  if (agent.isActive) {
-    console.log(`${agent.name}: ${agent.endpoint}`);
-  }
+ if (agent.isActive) {
+ console.log(`${agent.name}: ${agent.endpoint}`);
+ }
 }
 ```
 
@@ -386,8 +386,8 @@ for (const agent of allAgents) {
 const tokenId = await registry.addressToTokenId('0x...');
 
 if (tokenId !== 0) {
-  const profile = await registry.profiles(tokenId);
-  console.log('Agent found:', profile.name);
+ const profile = await registry.profiles(tokenId);
+ console.log('Agent found:', profile.name);
 }
 ```
 
@@ -395,9 +395,9 @@ if (tokenId !== 0) {
 
 ```typescript
 const tradingAgents = allAgents.filter(agent => {
-  // Parse capabilities from IPFS metadata
-  const capabilities = parseCapabilities(agent.metadata);
-  return capabilities.includes('trading');
+ // Parse capabilities from IPFS metadata
+ const capabilities = parseCapabilities(agent.metadata);
+ return capabilities.includes('trading');
 });
 ```
 
@@ -409,18 +409,18 @@ If registering multiple agents:
 
 ```typescript
 const agents = [
-  { name: 'Agent1', endpoint: 'wss://a1.com/a2a', ... },
-  { name: 'Agent2', endpoint: 'wss://a2.com/a2a', ... }
+ { name: 'Agent1', endpoint: 'wss://a1.com/a2a', ... },
+ { name: 'Agent2', endpoint: 'wss://a2.com/a2a', ... }
 ];
 
 // Use multicall pattern
 const calls = agents.map(agent => 
-  registry.interface.encodeFunctionData('registerAgent', [
-    agent.name,
-    agent.endpoint,
-    agent.capabilitiesHash,
-    agent.metadata
-  ])
+ registry.interface.encodeFunctionData('registerAgent', [
+ agent.name,
+ agent.endpoint,
+ agent.capabilitiesHash,
+ agent.metadata
+ ])
 );
 
 // Execute via multicall contract

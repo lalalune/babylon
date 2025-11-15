@@ -53,7 +53,12 @@ export function useWalletBalance(
         throw new Error('Failed to fetch wallet balance');
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (error) {
+        throw new Error(`Failed to parse response: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
 
       if (controller.signal.aborted) return;
 

@@ -36,9 +36,12 @@ export async function getAIModelConfig(): Promise<AIModelConfig> {
       },
     });
 
+    const envWandbModel = process.env.WANDB_MODEL || null;
+    const wandbApiKeyPresent = !!process.env.WANDB_API_KEY;
+
     cachedConfig = {
-      wandbModel: settings?.wandbModel || null,
-      wandbEnabled: settings?.wandbEnabled || false,
+      wandbModel: settings?.wandbModel || envWandbModel,
+      wandbEnabled: settings?.wandbEnabled ?? wandbApiKeyPresent,
     };
     lastFetch = now;
 

@@ -13,9 +13,9 @@ import {
  * Agent authentication schema
  */
 export const AgentAuthSchema = z.object({
-  agentId: SnowflakeIdSchema,
-  agentSecret: z.string().min(32, { message: 'Agent secret must be at least 32 characters' })
-});
+  agentId: SnowflakeIdSchema.describe('Agent identifier (required)'),
+  agentSecret: z.string().min(32, { message: 'Agent secret must be at least 32 characters' }).describe('Agent secret key (required)')
+}).describe('Agent authentication credentials');
 
 /**
  * Agent discovery query parameters schema

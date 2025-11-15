@@ -33,16 +33,16 @@ All actor affiliations are valid!
 
 ```bash
 WARNINGS:
-⚠️  Actor1 (actor1) missing 'realName' field
-⚠️  Actor2 (actor2) missing 'username' field
+ Actor1 (actor1) missing 'realName' field
+ Actor2 (actor2) missing 'username' field
 ```
 
 ### Errors (Fatal)
 
 ```bash
 VALIDATION ERRORS:
-❌ Actor1 (actor1) has invalid affiliation: "nonexistent-org"
-❌ Actor2 (actor2) has invalid affiliation: "deleted-company"
+Actor1 (actor1) has invalid affiliation: "nonexistent-org"
+Actor2 (actor2) has invalid affiliation: "deleted-company"
 Found 2 error(s)
 ```
 
@@ -50,26 +50,27 @@ Exit code: 1
 
 ## Data Source
 
-Reads from `public/data/actors.json`:
+Reads from `public/data/actors.json` (index file) and individual actor/organization files:
 
+```
+public/data/
+├── actors.json              # Index with references
+├── actors/                  # Individual actor JSON files
+│   ├── actor1.json
+│   └── ...
+└── organizations/           # Individual organization JSON files
+    ├── org1.json
+    └── ...
+```
+
+Example actor file (`public/data/actors/actor1.json`):
 ```json
 {
-  "actors": [
-    {
-      "id": "actor1",
-      "name": "John Doe",
-      "realName": "John Doe",
-      "username": "jdoe",
-      "affiliations": ["org1", "org2"]
-    }
-  ],
-  "organizations": [
-    {
-      "id": "org1",
-      "name": "OpenLie",
-      "type": "AI Company"
-    }
-  ]
+ "id": "actor1",
+ "name": "John Doe",
+ "realName": "John Doe",
+ "username": "jdoe",
+ "affiliations": ["org1", "org2"]
 }
 ```
 
@@ -88,29 +89,29 @@ await validateActorsData();
 ### Invalid Affiliation
 
 ```bash
-❌ Actor1 has invalid affiliation: "old-org"
+Actor1 has invalid affiliation: "old-org"
 ```
 
 **Solution:** Either:
-1. Add the organization to `public/data/actors.json`
-2. Remove the affiliation from the actor
+1. Create a new organization file in `public/data/organizations/` and add the reference to `actors.json`
+2. Remove the affiliation from the actor file in `public/data/actors/`
 3. Update the affiliation ID
 
 ### Missing Required Fields
 
 ```bash
-⚠️ Actor1 missing 'realName' field
+Actor1 missing 'realName' field
 ```
 
 **Solution:** Add the missing field:
 
 ```json
 {
-  "id": "actor1",
-  "name": "John Doe",
-  "realName": "John Doe",  // Add this
-  "username": "jdoe",
-  "affiliations": []
+ "id": "actor1",
+ "name": "John Doe",
+ "realName": "John Doe", // Add this
+ "username": "jdoe",
+ "affiliations": []
 }
 ```
 
@@ -123,11 +124,11 @@ Use in scripts:
 
 ```bash
 if bun run command:validate; then
-  echo "Validation passed"
-  bun run command:generate
+ echo "Validation passed"
+ bun run command:generate
 else
-  echo "Validation failed"
-  exit 1
+ echo "Validation failed"
+ exit 1
 fi
 ```
 

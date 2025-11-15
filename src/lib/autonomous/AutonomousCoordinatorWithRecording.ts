@@ -10,6 +10,8 @@ import { logger } from '@/lib/logger';
 import type { IAgentRuntime } from '@elizaos/core';
 import { trajectoryRecorder } from '../training/TrajectoryRecorder';
 import { WalletService } from '@/lib/services/wallet-service';
+import { agentRuntimeManager } from '../agents/runtime/AgentRuntimeManager';
+import { setTrajectoryContext } from '../agents/plugins/plugin-trajectory-logger/src/action-interceptor';
 
 // Import existing services
 import { autonomousA2AService } from '../agents/autonomous/AutonomousA2AService';
@@ -18,7 +20,9 @@ import { autonomousTradingService } from '../agents/autonomous/AutonomousTrading
 import { autonomousPostingService } from '../agents/autonomous/AutonomousPostingService';
 import { autonomousCommentingService } from '../agents/autonomous/AutonomousCommentingService';
 
-export interface AutonomousTickResult {
+// Use the canonical AutonomousTickResult from AutonomousCoordinator
+// This version extends it with trajectory info
+export interface AutonomousTickResultWithTrajectory {
   success: boolean;
   actionsExecuted: {
     trades: number;
@@ -40,7 +44,7 @@ export class AutonomousCoordinatorWithRecording {
   async executeAutonomousTick(
     agentUserId: string,
     runtime: IAgentRuntime
-  ): Promise<AutonomousTickResult> {
+  ): Promise<AutonomousTickResultWithTrajectory> {
     const startTime = Date.now();
 
     // START TRAJECTORY RECORDING
@@ -52,7 +56,15 @@ export class AutonomousCoordinatorWithRecording {
       }
     });
 
-    const result: AutonomousTickResult = {
+    // Set trajectory context on runtime for action/provider logging
+    const trajectoryLogger = agentRuntimeManager.getTrajectoryLogger(agentUserId);
+    if (trajectoryLogger) {
+      setTrajectoryContext(runtime, trajId, trajectoryLogger);
+      // Also set current trajectory ID on runtime for LLM call logging
+      (runtime as unknown as { currentTrajectoryId?: string }).currentTrajectoryId = trajId;
+    }
+
+    const result: AutonomousTickResultWithTrajectory = {
       success: false,
       actionsExecuted: {
         trades: 0,
@@ -97,35 +109,95 @@ export class AutonomousCoordinatorWithRecording {
 
       // === TRADING ===
       if (agent.autonomousTrading) {
-        // START STEP for trading
-        trajectoryRecorder.startStep(trajId, await this.captureEnvironmentState(agentUserId));
+        // Capture initial state before trading
+        const initialState = await this.captureEnvironmentState(agentUserId);
+        trajectoryRecorder.startStep(trajId, initialState);
 
+        let tradeInfo: { marketId?: string; ticker?: string; side?: string; marketType?: 'prediction' | 'perp' } = {};
+        
         if (useA2A) {
           const tradeResult = await autonomousA2AService.executeA2ATrade(agentUserId, runtime);
           if (tradeResult.success) {
             result.actionsExecuted.trades++;
+            tradeInfo = {
+              marketId: tradeResult.marketId,
+              ticker: tradeResult.ticker,
+              side: tradeResult.side,
+              marketType: tradeResult.marketType
+            };
           }
         } else {
-          const tradesExecuted = await autonomousTradingService.executeTrades(agentUserId, runtime);
-          result.actionsExecuted.trades += tradesExecuted;
+          const tradeResult = await autonomousTradingService.executeTrades(agentUserId, runtime);
+          result.actionsExecuted.trades += tradeResult.tradesExecuted;
+          tradeInfo = {
+            marketId: tradeResult.marketId,
+            ticker: tradeResult.ticker,
+            side: tradeResult.side,
+            marketType: tradeResult.marketType
+          };
         }
 
-        // COMPLETE STEP
+        // Capture state after trading to calculate reward
+        const afterState = await this.captureEnvironmentState(agentUserId);
+        
+        // Calculate reward based on P&L change
+        // Note: lifetimePnL updates asynchronously, so immediate reward may be 0
+        // The RewardBackpropagationService will update rewards when outcomes are known
+        const pnlChange = afterState.agentPnL - initialState.agentPnL;
+        
+        // For immediate reward, use a small positive reward if trade executed successfully
+        // The actual P&L-based reward will be backpropagated when market outcomes are known
+        let reward = 0;
+        if (result.actionsExecuted.trades > 0) {
+          // Small positive reward for taking action (encourages exploration)
+          // Actual reward will be calculated later based on outcomes
+          reward = 0.1;
+          
+          // If we can detect immediate P&L change, use it (but it's usually 0)
+          if (pnlChange !== 0) {
+            // Normalize: scale by 1000 to get meaningful rewards (e.g., $10 P&L = 0.01 reward)
+            // Cap at -1 to 1 range
+            reward = Math.max(-1, Math.min(1, pnlChange / 1000));
+          }
+        }
+
+        // COMPLETE STEP with calculated reward and market identifiers
         trajectoryRecorder.completeStep(trajId, {
           actionType: 'TRADING_DECISION',
-          parameters: { method: useA2A ? 'a2a' : 'database' },
+          parameters: { 
+            method: useA2A ? 'a2a' : 'database',
+            pnlChange,
+            initialPnL: initialState.agentPnL,
+            finalPnL: afterState.agentPnL,
+            // Include market identifiers for reward backpropagation
+            marketId: tradeInfo.marketId,
+            ticker: tradeInfo.ticker,
+            side: tradeInfo.side,
+            marketType: tradeInfo.marketType
+          },
           success: result.actionsExecuted.trades > 0
-        }, result.actionsExecuted.trades > 0 ? 0.5 : 0);
+        }, reward);
       }
 
       // === POSTING ===
       if (agent.autonomousPosting) {
         // START STEP
-        trajectoryRecorder.startStep(trajId, await this.captureEnvironmentState(agentUserId));
+        const initialState = await this.captureEnvironmentState(agentUserId);
+        trajectoryRecorder.startStep(trajId, initialState);
 
         const postId = await autonomousPostingService.createAgentPost(agentUserId, runtime);
         if (postId) {
           result.actionsExecuted.posts++;
+        }
+
+        // Calculate reward based on engagement (if post was created)
+        // For now, use small positive reward for successful post creation
+        // In future, can enhance with actual engagement metrics (likes, comments, shares)
+        let reward = 0;
+        if (postId) {
+          // Small positive reward for creating content (encourages participation)
+          // Will be enhanced later with actual engagement metrics
+          reward = 0.1;
         }
 
         // COMPLETE STEP
@@ -134,17 +206,27 @@ export class AutonomousCoordinatorWithRecording {
           parameters: { postId },
           success: !!postId,
           result: postId ? { postId } : undefined
-        }, postId ? 0.3 : 0);
+        }, reward);
       }
 
       // === COMMENTING ===
       if (agent.autonomousCommenting) {
         // START STEP
-        trajectoryRecorder.startStep(trajId, await this.captureEnvironmentState(agentUserId));
+        const initialState = await this.captureEnvironmentState(agentUserId);
+        trajectoryRecorder.startStep(trajId, initialState);
 
         const commentId = await autonomousCommentingService.createAgentComment(agentUserId, runtime);
         if (commentId) {
           result.actionsExecuted.comments++;
+        }
+
+        // Calculate reward based on engagement
+        // Small positive reward for creating content
+        let reward = 0;
+        if (commentId) {
+          // Small positive reward for engagement (encourages participation)
+          // Will be enhanced later with actual engagement metrics
+          reward = 0.05;
         }
 
         // COMPLETE STEP
@@ -153,7 +235,7 @@ export class AutonomousCoordinatorWithRecording {
           parameters: { commentId },
           success: !!commentId,
           result: commentId ? { commentId } : undefined
-        }, commentId ? 0.2 : 0);
+        }, reward);
       }
 
       result.success = true;

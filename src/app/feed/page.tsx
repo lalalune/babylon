@@ -103,7 +103,7 @@ function FeedPageContent() {
   useEffect(() => {
     const loadActorNames = async () => {
       try {
-        const response = await fetch('/data/actors.json')
+        const response = await fetch('/data/actors-full.json')
         if (!response.ok) return
         const data = await response.json() as { actors?: Array<{ id: string; name: string }> }
         const nameMap = new Map<string, string>()

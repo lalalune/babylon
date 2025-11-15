@@ -12,3 +12,14 @@ Only after all three commands pass without errors should you consider the work c
 
 If any of these commands fail, you must fix the issues before proceeding.
 
+NEVER use try { } catch { }, if (obj.property === 'function') or anything like that. That's bad defensive programming. Also use clean code, with a policy to fail fast
+
+NEVER use unknown or any. Try to research which type you need, see if it already exists, make sure it exists as a shared type if it is used in multiple places, and reference that. If you absolutely can't figure out the type, use unknown as a last resort.
+
+Always research what you are doing and look for existing code before writing new code to do something. Chances are good it already exists.
+
+Always write tests against the against backend. Only write unit tests where there is some specific logic to test, but mocks also hide bugs, so make sure the backend is running and test every feature by calling the actual APIs. Make sure the backend is running before running integration tests so yuo don't run into errors.
+
+You don't need to write markdown files every time you finish something. Instead, make sure you have reviewed, there are thorough tests for the thing you've done, and you've run the tests and confirmed they passed.
+
+Don't pipe your test commands. Just print them out when you run them in the console. Then I can see the errors and help you.

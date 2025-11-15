@@ -6,6 +6,7 @@ import { Flame } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/shared/Skeleton'
 import { usePredictionMarketsSubscription } from '@/hooks/usePredictionMarketStream'
+import { logger } from '@/lib/logger'
 
 interface PredictionSummary {
   id: string
@@ -33,21 +34,30 @@ export function PredictionTrendingPanel({ onMarketClick }: PredictionTrendingPan
 
   useEffect(() => {
     const fetchPredictions = async () => {
-      setLoading(true)
-      const response = await fetch('/api/markets/predictions')
-      const data = await response.json()
-      if (Array.isArray(data.questions)) {
-        setMarkets(
-          (data.questions as PredictionQuestion[]).map((question) => ({
-            id: question.id.toString(),
-            text: question.text,
-            yesShares: Number(question.yesShares ?? 0),
-            noShares: Number(question.noShares ?? 0),
-            resolutionDate: question.resolutionDate ?? undefined,
-          }))
-        )
+      try {
+        setLoading(true)
+        const response = await fetch('/api/markets/predictions')
+        if (!response.ok) {
+          throw new Error(`Failed to fetch: ${response.status}`)
+        }
+        const data = await response.json()
+        if (Array.isArray(data.questions)) {
+          setMarkets(
+            (data.questions as PredictionQuestion[]).map((question) => ({
+              id: question.id.toString(),
+              text: question.text,
+              yesShares: Number(question.yesShares ?? 0),
+              noShares: Number(question.noShares ?? 0),
+              resolutionDate: question.resolutionDate ?? undefined,
+            }))
+          )
+        }
+      } catch (error) {
+        logger.error('Failed to fetch hot predictions', { error }, 'PredictionTrendingPanel')
+        // Keep existing data on error
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
 
     fetchPredictions()

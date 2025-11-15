@@ -25,7 +25,7 @@ This will:
 If you're only working on the frontend and don't need content generation:
 
 ```bash
-bun run dev:web-only
+bun run dev:next-only
 ```
 
 ### Serverless/Cron Mode
@@ -45,14 +45,11 @@ bun run db:status
 # Apply migrations
 bun run db:migrate
 
-# Reset database (caution: deletes all data)
-bun run db:reset
-
 # Seed with fresh data
 bun run db:seed
 
 # Open Prisma Studio (database GUI)
-bun run prisma:studio
+npx prisma studio
 ```
 
 ### 2. Game Control
@@ -80,8 +77,8 @@ bun run test:integration
 # E2E tests (Playwright)
 bun run test:e2e
 
-# E2E with UI
-bun run test:e2e:ui
+# E2E with UI (headed mode)
+bun run test:playwright -- --headed
 ```
 
 ### 4. Code Quality
@@ -91,32 +88,32 @@ bun run test:e2e:ui
 bun run lint
 
 # Fix linting issues
-bun run lint:fix
+bun run lint
 
 # Type check
-bun run type-check
+bun run typecheck
 ```
 
 ## Project Structure
 
 ```
 babylon/
-├── src/
-│   ├── app/                # Next.js App Router
-│   │   ├── api/           # API routes
-│   │   ├── (routes)/      # Page routes
-│   │   └── layout.tsx     # Root layout
-│   ├── components/        # React components
-│   ├── lib/              # Utility libraries
-│   ├── engine/           # Game engine logic
-│   ├── agents/           # Agent system
-│   ├── a2a/              # A2A protocol
-│   └── types/            # TypeScript types
-├── contracts/            # Solidity smart contracts
-├── prisma/              # Database schema and migrations
-├── public/              # Static assets
-├── scripts/             # Utility scripts
-└── tests/               # Test files
+ src/
+ app/ # Next.js App Router
+ api/ # API routes
+ (routes)/ # Page routes
+ layout.tsx # Root layout
+ components/ # React components
+ lib/ # Utility libraries
+ engine/ # Game engine logic
+ agents/ # Agent system
+ a2a/ # A2A protocol
+ types/ # TypeScript types
+ contracts/ # Solidity smart contracts
+ prisma/ # Database schema and migrations
+ public/ # Static assets
+ scripts/ # Utility scripts
+ tests/ # Test files
 ```
 
 ## Real-Time Features
@@ -130,13 +127,13 @@ Babylon uses SSE for real-time updates:
 const eventSource = new EventSource('/api/sse/events');
 
 eventSource.addEventListener('feed_update', (e) => {
-  const data = JSON.parse(e.data);
-  // Handle new posts
+ const data = JSON.parse(e.data);
+ // Handle new posts
 });
 
 eventSource.addEventListener('market_update', (e) => {
-  const data = JSON.parse(e.data);
-  // Handle price changes
+ const data = JSON.parse(e.data);
+ // Handle price changes
 });
 ```
 
@@ -148,9 +145,9 @@ For agent communication:
 import { A2AClient } from '@/a2a/client';
 
 const client = new A2AClient({
-  serverUrl: 'ws://localhost:3000/ws/a2a',
-  agentId: 'my-agent',
-  privateKey: process.env.AGENT_PRIVATE_KEY
+ serverUrl: 'ws://localhost:3000/ws/a2a',
+ agentId: 'my-agent',
+ privateKey: process.env.AGENT_PRIVATE_KEY
 });
 
 await client.connect();
@@ -168,11 +165,11 @@ import { withErrorHandling, successResponse } from '@/lib/errors/error-handler';
 import { requireAuth } from '@/lib/api/auth-middleware';
 
 export const GET = withErrorHandling(async (request: NextRequest) => {
-  const user = await requireAuth(request);
-  
-  // Your logic here
-  
-  return successResponse({ data: 'Hello' });
+ const user = await requireAuth(request);
+ 
+ // Your logic here
+ 
+ return successResponse({ data: 'Hello' });
 });
 ```
 
@@ -186,18 +183,18 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
 ```prisma
 model MyModel {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
-  
-  @@index([name])
+ id String @id @default(uuid())
+ name String
+ createdAt DateTime @default(now())
+ 
+ @@index([name])
 }
 ```
 
 2. Create migration:
 
 ```bash
-bun run prisma:migrate
+bun run db:migrate
 ```
 
 3. Update TypeScript types in `src/types/`
@@ -214,15 +211,15 @@ touch src/components/MyComponent.tsx
 import { FC } from 'react';
 
 interface MyComponentProps {
-  title: string;
+ title: string;
 }
 
 export const MyComponent: FC<MyComponentProps> = ({ title }) => {
-  return (
-    <div className="p-4">
-      <h2>{title}</h2>
-    </div>
-  );
+ return (
+ <div className="p-4">
+ <h2>{title}</h2>
+ </div>
+ );
 };
 ```
 
@@ -234,26 +231,26 @@ Create `.vscode/launch.json`:
 
 ```json
 {
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Next.js: debug server-side",
-      "type": "node-terminal",
-      "request": "launch",
-      "command": "bun run dev"
-    },
-    {
-      "name": "Next.js: debug full stack",
-      "type": "node-terminal",
-      "request": "launch",
-      "command": "bun run dev",
-      "serverReadyAction": {
-        "pattern": "started server on .+, url: (https?://.+)",
-        "uriFormat": "%s",
-        "action": "debugWithChrome"
-      }
-    }
-  ]
+ "version": "0.2.0",
+ "configurations": [
+ {
+ "name": "Next.js: debug server-side",
+ "type": "node-terminal",
+ "request": "launch",
+ "command": "bun run dev"
+ },
+ {
+ "name": "Next.js: debug full stack",
+ "type": "node-terminal",
+ "request": "launch",
+ "command": "bun run dev",
+ "serverReadyAction": {
+ "pattern": "started server on .+, url: (https?://.+)",
+ "uriFormat": "%s",
+ "action": "debugWithChrome"
+ }
+ }
+ ]
 }
 ```
 

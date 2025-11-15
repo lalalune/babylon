@@ -57,9 +57,11 @@
  * ```
  */
 
-import type { Actor, Organization, WorldEvent } from '@/shared/types';
+import type { Actor, Organization, WorldEvent, Question } from '@/shared/types';
 import type { BabylonLLMClient } from '../generator/llm/openai-client';
 import { generateSnowflakeId } from '@/lib/snowflake';
+
+type ArticleStage = 'breaking' | 'commentary' | 'resolution';
 
 /**
  * Long-form news article with metadata
@@ -153,6 +155,102 @@ export class ArticleGenerator {
    */
   constructor(llm: BabylonLLMClient) {
     this.llm = llm;
+  }
+
+  /**
+   * Generate a single article for a question at specific stage
+   * 
+   * @param question - Prediction market question
+   * @param organization - News organization writing the article
+   * @param stage - Article stage (breaking/commentary/resolution)
+   * @param actors - All game actors
+   * @param recentEvents - Recent events for context
+   * @returns Article with stage-appropriate content
+   * 
+   * @description
+   * Generates articles tied to prediction market question lifecycle.
+   * Each stage has different tone and purpose.
+   */
+  async generateArticleForQuestion(
+    question: Question,
+    organization: Organization,
+    stage: ArticleStage,
+    actors: Actor[],
+    recentEvents: WorldEvent[] = []
+  ): Promise<Article> {
+    // Strict validation - fail fast on bad inputs
+    if (!question || !question.id || !question.text) {
+      throw new Error(`Invalid question for article generation: missing id or text`);
+    }
+    if (!organization || !organization.id || !organization.name) {
+      throw new Error(`Invalid organization for article generation: missing id or name`);
+    }
+    if (!stage || !['breaking', 'commentary', 'resolution'].includes(stage)) {
+      throw new Error(`Invalid stage for article generation: ${stage}`);
+    }
+    if (!actors || actors.length === 0) {
+      throw new Error('Actors array cannot be empty for article generation');
+    }
+
+    // Build context for the specific stage
+    const context = this.buildQuestionArticleContext(
+      question,
+      organization,
+      stage,
+      actors,
+      recentEvents
+    );
+
+    const article = await this.generateArticle(context);
+
+    // Validate generated article has required content
+    if (!article.title || article.title.trim().length === 0) {
+      throw new Error(`Generated article has empty title for Q${question.id} by ${organization.name}`);
+    }
+    if (!article.summary || article.summary.trim().length === 0) {
+      throw new Error(`Generated article has empty summary for Q${question.id} by ${organization.name}`);
+    }
+    if (!article.content || article.content.trim().length < 100) {
+      throw new Error(`Generated article content too short (${article.content?.length || 0} chars) for Q${question.id} by ${organization.name}`);
+    }
+
+    return article;
+  }
+
+  /**
+   * Build context for question-based article generation
+   */
+  private buildQuestionArticleContext(
+    question: Question,
+    org: Organization,
+    stage: ArticleStage,
+    actors: Actor[],
+    recentEvents: WorldEvent[]
+  ): ArticleGenerationContext {
+    // Find journalist from this org
+    const journalist = actors.find(a => a.affiliations?.includes(org.id));
+
+    // Create synthetic event from question for consistency with existing code
+    const questionIdNumber = typeof question.id === 'number' ? question.id : null;
+    const syntheticEvent: WorldEvent = {
+      id: `question-${question.id}-${stage}`,
+      day: 0, // Will be set by caller
+      type: stage === 'breaking' ? 'announcement' : stage === 'resolution' ? 'revelation' : 'development',
+      description: question.text,
+      actors: [], // Question-level articles don't focus on specific actors
+      visibility: 'public',
+      pointsToward: stage === 'resolution' ? (question.outcome ? 'YES' : 'NO') : null,
+      relatedQuestion: questionIdNumber,
+    };
+
+    return {
+      event: syntheticEvent,
+      organization: org,
+      journalist,
+      alignedActors: [],
+      opposingActors: [],
+      recentEvents: recentEvents.filter(e => e.relatedQuestion === questionIdNumber).slice(0, 3),
+    };
   }
 
   /**

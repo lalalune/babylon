@@ -12,6 +12,7 @@ import { CreateReportSchema, GetReportsSchema } from '@/lib/validation/schemas/m
 import { logger } from '@/lib/logger';
 import { BusinessLogicError, NotFoundError } from '@/lib/errors';
 import { generateSnowflakeId } from '@/lib/snowflake';
+import { evaluateReport, storeEvaluationResult } from '@/lib/moderation/report-evaluation';
 
 /**
  * POST /api/moderation/reports
@@ -143,9 +144,87 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     priority,
   }, 'POST /api/moderation/reports');
 
+  // Automatically evaluate and process the report
+  // This ensures fully automated moderation - no human review needed unless user stakes $10 for appeal
+  try {
+    const evaluation = await evaluateReport(report.id);
+    await storeEvaluationResult(report.id, evaluation);
+
+    // If evaluation indicates valid scammer/CSAM report with high confidence, automatically ban
+    // Check if recommendedActions suggest banning or if reasoning indicates scamming/CSAM
+    const shouldAutoBan = 
+      evaluation.outcome === 'valid_report' &&
+      evaluation.confidence >= 0.8 &&
+      report.reportedUserId !== null &&
+      (evaluation.recommendedActions.includes('ban_user') || 
+       evaluation.recommendedActions.includes('ban') ||
+       evaluation.recommendedActions.includes('mark_scammer') ||
+       evaluation.recommendedActions.includes('mark_csam') ||
+       evaluation.reasoning.toLowerCase().includes('scam') ||
+       evaluation.reasoning.toLowerCase().includes('csam') ||
+       evaluation.reasoning.toLowerCase().includes('child sexual abuse'))
+
+    if (shouldAutoBan && report.reportedUserId) {
+      // Determine if scammer or CSAM based on evaluation
+      const isScammer = evaluation.recommendedActions.includes('mark_scammer') || 
+                        evaluation.reasoning.toLowerCase().includes('scam')
+      const isCSAM = evaluation.recommendedActions.includes('mark_csam') ||
+                     evaluation.reasoning.toLowerCase().includes('csam') ||
+                     evaluation.reasoning.toLowerCase().includes('child sexual abuse')
+
+      // Automatically ban the reported user
+      if (report.reportedUserId) {
+        await prisma.user.update({
+          where: { id: report.reportedUserId },
+          data: {
+            isBanned: true,
+            bannedAt: new Date(),
+            bannedReason: `Automated ban from report #${report.id}: ${evaluation.reasoning.substring(0, 200)}`,
+            bannedBy: undefined, // System ban - no specific admin
+            isScammer: isScammer,
+            isCSAM: isCSAM,
+          },
+        });
+      }
+
+      // Update report status
+      await prisma.report.update({
+        where: { id: report.id },
+        data: {
+          status: 'resolved',
+          resolution: `User automatically banned: ${evaluation.reasoning.substring(0, 200)}`,
+          resolvedBy: null, // System resolution - no specific admin
+          resolvedAt: new Date(),
+        },
+      });
+
+      logger.info('User automatically banned from report', {
+        reportId: report.id,
+        reportedUserId: report.reportedUserId,
+        evaluationOutcome: evaluation.outcome,
+        confidence: evaluation.confidence,
+      }, 'POST /api/moderation/reports');
+    } else {
+      // Store evaluation but don't auto-ban (low confidence or not scammer/CSAM)
+      await prisma.report.update({
+        where: { id: report.id },
+        data: {
+          status: 'reviewing',
+          resolution: JSON.stringify(evaluation),
+        },
+      });
+    }
+  } catch (error) {
+    // Don't fail report creation if evaluation fails - log and continue
+    logger.error('Failed to automatically evaluate report', {
+      reportId: report.id,
+      error: error instanceof Error ? error.message : String(error),
+    }, 'POST /api/moderation/reports');
+  }
+
   return successResponse({
     success: true,
-    message: 'Report submitted successfully. Our moderation team will review it.',
+    message: 'Report submitted successfully. It has been automatically evaluated.',
     report,
   });
 });

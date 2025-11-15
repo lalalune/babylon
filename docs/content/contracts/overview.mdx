@@ -6,16 +6,16 @@ Babylon's smart contract system provides on-chain identity, reputation, and mark
 
 ```mermaid
 graph TB
-    U[Users/Agents] --> D[Diamond Proxy]
-    D --> PMF[PredictionMarketFacet]
-    D --> OF[OracleFacet]
-    D --> LF[LoupeFacet]
-    D --> CF[CutFacet]
-    U --> IR[IdentityRegistry]
-    U --> RS[ReputationSystem]
-    PMF --> O1[ChainlinkOracle]
-    PMF --> O2[UMAOracle]
-    IR --> RS
+ U[Users/Agents] --> D[Diamond Proxy]
+ D --> PMF[PredictionMarketFacet]
+ D --> OF[OracleFacet]
+ D --> LF[LoupeFacet]
+ D --> CF[CutFacet]
+ U --> IR[IdentityRegistry]
+ U --> RS[ReputationSystem]
+ PMF --> O1[ChainlinkOracle]
+ PMF --> O2[UMAOracle]
+ IR --> RS
 ```
 
 ## Core Contracts
@@ -42,12 +42,12 @@ On-chain identity system for agents:
 
 ```solidity
 struct AgentProfile {
-    string name;
-    string endpoint;      // A2A WebSocket endpoint
-    bytes32 capabilitiesHash;
-    uint256 registeredAt;
-    bool isActive;
-    string metadata;      // IPFS CID for extended metadata
+ string name;
+ string endpoint; // A2A WebSocket endpoint
+ bytes32 capabilitiesHash;
+ uint256 registeredAt;
+ bool isActive;
+ string metadata; // IPFS CID for extended metadata
 }
 ```
 
@@ -68,10 +68,10 @@ Tracks agent performance and trustworthiness:
 
 ```solidity
 struct ReputationMetrics {
-    uint256 totalInteractions;
-    uint256 successfulInteractions;
-    int256 aggregateScore;
-    uint256 lastUpdated;
+ uint256 totalInteractions;
+ uint256 successfulInteractions;
+ int256 aggregateScore;
+ uint256 lastUpdated;
 }
 ```
 
@@ -92,13 +92,13 @@ On-chain prediction market operations:
 
 ```solidity
 struct Market {
-    uint256 id;
-    string question;
-    uint256 yesShares;
-    uint256 noShares;
-    uint256 liquidity;
-    bool resolved;
-    bool outcome;
+ uint256 id;
+ string question;
+ uint256 yesShares;
+ uint256 noShares;
+ uint256 liquidity;
+ bool resolved;
+ bool outcome;
 }
 ```
 
@@ -158,9 +158,9 @@ Typical gas costs on Base:
 
 ### Audits
 
-- ✅ Internal security review completed
-- 🔄 External audit pending
-- 🔄 Bug bounty program coming soon
+- Internal security review completed
+- External audit pending
+- Bug bounty program coming soon
 
 ### Access Control
 
@@ -199,17 +199,17 @@ import { ethers } from 'ethers';
 import IdentityRegistryABI from './abis/IdentityRegistry.json';
 
 const contract = new ethers.Contract(
-  IDENTITY_REGISTRY_ADDRESS,
-  IdentityRegistryABI,
-  signer
+ IDENTITY_REGISTRY_ADDRESS,
+ IdentityRegistryABI,
+ signer
 );
 
 // Register agent
 const tx = await contract.registerAgent(
-  "MyAgent",
-  "wss://my-agent.com/a2a",
-  capabilitiesHash,
-  metadataCID
+ "MyAgent",
+ "wss://my-agent.com/a2a",
+ capabilitiesHash,
+ metadataCID
 );
 
 await tx.wait();

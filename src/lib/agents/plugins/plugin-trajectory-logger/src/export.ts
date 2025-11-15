@@ -368,21 +368,70 @@ async function uploadToHuggingFaceHub(
   options: ExportOptions
 ): Promise<void> {
   try {
-    // This uses the Hugging Face Hub API
-    // You would need @huggingface/hub package
-    
-    console.log('Uploading to Hugging Face Hub...');
-    console.log(`Dataset: ${options.datasetName}`);
-    
-    // TODO: Implement actual upload
-    // For now, print instructions
-    console.log('\n📦 To upload to Hugging Face Hub manually:');
-    console.log('1. Install: pip install huggingface_hub');
-    console.log('2. Login: huggingface-cli login');
-    console.log(`3. Upload: huggingface-cli upload ${options.datasetName} ${exportDir}`);
-    
+    if (!options.huggingFaceToken) {
+      throw new Error('HuggingFace token is required for upload');
+    }
+
+    // Try using child_process to call huggingface-cli (most reliable method)
+    try {
+      const { exec } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      const execAsync = promisify(exec);
+      
+      // Set token as environment variable for huggingface-cli
+      process.env.HUGGINGFACE_HUB_TOKEN = options.huggingFaceToken;
+      
+      console.log('Uploading to Hugging Face Hub...');
+      console.log(`Dataset: ${options.datasetName}`);
+      
+      await execAsync(`huggingface-cli upload ${options.datasetName} ${exportDir} --repo-type dataset`);
+      console.log('✅ Successfully uploaded via huggingface-cli');
+    } catch (cliError) {
+      // Fallback: Try @huggingface/hub npm package if available
+      try {
+        const hubModule = await import('@huggingface/hub');
+        // Handle different export styles
+        const HfApi = (hubModule as { HfApi?: new (args: { token: string }) => { uploadFile: (args: { repoId: string; path: string; fileContent: string; repoType: string }) => Promise<void> } }).HfApi;
+        
+        if (!HfApi) {
+          throw new Error('HfApi not found in @huggingface/hub');
+        }
+        
+        const api = new HfApi({ token: options.huggingFaceToken });
+        const fs = await import('node:fs/promises');
+        const path = await import('node:path');
+        const files = await fs.readdir(exportDir);
+
+        for (const file of files) {
+          const filePath = path.join(exportDir, file);
+          const stats = await fs.stat(filePath);
+          
+          if (stats.isFile()) {
+            const fileContent = await fs.readFile(filePath, 'utf-8');
+            await api.uploadFile({
+              repoId: options.datasetName,
+              path: file,
+              fileContent: fileContent,
+              repoType: 'dataset',
+            });
+            console.log(`Uploaded ${file}`);
+          }
+        }
+
+        console.log('✅ Successfully uploaded to Hugging Face Hub');
+      } catch (importError) {
+        // If both methods fail, provide instructions
+        console.warn('Neither huggingface-cli nor @huggingface/hub available.');
+        console.log('\n📦 To upload to Hugging Face Hub:');
+        console.log('1. Install: pip install huggingface_hub');
+        console.log('2. Login: huggingface-cli login');
+        console.log(`3. Upload: huggingface-cli upload ${options.datasetName} ${exportDir} --repo-type dataset`);
+        throw new Error('HuggingFace upload failed: neither huggingface-cli nor @huggingface/hub available');
+      }
+    }
   } catch (error) {
     console.error('Failed to upload to Hugging Face Hub:', error);
+    throw error;
   }
 }
 

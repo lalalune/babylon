@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Database, RefreshCw, CheckCircle, AlertCircle, TrendingUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { logger } from '@/lib/logger'
 
 interface TrainingDataStats {
   summary: {
@@ -60,11 +61,17 @@ export function TrainingDataTab() {
 
       if (!response.ok) throw new Error('Failed to fetch training data')
 
-      const result = await response.json()
+      let result;
+      try {
+        result = await response.json()
+      } catch (parseError) {
+        logger.error('Failed to parse training data response', { error: parseError }, 'TrainingDataTab')
+        throw new Error('Failed to parse response')
+      }
       setData(result.data)
       setLoading(false)
     } catch (error) {
-      console.error('Failed to load training data:', error)
+      logger.error('Failed to load training data', { error }, 'TrainingDataTab')
       toast.error('Failed to load training data')
       setLoading(false)
     }

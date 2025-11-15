@@ -21,9 +21,16 @@ import { shuffleArray } from '@/lib/utils/randomization'
 export class AutonomousTradingService {
   /**
    * Evaluate and execute trades for an agent
-   * TODO: Removed outer try/catch - let errors propagate. Kept inner try/catch for individual trade execution to continue processing.
+   * Note: Inner try/catch is kept for individual trade execution to continue processing on failure.
+   * Returns trade execution result with market identifiers for trajectory recording
    */
-  async executeTrades(agentUserId: string, _runtime: IAgentRuntime): Promise<number> {
+  async executeTrades(agentUserId: string, _runtime: IAgentRuntime): Promise<{
+    tradesExecuted: number;
+    marketId?: string;
+    ticker?: string;
+    side?: string;
+    marketType?: 'prediction' | 'perp';
+  }> {
     const agent = await prisma.user.findUnique({
       where: { id: agentUserId }
     })
@@ -74,6 +81,8 @@ export class AutonomousTradingService {
     const contextString = formatRandomContext(marketContext)
 
     // Build trading decision prompt
+    // Note: NPC trust scores are provided by experiencePlugin (marketOutcomeEvaluator)
+    // and will appear in agent context automatically via providers
     const prompt = `${agent.agentSystem}
 
 You are ${agent.displayName}, an autonomous trading agent.
@@ -104,7 +113,7 @@ Respond in JSON format:
     "market": "id or ticker",
     "action": "buy_yes" | "buy_no" | "sell" | "open_long" | "open_short" | "close",
     "amount": number,
-    "reasoning": "why"
+    "reasoning": "why (mention trust scores if relevant)"
   }
 }
 
@@ -122,16 +131,32 @@ ${contextString}`
 
     const jsonMatch = decision.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
-      return 0
+      return {
+        tradesExecuted: 0,
+        marketId: undefined,
+        ticker: undefined,
+        side: undefined,
+        marketType: undefined
+      }
     }
     const tradeDecision = JSON.parse(jsonMatch[0]) as { action: string; trade?: {type: string; market: string; action: string; amount: number; reasoning?: string } }
 
     if (tradeDecision.action !== 'trade' || !tradeDecision.trade) {
-      return 0 // Agent decided to hold
+      return {
+        tradesExecuted: 0,
+        marketId: undefined,
+        ticker: undefined,
+        side: undefined,
+        marketType: undefined
+      } // Agent decided to hold
     }
 
     const trade = tradeDecision.trade
     let tradesExecuted = 0
+    let lastMarketId: string | undefined
+    let lastTicker: string | undefined
+    let lastSide: string | undefined
+    let lastMarketType: 'prediction' | 'perp' | undefined
 
     // Execute the trade based on type
     if (trade.type === 'prediction' && predictionMarkets.length > 0) {
@@ -221,6 +246,9 @@ ${contextString}`
             })
 
             tradesExecuted++
+            lastMarketId = market.id
+            lastSide = side ? 'YES' : 'NO'
+            lastMarketType = 'prediction'
             logger.info(`Agent ${agent.displayName} bought ${side ? 'YES' : 'NO'} on ${market.question}`, undefined, 'AutonomousTrading')
           }
         } catch (error) {
@@ -228,38 +256,42 @@ ${contextString}`
         }
       }
     } else if (trade.type === 'perp' && perpMarkets.length > 0) {
-      const org = perpMarkets.find(o => o.name.toLowerCase().includes(trade.market.toLowerCase()))
+      const org = perpMarkets.find(o => o.name === trade.market || o.id === trade.market)
       if (org && trade.amount <= Number(balance.balance)) {
-        // Keep try/catch for individual trade execution
         try {
           if (trade.action === 'open_long' || trade.action === 'open_short') {
             const side = trade.action === 'open_long' ? 'long' : 'short'
+            // Use org.name as ticker (Organization model doesn't have ticker field, name is used as ticker)
+            const ticker = org.name
             
-            // Execute via PerpTradeService
-            const perpResult = await PerpTradeService.openPosition(
-              { userId: agentUserId, walletAddress: agent.walletAddress || undefined },
-              {
-                ticker: org.name,
-                side,
-                size: trade.amount,
-                leverage: 2 // Conservative leverage for agents
-              }
-            )
+            await asUser({ userId: agentUserId, walletAddress: agent.walletAddress || undefined }, async () => {
+              await PerpTradeService.openPosition(
+                { userId: agentUserId, walletAddress: agent.walletAddress || undefined },
+                {
+                  ticker,
+                  side,
+                  size: trade.amount,
+                  leverage: 1
+                }
+              )
+            })
 
-            // Record in AgentTrade
             await agentPnLService.recordTrade({
               agentId: agentUserId,
               userId: agent.managedBy || agentUserId,
               marketType: 'perp',
-              ticker: org.name,
+              ticker: org.name, // Use org.name as ticker
               action: 'open',
               side,
               amount: trade.amount,
-              price: perpResult.position.entryPrice,
-              reasoning: trade.reasoning ?? undefined
+              price: Number(org.currentPrice ?? 0),
+              reasoning: trade.reasoning || undefined
             })
 
             tradesExecuted++
+            lastTicker = org.name // Use org.name as ticker
+            lastSide = side
+            lastMarketType = 'perp'
             logger.info(`Agent ${agent.displayName} opened ${side} position on ${org.name}`, undefined, 'AutonomousTrading')
           }
         } catch (error) {
@@ -268,7 +300,13 @@ ${contextString}`
       }
     }
 
-    return tradesExecuted
+    return {
+      tradesExecuted,
+      marketId: lastMarketId,
+      ticker: lastTicker,
+      side: lastSide,
+      marketType: lastMarketType
+    }
   }
 }
 

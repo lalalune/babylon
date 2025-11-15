@@ -21,14 +21,16 @@
  * 
  * **Vercel Compatibility:**
  * Assets are fetched from database rather than filesystem to support
- * serverless deployments. Static assets (actors.json, etc.) should be
+ * serverless deployments. Static assets (actors data, etc.) should be
  * fetched directly from the public directory by clients.
  * 
  * **Client Integration:**
  * ```typescript
  * // Fetch additional static assets directly
- * const actors = await fetch('/data/actors.json').then(r => r.json());
+ * const actors = await fetch('/data/actors-full.json').then(r => r.json());
  * const questions = await fetch('/data/questions.json').then(r => r.json());
+ * // Or use the API endpoint
+ * const actors = await fetch('/api/actors').then(r => r.json());
  * ```
  * 
  * @returns {object} Game assets
@@ -56,7 +58,7 @@
  * // Combine with static assets
  * const [gameAssets, actors] = await Promise.all([
  *   fetch('/api/game-assets').then(r => r.json()),
- *   fetch('/data/actors.json').then(r => r.json())
+ *   fetch('/data/actors-full.json').then(r => r.json())
  * ]);
  * ```
  * 
@@ -70,7 +72,8 @@
  * ```
  * 
  * @see {@link /lib/db/context} Database context with RLS
- * @see {@link /public/data/actors.json} Static actor data
+ * @see {@link /public/data/actors-full.json} Static actor data (generated)
+ * @see {@link /public/data/README.md} Actor data structure documentation
  * @see {@link /api/games} Games listing endpoint
  */
 
@@ -114,7 +117,7 @@ export const GET = withErrorHandling(async (_request: NextRequest) => {
       })
 
   // If you need additional game assets, store them in database or
-  // have the client fetch from /data/actors.json directly (public folder)
+  // have the client fetch from /data/actors-full.json or /api/actors directly
   const assets = {
     groupChats: groupChats.map(chat => ({
       id: chat.id,

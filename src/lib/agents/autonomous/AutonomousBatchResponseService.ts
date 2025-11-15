@@ -41,7 +41,6 @@ interface ResponseDecision {
 export class AutonomousBatchResponseService {
   /**
    * Gather all pending interactions that might need responses
-   * TODO: Removed try/catch - let database errors propagate
    */
   async gatherPendingInteractions(agentUserId: string): Promise<PendingInteraction[]> {
     const interactions: PendingInteraction[] = []
@@ -196,7 +195,7 @@ export class AutonomousBatchResponseService {
 
   /**
    * Evaluate which interactions warrant a response using AI
-   * TODO: Removed outer try/catch - let database/LLM errors propagate. Kept JSON parsing try/catch as it's expected to fail sometimes.
+   * Note: JSON parsing try/catch is kept as it's expected to fail sometimes with LLM output.
    */
   async evaluateInteractions(
     agentUserId: string,
@@ -283,7 +282,7 @@ Array:`
 
   /**
    * Generate and post responses for approved interactions
-   * TODO: Removed outer try/catch - let errors propagate. Kept inner try/catch for individual response posting as we want to continue on failure.
+   * Note: Inner try/catch is kept for individual response posting to continue processing on failure.
    */
   async executeResponses(
     agentUserId: string,
@@ -408,7 +407,6 @@ Generate ONLY the response text, nothing else.`
 
   /**
    * Main entry point: Process all pending interactions in batch
-   * TODO: Removed try/catch - let errors propagate to caller
    */
   async processBatch(agentUserId: string, _runtime: IAgentRuntime): Promise<number> {
     logger.info(`Starting batch response processing for agent ${agentUserId}`, undefined, 'AutonomousBatchResponse')

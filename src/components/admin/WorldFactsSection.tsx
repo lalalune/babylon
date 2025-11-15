@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Globe, RefreshCw, Newspaper, Edit, Save, X, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/shared/Skeleton'
+import { logger } from '@/lib/logger'
 
 interface WorldFact {
   id: string
@@ -47,7 +48,13 @@ export function WorldFactsSection() {
     try {
       const response = await fetch('/api/admin/world-facts')
       if (!response.ok) throw new Error('Failed to fetch world facts')
-      const result = await response.json()
+      let result;
+      try {
+        result = await response.json()
+      } catch (parseError) {
+        logger.error('Failed to parse world facts response', { error: parseError }, 'WorldFactsSection')
+        throw new Error('Failed to parse response')
+      }
       setData(result)
       setError(null)
     } catch (err) {
@@ -294,4 +301,5 @@ export function WorldFactsSection() {
     </div>
   )
 }
+
 

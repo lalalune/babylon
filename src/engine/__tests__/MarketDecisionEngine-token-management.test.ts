@@ -221,43 +221,37 @@ describe('MarketDecisionEngine - Token Management', () => {
     });
 
     test('should split large NPC count into multiple batches', async () => {
-      // Create 400 NPCs (should require 2 batches with 128k context and 400 tokens per NPC)
-      // Max NPCs per batch: 128450 / 400 = 321, so 400 NPCs = 2 batches
+      // Create 400 NPCs (should require 4 batches with current config)
+      // Actual implementation: 800 tokens per NPC, 128450 max context, 80% safety = ~128 NPCs per batch
+      // Max NPCs per batch: (128450 * 0.8) / 800 = 128, so 400 NPCs = 4 batches
       const npcs = Array.from({ length: 400 }, (_, i) => 
         createMockNPC(`npc-${i}`, `NPC ${i}`)
       );
       mockContext.setMockNPCs(npcs);
 
-      // Mock responses for each batch
-      const batch1 = npcs.slice(0, 321).map(npc => ({
-        npcId: npc.npcId,
-        npcName: npc.npcName,
-        action: 'hold' as const,
-        marketType: null,
-        amount: 0,
-        confidence: 1,
-        reasoning: 'Holding',
-        timestamp: new Date().toISOString(),
-      }));
-      const batch2 = npcs.slice(321).map(npc => ({
-        npcId: npc.npcId,
-        npcName: npc.npcName,
-        action: 'hold' as const,
-        marketType: null,
-        amount: 0,
-        confidence: 1,
-        reasoning: 'Holding',
-        timestamp: new Date().toISOString(),
-      }));
+      // Mock responses for each batch (128 NPCs per batch)
+      const createBatch = (start: number, count: number) => 
+        npcs.slice(start, start + count).map(npc => ({
+          npcId: npc.npcId,
+          npcName: npc.npcName,
+          action: 'hold' as const,
+          marketType: null,
+          amount: 0,
+          confidence: 1,
+          reasoning: 'Holding',
+          timestamp: new Date().toISOString(),
+        }));
 
-      mockLLMInstance.setMockResponse(batch1);
-      mockLLMInstance.setMockResponse(batch2);
+      mockLLMInstance.setMockResponse(createBatch(0, 128));
+      mockLLMInstance.setMockResponse(createBatch(128, 128));
+      mockLLMInstance.setMockResponse(createBatch(256, 128));
+      mockLLMInstance.setMockResponse(createBatch(384, 16)); // Last batch has 16 NPCs
 
       const engine = new MarketDecisionEngine(mockLLM, mockContext);
       const decisions = await engine.generateBatchDecisions();
 
       expect(decisions.length).toBe(400);
-      expect(mockLLMInstance.getCallCount()).toBe(2); // Should be exactly 2 batches
+      expect(mockLLMInstance.getCallCount()).toBe(4); // Should be exactly 4 batches
     });
   });
 

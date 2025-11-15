@@ -14,6 +14,8 @@ Day {{day}}/30
 {{progressContext}}
 {{atmosphereContext}}
 
+{{trendContext}}
+
 {{previousPostsContext}}
 
 WORLD CONTEXT:

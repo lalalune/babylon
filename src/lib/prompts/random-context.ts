@@ -12,6 +12,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { sampleRandom, shuffleArray } from '../utils/randomization';
+import { logger } from '../logger';
 
 export interface RandomMarketContext {
   gainers?: Array<{ name: string; price: number; change: number }>;
@@ -48,7 +49,7 @@ async function getMarketGainers(limit: number = 3): Promise<Array<{ name: string
 
     return withChanges;
   } catch (error) {
-    console.error('Error fetching market gainers:', error);
+    logger.error('Error fetching market gainers', { error }, 'random-context');
     return [];
   }
 }
@@ -80,7 +81,7 @@ async function getMarketLosers(limit: number = 3): Promise<Array<{ name: string;
 
     return withChanges;
   } catch (error) {
-    console.error('Error fetching market losers:', error);
+    logger.error('Error fetching market losers', { error }, 'random-context');
     return [];
   }
 }
@@ -110,7 +111,7 @@ async function getActiveQuestions(limit: number = 3): Promise<Array<{ question: 
     // Randomly sample
     return sampleRandom(formatted, limit);
   } catch (error) {
-    console.error('Error fetching active questions:', error);
+    logger.error('Error fetching active questions', { error }, 'random-context');
     return [];
   }
 }
@@ -138,7 +139,7 @@ async function getTrendingPosts(limit: number = 3): Promise<Array<{ author: stri
     // Randomly sample from top posts
     return sampleRandom(formatted, limit);
   } catch (error) {
-    console.error('Error fetching trending posts:', error);
+    logger.error('Error fetching trending posts', { error }, 'random-context');
     return [];
   }
 }
@@ -160,7 +161,7 @@ async function getRecentEvents(limit: number = 2): Promise<Array<{ title: string
 
     return sampleRandom(formatted, limit);
   } catch (error) {
-    console.error('Error fetching recent events:', error);
+    logger.error('Error fetching recent events', { error }, 'random-context');
     return [];
   }
 }

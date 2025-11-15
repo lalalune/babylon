@@ -69,7 +69,13 @@ export async function POST(request: NextRequest) {
 
   await updateFeedbackMetrics(toAgent.id, body.score)
 
-  submitFeedbackToAgent0(feedback.id)
+  // Submit to Agent0 network (fire-and-forget with error handling)
+  submitFeedbackToAgent0(feedback.id).catch((error) => {
+    logger.error('Failed to submit feedback to Agent0', {
+      feedbackId: feedback.id,
+      error,
+    })
+  })
 
   const metrics = await prisma.agentPerformanceMetrics.findUnique({
     where: { userId: toAgent.id },

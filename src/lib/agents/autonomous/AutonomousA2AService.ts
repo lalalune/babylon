@@ -41,15 +41,22 @@ export class AutonomousA2AService {
   async executeA2ATrade(
     agentUserId: string,
     runtime: IAgentRuntime
-  ): Promise<{ success: boolean; tradeId?: string }> {
-    if (!isBabylonRuntime(runtime) || !runtime.a2aClient) {
+  ): Promise<{ 
+    success: boolean; 
+    tradeId?: string;
+    marketId?: string;
+    ticker?: string;
+    side?: string;
+    marketType?: 'prediction' | 'perp';
+  }> {
+    if (!isBabylonRuntime(runtime) || !runtime.a2aClient?.isConnected()) {
       logger.debug('A2A not available, skipping A2A trade', { agentUserId })
-      return { success: false }
+      return { success: false, marketId: undefined, ticker: undefined, side: undefined, marketType: undefined }
     }
 
     const agent = await prisma.user.findUnique({ where: { id: agentUserId } })
     if (!agent || !agent.isAgent || !agent.autonomousTrading) {
-      return { success: false }
+      return { success: false, marketId: undefined, ticker: undefined, side: undefined, marketType: undefined }
     }
 
     // After type guard, runtime is BabylonRuntime and a2aClient is defined
@@ -60,7 +67,7 @@ export class AutonomousA2AService {
     }) as { predictions?: PredictionMarket[] }
 
     if (!predictionsResponse?.predictions || predictionsResponse.predictions.length === 0) {
-      return { success: false }
+      return { success: false, marketId: undefined, ticker: undefined, side: undefined, marketType: undefined }
     }
 
     const opportunities = predictionsResponse.predictions.filter((market) => {
@@ -70,25 +77,26 @@ export class AutonomousA2AService {
     })
 
     if (opportunities.length === 0) {
-      return { success: false }
+      return { success: false, marketId: undefined, ticker: undefined, side: undefined, marketType: undefined }
     }
 
     const market = opportunities[0]!
+    const marketId = market.id
     const tradeAmount = Math.min(50, Number(agent.virtualBalance) * 0.05)
 
     if (tradeAmount < 10) {
-      return { success: false }
+      return { success: false, marketId: undefined, ticker: undefined, side: undefined, marketType: undefined }
     }
 
     const tradeResult = await a2aClient.sendRequest('a2a.buyShares', {
-      marketId: market.id,
+      marketId,
       outcome: 'YES',
       amount: tradeAmount
     }) as { shares?: number; avgPrice?: number; positionId?: string }
 
     logger.info('A2A trade executed', {
       agentUserId,
-      marketId: market.id,
+      marketId,
       amount: tradeAmount,
       shares: tradeResult.shares || 0
     })
@@ -98,7 +106,7 @@ export class AutonomousA2AService {
         id: await generateSnowflakeId(),
         agentUserId,
         marketType: 'prediction',
-        marketId: market.id,
+        marketId,
         action: 'open',
         side: 'yes',
         amount: tradeAmount,
@@ -107,7 +115,14 @@ export class AutonomousA2AService {
       }
     })
 
-    return { success: true, tradeId: tradeResult.positionId }
+    return { 
+      success: true, 
+      tradeId: tradeResult.positionId,
+      marketId,
+      ticker: undefined,
+      side: 'YES',
+      marketType: 'prediction'
+    }
   }
 
   /**

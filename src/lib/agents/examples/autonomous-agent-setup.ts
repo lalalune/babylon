@@ -59,11 +59,9 @@ export async function setupBasicAutonomousAgent(agentUserId: string): Promise<{ 
     bio: agent.bio ? JSON.parse(agent.bio) : [],
     
     settings: {
-      // Use TEXT_SMALL for most operations (routes to llama-3.1-8b-instant - free tier)
-      // Use TEXT_LARGE for quality content (routes to qwen/qwen3-32b)
-      model: agent.agentModelTier === 'pro' 
-        ? ModelType.TEXT_LARGE 
-        : ModelType.TEXT_SMALL,
+      // Always use TEXT_LARGE (qwen 32b) - free chat, 1pt per tick
+      // WANDB models are checked at runtime if available
+      model: ModelType.TEXT_LARGE,
       temperature: 0.7,
       maxTokens: 1000
     },

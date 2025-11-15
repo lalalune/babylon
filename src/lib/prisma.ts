@@ -20,6 +20,7 @@
 import { PrismaClient } from '@prisma/client';
 import { createRetryProxy } from './prisma-retry';
 import { createMonitoredPrismaClient } from './db/monitored-prisma';
+import { logger } from './logger';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -84,7 +85,7 @@ function createPrismaClient() {
   }
   
   if (!databaseUrl && process.env.NODE_ENV === 'production') {
-    console.error('[Prisma] ERROR: Neither PRISMA_DATABASE_URL nor DATABASE_URL is set');
+    logger.error('[Prisma] ERROR: Neither PRISMA_DATABASE_URL nor DATABASE_URL is set', undefined, 'prisma');
   }
   
   // Set DATABASE_URL if using PRISMA_DATABASE_URL (for Prisma CLI commands)
@@ -96,7 +97,7 @@ function createPrismaClient() {
   // This ensures we can handle high concurrent load regardless of .env configuration
   if (databaseUrl) {
     databaseUrl = enforceConnectionPoolParams(databaseUrl);
-    console.log('[Prisma] Enforced connection pool settings: connection_limit=50, pool_timeout=30, connect_timeout=10');
+    logger.info('[Prisma] Enforced connection pool settings: connection_limit=50, pool_timeout=30, connect_timeout=10', undefined, 'prisma');
   }
   
   const baseClient = new PrismaClient({
@@ -215,7 +216,7 @@ function getPrismaClient(): PrismaClient | null {
   
   if (isBuildTime && !isTestEnvCheck) {
     if (!globalForPrisma.prisma) {
-      console.log('[Prisma] Build time detected - skipping Prisma initialization');
+      logger.info('[Prisma] Build time detected - skipping Prisma initialization', undefined, 'prisma');
     }
     return null;
   }
@@ -233,11 +234,11 @@ function getPrismaClient(): PrismaClient | null {
         
         // Add connection lifecycle logging in development and test
         if (process.env.NODE_ENV === 'development' || isTestEnv) {
-          console.log('[Prisma] Created new Prisma Client instance');
+          logger.info('[Prisma] Created new Prisma Client instance', undefined, 'prisma');
         }
       } catch (error) {
         if (isTestEnv) {
-          console.error('[Prisma] Failed to initialize Prisma client in test environment:', error);
+          logger.error('[Prisma] Failed to initialize Prisma client in test environment', { error }, 'prisma');
           throw error;
         }
         // In non-test environments, allow null to be returned (will throw later)
@@ -258,7 +259,7 @@ const isTestEnv = isTestEnvironment();
 
 // In test environments, ensure Prisma is initialized
 if (isTestEnv && !basePrismaClient) {
-  console.error('[Prisma] ERROR: Prisma client is not initialized in test environment. Check DATABASE_URL environment variable.');
+  logger.error('[Prisma] ERROR: Prisma client is not initialized in test environment. Check DATABASE_URL environment variable.', undefined, 'prisma');
   throw new Error('Prisma client is not initialized in test environment. Check DATABASE_URL environment variable.');
 }
 
@@ -297,7 +298,7 @@ function getPrismaWithRetry(): PrismaClient {
     // Only throw for non-test environments (build time, etc.)
     if (!isTestEnv) {
       if (!isBuildTime) {
-        console.error('[Prisma] ERROR: Prisma client is not initialized. Check DATABASE_URL environment variable.');
+        logger.error('[Prisma] ERROR: Prisma client is not initialized. Check DATABASE_URL environment variable.', undefined, 'prisma');
         throw new Error('Prisma client is not initialized. Check DATABASE_URL environment variable.');
       }
       return null as unknown as PrismaClient; // Type cast for build time only

@@ -1,5 +1,7 @@
 import { useRef, useCallback, useState, useEffect } from 'react'
 
+import { logger } from '@/lib/logger'
+
 export interface PullToRefreshOptions {
   onRefresh: () => Promise<void> | void
   threshold?: number
@@ -54,12 +56,12 @@ export function usePullToRefresh(options: PullToRefreshOptions): PullToRefreshRe
   const triggerRefresh = useCallback(async () => {
     // Check and set locks atomically - only the first caller proceeds
     if (hasTriggeredRef.current || isRefreshingRef.current) {
-      console.log('[PTR] Already refreshing, ignoring duplicate call')
+      logger.debug('[PTR] Already refreshing, ignoring duplicate call')
       return
     }
     
     // Set locks immediately
-    console.log('[PTR] Setting locks and starting refresh')
+    logger.debug('[PTR] Setting locks and starting refresh')
     hasTriggeredRef.current = true
     isRefreshingRef.current = true
     
@@ -77,7 +79,7 @@ export function usePullToRefresh(options: PullToRefreshOptions): PullToRefreshRe
     try {
       await onRefresh()
     } finally {
-      console.log('[PTR] Refresh complete')
+      logger.debug('[PTR] Refresh complete')
       // Keep spinner visible briefly
       await new Promise(resolve => setTimeout(resolve, 200))
       
@@ -87,7 +89,7 @@ export function usePullToRefresh(options: PullToRefreshOptions): PullToRefreshRe
       
       // Reset locks after animation (with additional buffer to prevent rapid re-triggers)
       setTimeout(() => {
-        console.log('[PTR] Locks reset')
+        logger.debug('[PTR] Locks reset')
         hasTriggeredRef.current = false
         isRefreshingRef.current = false
         wheelAccumulator.current = 0
@@ -210,7 +212,7 @@ export function usePullToRefresh(options: PullToRefreshOptions): PullToRefreshRe
 
         // Trigger at threshold
         if (distance >= threshold && !hasTriggeredRef.current && !isRefreshingRef.current) {
-          console.log('[PTR Wheel] Triggering at distance:', distance)
+          logger.debug('[PTR Wheel] Triggering at distance:', { distance })
           // Clear accumulator before triggering
           wheelAccumulator.current = 0
           lastWheelTriggerRef.current = now

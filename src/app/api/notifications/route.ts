@@ -97,6 +97,7 @@
  */
 
 import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { authenticate } from '@/lib/api/auth-middleware';
 import { asUser } from '@/lib/db/context';
 import { withErrorHandling, successResponse } from '@/lib/errors/error-handler';
@@ -104,6 +105,7 @@ import { InternalServerError } from '@/lib/errors';
 import { NotificationsQuerySchema, MarkNotificationsReadSchema } from '@/lib/validation/schemas';
 import { logger } from '@/lib/logger';
 import { getCacheOrFetch, invalidateCachePattern, CACHE_KEYS } from '@/lib/cache-service';
+import { getBlockedUserIds, getMutedUserIds, getBlockedByUserIds } from '@/lib/moderation/filters';
 
 /**
  * GET /api/notifications - Get user notifications
@@ -147,16 +149,25 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   // OPTIMIZED: Cache notifications with short TTL (high-frequency polling endpoint)
   const cacheKey = `notifications:${authUser.userId}:${JSON.stringify(where)}:${validatedLimit}`;
   
+  // Get blocked/muted user IDs to filter notifications
+  const [blockedIds, mutedIds, blockedByIds] = await Promise.all([
+    getBlockedUserIds(authUser.userId),
+    getMutedUserIds(authUser.userId),
+    getBlockedByUserIds(authUser.userId),
+  ]);
+  
+  const excludedUserIds = new Set([...blockedIds, ...mutedIds, ...blockedByIds]);
+
   const { notifications, unreadCount } = await getCacheOrFetch(
     cacheKey,
     async () => {
       return await asUser(authUser, async (db) => {
-        const notifications = await db.notification.findMany({
+        const allNotifications = await db.notification.findMany({
           where,
           orderBy: {
             createdAt: 'desc',
           },
-          take: validatedLimit,
+          take: validatedLimit * 2, // Fetch more to account for filtering
           include: {
             User_Notification_actorIdToUser: {
               select: {
@@ -168,6 +179,11 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
             },
           },
         });
+
+        // Filter out notifications from blocked/muted users
+        const notifications = allNotifications
+          .filter(n => !n.actorId || !excludedUserIds.has(n.actorId))
+          .slice(0, validatedLimit); // Limit to requested amount after filtering
 
         const unreadCount = await db.notification.count({
           where: {
@@ -214,7 +230,8 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       } else {
         // Fallback: try to convert to Date then to ISO string
         try {
-          createdAtISO = new Date(n.createdAt).toISOString();
+          const dateValue = n.createdAt as string | number | Date
+          createdAtISO = new Date(dateValue).toISOString();
         } catch {
           createdAtISO = new Date().toISOString();
         }
@@ -248,7 +265,16 @@ export const PATCH = withErrorHandling(async (request: NextRequest) => {
   const authUser = await authenticate(request);
 
   // Parse and validate request body
-  const body = await request.json();
+  let body: { notificationIds?: string[]; markAllAsRead?: boolean }
+  try {
+    body = await request.json() as { notificationIds?: string[]; markAllAsRead?: boolean }
+  } catch (error) {
+    logger.error('Failed to parse request body', { error }, 'PATCH /api/notifications')
+    return NextResponse.json({
+      success: false,
+      error: 'Invalid request body'
+    }, { status: 400 })
+  }
   const { notificationIds, markAllAsRead } = MarkNotificationsReadSchema.parse(body);
 
   await asUser(authUser, async (db) => {

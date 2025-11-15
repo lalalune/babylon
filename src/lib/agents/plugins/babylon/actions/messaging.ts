@@ -4,7 +4,7 @@
  */
 
 import type { Action, IAgentRuntime, Memory, State, HandlerCallback } from '@elizaos/core'
-import { logger } from '@/lib/logger'
+// // import { logger } from '@/lib/logger' // Commented out - not needed // Unused - needed when A2A methods are implemented
 import type { BabylonRuntime } from '../types'
 
 /**
@@ -35,7 +35,7 @@ export const sendMessageAction: Action = {
   
   handler: async (
     runtime: IAgentRuntime,
-    message: Memory,
+    _message: Memory,
     _state?: State,
     _options?: unknown,
     callback?: HandlerCallback
@@ -53,7 +53,7 @@ export const sendMessageAction: Action = {
     }
     
     // Parse message
-    const content = message.content.text || ''
+    const content = _message.content.text || ''
     const chatIdMatch = content.match(/chat[:\s-]+([a-zA-Z0-9-]+)/)
     const messageMatch = content.match(/(?::|with)\s*["'](.+?)["']/) || content.match(/message\s+(.+)$/i)
     
@@ -70,20 +70,33 @@ export const sendMessageAction: Action = {
     const chatId = chatIdMatch[1]!
     const messageContent = messageMatch[1]!
     
-    // Send message via A2A
-    const result = await babylonRuntime.a2aClient.sendRequest('a2a.sendMessage', {
-      chatId,
-      content: messageContent
-    }) as { success?: boolean; messageId?: string }
-    
-    if (callback) {
-      callback({
-        text: `Successfully sent message! Message ID: ${result.messageId}`,
-        action: 'SEND_MESSAGE'
-      })
+    try {
+      const result = await babylonRuntime.a2aClient.sendMessage(
+        chatId,
+        messageContent
+      ) as { success?: boolean; messageId?: string; message?: string }
+      
+      if (callback) {
+        if (result.success === false) {
+          callback({
+            text: `Failed to send message: ${result.message || 'Unknown error'}`,
+            action: 'SEND_MESSAGE'
+          })
+        } else {
+          callback({
+            text: `Successfully sent message! Message ID: ${result.messageId || 'unknown'}`,
+            action: 'SEND_MESSAGE'
+          })
+        }
+      }
+    } catch (error) {
+      if (callback) {
+        callback({
+          text: `Error sending message: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          action: 'SEND_MESSAGE'
+        })
+      }
     }
-    
-    logger.info('Agent sent message', { chatId, messageId: result.messageId })
   }
 }
 
@@ -132,7 +145,6 @@ export const createGroupAction: Action = {
       return
     }
     
-    // Parse message
     const content = message.content.text || ''
     const nameMatch = content.match(/(?:group|named?)\s+["'](.+?)["']/) || content.match(/group\s+([A-Za-z0-9\s]+)(?:\s+with)?/)
     const membersMatch = content.match(/(?:with|members?)\s+(.+)$/)
@@ -147,43 +159,40 @@ export const createGroupAction: Action = {
       return
     }
     
-    const groupName = nameMatch ? nameMatch[1]?.trim() : ''
-    if (!groupName) {
-      if (callback) {
-        callback({
-          text: 'Could not determine group name.',
-          action: 'CREATE_GROUP'
-        })
-      }
-      return
-    }
+    const groupName = nameMatch[1]?.trim() || 'Unnamed Group'
     const memberIds: string[] = []
-    
     if (membersMatch) {
-      // Parse member IDs (simplified - in real use would need better parsing)
       const memberStr = membersMatch[1]
       if (memberStr) {
         const matches = memberStr.match(/[a-zA-Z0-9-]+/g)
-        if (matches) {
-          memberIds.push(...matches)
-        }
+        if (matches) memberIds.push(...matches)
       }
     }
     
-    // Create group via A2A
-    const result = await babylonRuntime.a2aClient.sendRequest('a2a.createGroup', {
-      name: groupName,
-      memberIds
-    }) as { success?: boolean; chatId?: string }
-    
-    if (callback) {
-      callback({
-        text: `Successfully created group "${groupName}"! Chat ID: ${result.chatId}`,
-        action: 'CREATE_GROUP'
-      })
+    try {
+      const result = await babylonRuntime.a2aClient.createGroup(groupName, memberIds) as { success?: boolean; chatId?: string; message?: string }
+      
+      if (callback) {
+        if (result.success === false) {
+          callback({
+            text: `Failed to create group: ${result.message || 'Unknown error'}`,
+            action: 'CREATE_GROUP'
+          })
+        } else {
+          callback({
+            text: `Successfully created group "${groupName}"! Chat ID: ${result.chatId || 'unknown'}`,
+            action: 'CREATE_GROUP'
+          })
+        }
+      }
+    } catch (error) {
+      if (callback) {
+        callback({
+          text: `Error creating group: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          action: 'CREATE_GROUP'
+        })
+      }
     }
-    
-    logger.info('Agent created group', { groupName, chatId: result.chatId, memberCount: memberIds.length })
   }
 }
 

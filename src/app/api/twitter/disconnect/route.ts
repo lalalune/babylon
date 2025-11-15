@@ -1,6 +1,6 @@
 /**
  * API Route: /api/twitter/disconnect
- * Disconnects user's Twitter account (removes OAuth 1.0a credentials)
+ * Disconnects user's Twitter account (removes OAuth 2.0 credentials)
  */
 
 import type { NextRequest } from 'next/server'
@@ -14,8 +14,17 @@ export async function POST(request: NextRequest) {
   const authUser = await authenticate(request)
   const user = await requireUserByIdentifier(authUser.userId, { id: true })
 
-  await prisma.twitterOAuthToken.deleteMany({
-    where: { userId: user.id },
+  // Clear Twitter OAuth 2.0 credentials from user
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      twitterAccessToken: null,
+      twitterRefreshToken: null,
+      twitterTokenExpiresAt: null,
+      twitterId: null,
+      twitterUsername: null,
+      hasTwitter: false,
+    },
   })
 
   logger.info('Twitter account disconnected', { userId: user.id }, 'TwitterDisconnect')

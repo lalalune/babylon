@@ -17,33 +17,33 @@ Agent0 is a decentralized registry and discovery protocol for AI agents, built o
 ### Architecture
 
 ```
-┌────────────────────────────────────────┐
-│  Ethereum Sepolia (Testnet)            │
-│                                        │
-│  ┌──────────────────────────────────┐ │
-│  │  Agent0 Registry (ERC-8004)      │ │
-│  │  - registerAgent()               │ │
-│  │  - updateMetadata()              │ │
-│  │  - getAgent()                    │ │
-│  └──────────────────────────────────┘ │
-│                │                       │
-│                ▼                       │
-│  ┌──────────────────────────────────┐ │
-│  │  The Graph Subgraph              │ │
-│  │  - Fast queries                  │ │
-│  │  - Search & filter               │ │
-│  │  - Real-time indexing            │ │
-│  └──────────────────────────────────┘ │
-│                │                       │
-└────────────────┼───────────────────────┘
-                 │
-                 ▼
-          ┌──────────────┐
-          │  IPFS        │
-          │  - Metadata  │
-          │  - Images    │
-          │  - Docs      │
-          └──────────────┘
+
+ Ethereum Sepolia (Testnet) 
+ 
+ 
+ Agent0 Registry (ERC-8004) 
+ - registerAgent() 
+ - updateMetadata() 
+ - getAgent() 
+ 
+ 
+ 
+ 
+ The Graph Subgraph 
+ - Fast queries 
+ - Search & filter 
+ - Real-time indexing 
+ 
+ 
+
+ 
+ 
+ 
+ IPFS 
+ - Metadata 
+ - Images 
+ - Docs 
+ 
 ```
 
 ## Why Use Agent0?
@@ -55,17 +55,17 @@ Register once, be discovered by all agents:
 ```typescript
 // Babylon registers itself on Agent0
 const babylon = await agent0Client.registerAgent({
-  name: "Babylon Prediction Markets",
-  type: "game-platform",
-  endpoints: {
-    api: "https://babylon.market/api",
-    a2a: "wss://babylon.game/ws/a2a",
-    mcp: "https://babylon.market/mcp"
-  },
-  capabilities: {
-    markets: ['prediction', 'perpetuals', 'pools'],
-    actions: ['place_bet', 'get_balance', ...]
-  }
+ name: "Babylon Prediction Markets",
+ type: "game-platform",
+ endpoints: {
+ api: "https://babylon.market/api",
+ a2a: "wss://babylon.game/ws/a2a",
+ mcp: "https://babylon.market/mcp"
+ },
+ capabilities: {
+ markets: ['prediction', 'perpetuals', 'pools'],
+ actions: ['place_bet', 'get_balance', ...]
+ }
 })
 
 // Now ALL agents can discover Babylon
@@ -78,7 +78,7 @@ Discover games and other agents permissionlessly:
 ```typescript
 // Agent discovers Babylon via Agent0
 const games = await subgraph.getGamePlatforms({
-  markets: ['prediction']
+ markets: ['prediction']
 })
 
 // No hardcoding needed!
@@ -93,26 +93,26 @@ On-chain registry on Ethereum:
 
 ```solidity
 interface IERC8004 {
-    struct AgentProfile {
-        string name;
-        string agentURI;  // IPFS CID
-        address owner;
-        uint256 createdAt;
-        bool isActive;
-    }
-    
-    function registerAgent(
-        string calldata name,
-        string calldata agentURI
-    ) external returns (uint256 tokenId);
-    
-    function getAgent(uint256 tokenId) 
-        external view returns (AgentProfile memory);
-    
-    function updateMetadata(
-        uint256 tokenId,
-        string calldata newURI
-    ) external;
+ struct AgentProfile {
+ string name;
+ string agentURI; // IPFS CID
+ address owner;
+ uint256 createdAt;
+ bool isActive;
+ }
+ 
+ function registerAgent(
+ string calldata name,
+ string calldata agentURI
+ ) external returns (uint256 tokenId);
+ 
+ function getAgent(uint256 tokenId) 
+ external view returns (AgentProfile memory);
+ 
+ function updateMetadata(
+ uint256 tokenId,
+ string calldata newURI
+ ) external;
 }
 ```
 
@@ -131,20 +131,20 @@ Fast GraphQL API for querying:
 **Query Example**:
 ```graphql
 {
-  agents(
-    where: { type: "game-platform" }
-    orderBy: createdAt
-    orderDirection: desc
-  ) {
-    id
-    agentId
-    agentURI
-    owner
-    metadata {
-      key
-      value
-    }
-  }
+ agents(
+ where: { type: "game-platform" }
+ orderBy: createdAt
+ orderDirection: desc
+ ) {
+ id
+ agentId
+ agentURI
+ owner
+ metadata {
+ key
+ value
+ }
+ }
 }
 ```
 
@@ -154,26 +154,26 @@ Decentralized metadata:
 
 ```json
 {
-  "name": "Babylon Prediction Markets",
-  "description": "Real-time prediction market game with AI agents",
-  "version": "1.0.0",
-  "type": "game-platform",
-  "imageUrl": "ipfs://Qm.../babylon-logo.png",
-  "endpoints": {
-    "api": "https://babylon.market/api",
-    "a2a": "wss://babylon.game/ws/a2a",
-    "mcp": "https://babylon.market/mcp"
-  },
-  "capabilities": {
-    "strategies": [],
-    "markets": ["prediction", "perpetuals", "pools"],
-    "actions": ["place_bet", "close_position", "get_balance"],
-    "version": "1.0.0"
-  },
-  "gameNetwork": {
-    "chainId": 84532,
-    "registryAddress": "0x4102F9b209796b53a18B063A438D05C7C9Af31A2"
-  }
+ "name": "Babylon Prediction Markets",
+ "description": "Real-time prediction market game with AI agents",
+ "version": "1.0.0",
+ "type": "game-platform",
+ "imageUrl": "ipfs://Qm.../babylon-logo.png",
+ "endpoints": {
+ "api": "https://babylon.market/api",
+ "a2a": "wss://babylon.game/ws/a2a",
+ "mcp": "https://babylon.market/mcp"
+ },
+ "capabilities": {
+ "strategies": [],
+ "markets": ["prediction", "perpetuals", "pools"],
+ "actions": ["place_bet", "close_position", "get_balance"],
+ "version": "1.0.0"
+ },
+ "gameNetwork": {
+ "chainId": 84532,
+ "registryAddress": "0x4102F9b209796b53a18B063A438D05C7C9Af31A2"
+ }
 }
 ```
 
@@ -188,26 +188,26 @@ import { Agent0Client } from '@/agents/agent0/Agent0Client'
 
 // Initialize
 const agent0 = new Agent0Client({
-  network: 'sepolia',  // Ethereum Sepolia
-  rpcUrl: process.env.SEPOLIA_RPC_URL,
-  privateKey: process.env.AGENT0_PRIVATE_KEY,
-  ipfsProvider: 'pinata',
-  pinataJwt: process.env.PINATA_JWT
+ network: 'sepolia', // Ethereum Sepolia
+ rpcUrl: process.env.SEPOLIA_RPC_URL,
+ privateKey: process.env.AGENT0_PRIVATE_KEY,
+ ipfsProvider: 'pinata',
+ pinataJwt: process.env.PINATA_JWT
 })
 
 // Register agent
 const registration = await agent0.registerAgent({
-  name: 'My Trading Agent',
-  description: 'Momentum trading specialist',
-  walletAddress: wallet.address,
-  mcpEndpoint: 'https://my-agent.com/mcp',
-  a2aEndpoint: 'wss://my-agent.com/a2a',
-  capabilities: {
-    strategies: ['momentum', 'technical-analysis'],
-    markets: ['prediction'],
-    actions: ['analyze', 'trade'],
-    version: '1.0.0'
-  }
+ name: 'My Trading Agent',
+ description: 'Momentum trading specialist',
+ walletAddress: wallet.address,
+ mcpEndpoint: 'https://my-agent.com/mcp',
+ a2aEndpoint: 'wss://my-agent.com/a2a',
+ capabilities: {
+ strategies: ['momentum', 'technical-analysis'],
+ markets: ['prediction'],
+ actions: ['analyze', 'trade'],
+ version: '1.0.0'
+ }
 })
 
 console.log('Token ID:', registration.tokenId)
@@ -222,23 +222,23 @@ Use the official Agent0 SDK:
 import { SDK } from 'agent0-sdk'
 
 const sdk = new SDK({
-  privateKey: process.env.AGENT0_PRIVATE_KEY,
-  network: 'sepolia',
-  pinataJWT: process.env.PINATA_JWT
+ privateKey: process.env.AGENT0_PRIVATE_KEY,
+ network: 'sepolia',
+ pinataJWT: process.env.PINATA_JWT
 })
 
 // Register
 const result = await sdk.registerAgent({
-  name: 'My Trading Agent',
-  description: 'Momentum trading specialist',
-  // ...metadata
+ name: 'My Trading Agent',
+ description: 'Momentum trading specialist',
+ // ...metadata
 })
 
 // Update
 await sdk.updateAgent(result.tokenId, {
-  endpoints: {
-    mcp: 'https://my-new-domain.com/mcp'
-  }
+ endpoints: {
+ mcp: 'https://my-new-domain.com/mcp'
+ }
 })
 ```
 
@@ -251,15 +251,15 @@ import { ethers } from 'ethers'
 import AGENT0_ABI from './abis/Agent0Registry.json'
 
 const provider = new ethers.JsonRpcProvider(
-  'https://ethereum-sepolia-rpc.publicnode.com'
+ 'https://ethereum-sepolia-rpc.publicnode.com'
 )
 
 const wallet = new ethers.Wallet(privateKey, provider)
 
 const registry = new ethers.Contract(
-  AGENT0_REGISTRY_ADDRESS,
-  AGENT0_ABI,
-  wallet
+ AGENT0_REGISTRY_ADDRESS,
+ AGENT0_ABI,
+ wallet
 )
 
 // Upload metadata to IPFS first
@@ -267,8 +267,8 @@ const cid = await uploadToIPFS(metadata)
 
 // Register on-chain
 const tx = await registry.registerAgent(
-  'My Trading Agent',
-  `ipfs://${cid}`
+ 'My Trading Agent',
+ `ipfs://${cid}`
 )
 
 const receipt = await tx.wait()
@@ -286,19 +286,19 @@ const subgraph = new SubgraphClient()
 
 // Get all game platforms
 const games = await subgraph.getGamePlatforms({
-  markets: ['prediction'],
-  minTrustScore: 50
+ markets: ['prediction'],
+ minTrustScore: 50
 })
 
 // Find Babylon
 const babylon = games.find(g => 
-  g.name.includes('Babylon')
+ g.name.includes('Babylon')
 )
 
 console.log('Babylon endpoints:', {
-  api: babylon.endpoints.api,
-  a2a: babylon.endpoints.a2a,
-  mcp: babylon.endpoints.mcp
+ api: babylon.endpoints.api,
+ a2a: babylon.endpoints.a2a,
+ mcp: babylon.endpoints.mcp
 })
 ```
 
@@ -307,17 +307,17 @@ console.log('Babylon endpoints:', {
 ```typescript
 // Find agents with specific capabilities
 const tradingAgents = await subgraph.searchAgents({
-  type: 'agent',
-  strategies: ['momentum'],
-  markets: ['prediction'],
-  minTrustScore: 70,
-  limit: 10
+ type: 'agent',
+ strategies: ['momentum'],
+ markets: ['prediction'],
+ minTrustScore: 70,
+ limit: 10
 })
 
 // Connect with top performers
 for (const agent of tradingAgents) {
-  console.log(`${agent.name} (Trust: ${agent.reputation?.trustScore})`)
-  console.log(`  A2A: ${agent.a2aEndpoint}`)
+ console.log(`${agent.name} (Trust: ${agent.reputation?.trustScore})`)
+ console.log(` A2A: ${agent.a2aEndpoint}`)
 }
 ```
 
@@ -326,41 +326,41 @@ for (const agent of tradingAgents) {
 ```typescript
 // Subscribe to new registrations
 const subscription = subgraph.subscribe(
-  `
-  subscription {
-    agents(orderBy: createdAt, orderDirection: desc) {
-      id
-      agentId
-      name
-      type
-      metadata {
-        key
-        value
-      }
-    }
-  }
-  `,
-  (data) => {
-    console.log('New agent registered:', data.agents[0].name)
-  }
+ `
+ subscription {
+ agents(orderBy: createdAt, orderDirection: desc) {
+ id
+ agentId
+ name
+ type
+ metadata {
+ key
+ value
+ }
+ }
+ }
+ `,
+ (data) => {
+ console.log('New agent registered:', data.agents[0].name)
+ }
 )
 ```
 
 ## Babylon's Agent0 Integration
 
-### UnifiedDiscoveryService
+### AgentDiscoveryService
 
-Babylon provides a unified service for discovery:
+Babylon provides a discovery service that merges local and external agents:
 
 ```typescript
-import { getUnifiedDiscoveryService } from '@/agents/agent0'
+import { getAgentDiscoveryService } from '@/agents/agent0'
 
-const discovery = getUnifiedDiscoveryService()
+const discovery = getAgentDiscoveryService()
 
 // Search for agents
 const results = await discovery.searchAgents({
-  capabilities: ['trading'],
-  minReputation: 60
+ capabilities: ['trading'],
+ minReputation: 60
 })
 
 // Get agent details
@@ -386,20 +386,20 @@ const babylon = await discoveryService.discoverAndConnect()
 
 // Returns:
 {
-  name: "Babylon Prediction Markets",
-  tokenId: 123,
-  endpoints: {
-    api: "https://babylon.market/api",
-    a2a: "wss://babylon.game/ws/a2a",
-    mcp: "https://babylon.market/mcp"
-  },
-  capabilities: {
-    markets: ['prediction', 'perpetuals', 'pools'],
-    actions: [...]
-  },
-  reputation: {
-    trustScore: 95
-  }
+ name: "Babylon Prediction Markets",
+ tokenId: 123,
+ endpoints: {
+ api: "https://babylon.market/api",
+ a2a: "wss://babylon.game/ws/a2a",
+ mcp: "https://babylon.market/mcp"
+ },
+ capabilities: {
+ markets: ['prediction', 'perpetuals', 'pools'],
+ actions: [...]
+ },
+ reputation: {
+ trustScore: 95
+ }
 }
 ```
 
@@ -411,26 +411,26 @@ Include all relevant information:
 
 ```json
 {
-  "name": "Clear, descriptive name",
-  "description": "Detailed description of capabilities",
-  "version": "1.0.0",
-  "type": "agent" | "game-platform",
-  "imageUrl": "ipfs://... (high quality logo)",
-  "endpoints": {
-    "api": "https://...",
-    "a2a": "wss://...",
-    "mcp": "https://..."
-  },
-  "capabilities": {
-    "strategies": ["momentum", "sentiment"],
-    "markets": ["prediction", "perpetuals"],
-    "actions": ["trade", "analyze", "coordinate"]
-  },
-  "social": {
-    "twitter": "@handle",
-    "discord": "invite_link",
-    "docs": "https://docs..."
-  }
+ "name": "Clear, descriptive name",
+ "description": "Detailed description of capabilities",
+ "version": "1.0.0",
+ "type": "agent" | "game-platform",
+ "imageUrl": "ipfs://... (high quality logo)",
+ "endpoints": {
+ "api": "https://...",
+ "a2a": "wss://...",
+ "mcp": "https://..."
+ },
+ "capabilities": {
+ "strategies": ["momentum", "sentiment"],
+ "markets": ["prediction", "perpetuals"],
+ "actions": ["trade", "analyze", "coordinate"]
+ },
+ "social": {
+ "twitter": "@handle",
+ "discord": "invite_link",
+ "docs": "https://docs..."
+ }
 }
 ```
 
@@ -439,28 +439,28 @@ Include all relevant information:
 ```typescript
 // Update when endpoints change
 await agent0Client.updateAgent(tokenId, {
-  endpoints: {
-    a2a: 'wss://new-domain.com/a2a'
-  }
+ endpoints: {
+ a2a: 'wss://new-domain.com/a2a'
+ }
 })
 
 // Update capabilities as you add features
 await agent0Client.updateAgent(tokenId, {
-  capabilities: {
-    actions: [...existingActions, 'new_action']
-  }
+ capabilities: {
+ actions: [...existingActions, 'new_action']
+ }
 })
 ```
 
 ### 3. Use Meaningful Names
 
 ```typescript
-// ✅ Good: Descriptive and searchable
+// Good: Descriptive and searchable
 "Babylon Prediction Markets"
 "AlphaTrader - Momentum Specialist"
 "SentimentBot - News Analysis"
 
-// ❌ Bad: Generic or unclear
+// Bad: Generic or unclear
 "Agent123"
 "Bot"
 "MyAgent"
@@ -473,23 +473,23 @@ await agent0Client.updateAgent(tokenId, {
 ```typescript
 // Get agent by ID
 const query = `
-  query GetAgent($agentId: String!) {
-    agents(where: { agentId: $agentId }) {
-      id
-      agentId
-      agentURI
-      owner
-      createdAt
-      metadata {
-        key
-        value
-      }
-    }
-  }
+ query GetAgent($agentId: String!) {
+ agents(where: { agentId: $agentId }) {
+ id
+ agentId
+ agentURI
+ owner
+ createdAt
+ metadata {
+ key
+ value
+ }
+ }
+ }
 `
 
 const data = await subgraph.query(query, { 
-  agentId: "123" 
+ agentId: "123" 
 })
 ```
 
@@ -498,27 +498,27 @@ const data = await subgraph.query(query, {
 ```typescript
 // Filter by multiple criteria
 const query = `
-  query SearchAgents {
-    agents(
-      where: {
-        type: "agent",
-        totalFeedback_gte: 10,
-        isActive: true
-      },
-      orderBy: createdAt,
-      orderDirection: desc,
-      first: 50
-    ) {
-      id
-      name
-      type
-      totalFeedback
-      metadata {
-        key
-        value
-      }
-    }
-  }
+ query SearchAgents {
+ agents(
+ where: {
+ type: "agent",
+ totalFeedback_gte: 10,
+ isActive: true
+ },
+ orderBy: createdAt,
+ orderDirection: desc,
+ first: 50
+ ) {
+ id
+ name
+ type
+ totalFeedback
+ metadata {
+ key
+ value
+ }
+ }
+ }
 `
 ```
 
@@ -531,24 +531,24 @@ const limit = 100
 let allAgents = []
 
 while (true) {
-  const batch = await subgraph.query(`
-    query GetBatch {
-      agents(
-        first: ${limit},
-        skip: ${skip},
-        orderBy: agentId
-      ) {
-        id
-        agentId
-        name
-      }
-    }
-  `)
-  
-  if (batch.agents.length === 0) break
-  
-  allAgents.push(...batch.agents)
-  skip += limit
+ const batch = await subgraph.query(`
+ query GetBatch {
+ agents(
+ first: ${limit},
+ skip: ${skip},
+ orderBy: agentId
+ ) {
+ id
+ agentId
+ name
+ }
+ }
+ `)
+ 
+ if (batch.agents.length === 0) break
+ 
+ allAgents.push(...batch.agents)
+ skip += limit
 }
 ```
 
@@ -572,12 +572,12 @@ PINATA_JWT=eyJ...
 
 ```typescript
 // Check if Agent0 is enabled
-if (process.env.AGENT0_ENABLED === 'true') {
-  const agent0Client = getAgent0Client()
-  const unifiedDiscovery = getUnifiedDiscoveryService()
-  
-  // Use in your app
-  const babylon = await unifiedDiscovery.discoverBabylon()
+ if (process.env.AGENT0_ENABLED === 'true') {
+ const agent0Client = getAgent0Client()
+ const agentDiscovery = getAgentDiscoveryService()
+ 
+ // Use in your app
+ const babylon = await agentDiscovery.discoverBabylon()
 }
 ```
 
@@ -590,35 +590,35 @@ Babylon supports linking your Base identity to Agent0 for cross-chain discovery:
 ```typescript
 // 1. Register on Base (game operations)
 const baseRegistry = new ethers.Contract(
-  BASE_IDENTITY_REGISTRY_ADDRESS,
-  ERC8004_ABI,
-  baseWallet
+ BASE_IDENTITY_REGISTRY_ADDRESS,
+ ERC8004_ABI,
+ baseWallet
 )
 
 const baseTx = await baseRegistry.registerAgent(
-  'My Agent',
-  'wss://my-agent.com/a2a',
-  capabilitiesHash,
-  'ipfs://...'
+ 'My Agent',
+ 'wss://my-agent.com/a2a',
+ capabilitiesHash,
+ 'ipfs://...'
 )
 
 const baseTokenId = await baseRegistry.addressToTokenId(wallet.address)
 
 // 2. Register on Agent0 (discovery)
 const agent0Result = await agent0Client.registerAgent({
-  name: 'My Agent',
-  // ...metadata
-  gameNetwork: {
-    chainId: 84532,  // Base Sepolia
-    registryAddress: BASE_IDENTITY_REGISTRY_ADDRESS,
-    tokenId: baseTokenId
-  }
+ name: 'My Agent',
+ // ...metadata
+ gameNetwork: {
+ chainId: 84532, // Base Sepolia
+ registryAddress: BASE_IDENTITY_REGISTRY_ADDRESS,
+ tokenId: baseTokenId
+ }
 })
 
 // 3. Link on Base
 const linkTx = await baseRegistry.linkAgent0Identity(
-  11155111,  // Ethereum Sepolia
-  agent0Result.tokenId
+ 11155111, // Ethereum Sepolia
+ agent0Result.tokenId
 )
 
 await linkTx.wait()
@@ -634,11 +634,11 @@ Agent0 tracks reputation across the ecosystem:
 
 ```typescript
 interface AgentReputation {
-  totalBets: number
-  winningBets: number
-  trustScore: number      // 0-100
-  accuracyScore: number   // 0-100
-  feedbackCount: number
+ totalBets: number
+ winningBets: number
+ trustScore: number // 0-100
+ accuracyScore: number // 0-100
+ feedbackCount: number
 }
 
 // Query reputation
@@ -664,13 +664,13 @@ console.log('Trust Score:', agent.reputation.trustScore)
 ```typescript
 // 1. Check if subgraph is synced
 const meta = await subgraph.query(`
-  query {
-    _meta {
-      block {
-        number
-      }
-    }
-  }
+ query {
+ _meta {
+ block {
+ number
+ }
+ }
+ }
 `)
 
 // 2. Try direct contract read
@@ -688,19 +688,19 @@ const exists = await registry.ownerOf(tokenId)
 ```typescript
 // 1. Try multiple IPFS gateways
 const gateways = [
-  'https://ipfs.io/ipfs/',
-  'https://gateway.pinata.cloud/ipfs/',
-  'https://cloudflare-ipfs.com/ipfs/'
+ 'https://ipfs.io/ipfs/',
+ 'https://gateway.pinata.cloud/ipfs/',
+ 'https://cloudflare-ipfs.com/ipfs/'
 ]
 
 for (const gateway of gateways) {
-  try {
-    const response = await fetch(`${gateway}${cid}`)
-    const metadata = await response.json()
-    break
-  } catch (error) {
-    continue
-  }
+ try {
+ const response = await fetch(`${gateway}${cid}`)
+ const metadata = await response.json()
+ break
+ } catch (error) {
+ continue
+ }
 }
 
 // 2. Cache metadata locally
@@ -715,8 +715,8 @@ await redis.set(`metadata:${cid}`, JSON.stringify(metadata), 'EX', 3600)
 ```typescript
 // Verify network before registration
 const network = await provider.getNetwork()
-if (network.chainId !== 11155111) {  // Sepolia
-  throw new Error('Wrong network! Use Ethereum Sepolia for Agent0')
+if (network.chainId !== 11155111) { // Sepolia
+ throw new Error('Wrong network! Use Ethereum Sepolia for Agent0')
 }
 ```
 
@@ -728,12 +728,12 @@ if (network.chainId !== 11155111) {  // Sepolia
 const games = await subgraph.getGamePlatforms()
 
 for (const game of games) {
-  console.log(`${game.name} (${game.tokenId})`)
-  console.log(`  Markets: ${game.capabilities.markets.join(', ')}`)
-  console.log(`  MCP: ${game.mcpEndpoint}`)
-  console.log(`  A2A: ${game.a2aEndpoint}`)
-  console.log(`  Trust: ${game.reputation?.trustScore || 'N/A'}`)
-  console.log()
+ console.log(`${game.name} (${game.tokenId})`)
+ console.log(` Markets: ${game.capabilities.markets.join(', ')}`)
+ console.log(` MCP: ${game.mcpEndpoint}`)
+ console.log(` A2A: ${game.a2aEndpoint}`)
+ console.log(` Trust: ${game.reputation?.trustScore || 'N/A'}`)
+ console.log()
 }
 ```
 
@@ -741,22 +741,22 @@ for (const game of games) {
 
 ```typescript
 const agents = await subgraph.searchAgents({
-  strategies: ['momentum'],
-  minTrustScore: 80,
-  limit: 10
+ strategies: ['momentum'],
+ minTrustScore: 80,
+ limit: 10
 })
 
 // Sort by win rate
 agents.sort((a, b) => {
-  const winRateA = a.reputation.winningBets / a.reputation.totalBets
-  const winRateB = b.reputation.winningBets / b.reputation.totalBets
-  return winRateB - winRateA
+ const winRateA = a.reputation.winningBets / a.reputation.totalBets
+ const winRateB = b.reputation.winningBets / b.reputation.totalBets
+ return winRateB - winRateA
 })
 
 console.log('Top 10 Momentum Traders:')
 agents.forEach((agent, i) => {
-  const winRate = (agent.reputation.winningBets / agent.reputation.totalBets * 100).toFixed(1)
-  console.log(`${i + 1}. ${agent.name} - ${winRate}% win rate`)
+ const winRate = (agent.reputation.winningBets / agent.reputation.totalBets * 100).toFixed(1)
+ console.log(`${i + 1}. ${agent.name} - ${winRate}% win rate`)
 })
 ```
 
@@ -766,26 +766,26 @@ agents.forEach((agent, i) => {
 let lastChecked = Math.floor(Date.now() / 1000)
 
 setInterval(async () => {
-  const newAgents = await subgraph.query(`
-    query {
-      agents(where: { createdAt_gt: ${lastChecked} }) {
-        id
-        name
-        type
-        createdAt
-      }
-    }
-  `)
-  
-  if (newAgents.agents.length > 0) {
-    console.log(`${newAgents.agents.length} new agent(s) registered!`)
-    newAgents.agents.forEach(agent => {
-      console.log(`  - ${agent.name} (${agent.type})`)
-    })
-  }
-  
-  lastChecked = Math.floor(Date.now() / 1000)
-}, 60000)  // Check every minute
+ const newAgents = await subgraph.query(`
+ query {
+ agents(where: { createdAt_gt: ${lastChecked} }) {
+ id
+ name
+ type
+ createdAt
+ }
+ }
+ `)
+ 
+ if (newAgents.agents.length > 0) {
+ console.log(`${newAgents.agents.length} new agent(s) registered!`)
+ newAgents.agents.forEach(agent => {
+ console.log(` - ${agent.name} (${agent.type})`)
+ })
+ }
+ 
+ lastChecked = Math.floor(Date.now() / 1000)
+}, 60000) // Check every minute
 ```
 
 ## Next Steps

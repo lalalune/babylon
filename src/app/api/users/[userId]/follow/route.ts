@@ -137,18 +137,32 @@ export const POST = withErrorHandling(async (
   }
 
   // Check if target exists (could be a user or actor)
-  const targetActor = targetUser ? null : await prisma.actor.findUnique({
-    where: { id: targetId },
-    select: { id: true },
-  });
+  // If targetUser has isActor flag, we still need to check for Actor record
+  const targetActor = targetUser?.isActor 
+    ? await prisma.actor.findUnique({
+        where: { id: targetId },
+        select: { id: true },
+      })
+    : targetUser 
+      ? null 
+      : await prisma.actor.findUnique({
+          where: { id: targetId },
+          select: { id: true },
+        });
 
   // If neither user nor actor found, return error
+  // Also error if targetUser has isActor flag but no Actor record exists
   if (!targetUser && !targetActor) {
     throw new NotFoundError('User or actor', targetId);
   }
+  if (targetUser?.isActor && !targetActor) {
+    throw new NotFoundError('Actor', targetId);
+  }
 
-  if (targetUser) {
-    // Target is a user - use Follow model
+  // If targetUser has isActor flag, treat as actor (not regular user)
+  // Also check if targetActor exists (could be actor ID that doesn't match a user)
+  if (targetUser && !targetUser.isActor) {
+    // Target is a regular user - use Follow model
     // Check if already following
     const existingFollow = await prisma.follow.findUnique({
       where: {
@@ -214,7 +228,7 @@ export const POST = withErrorHandling(async (
       201
     );
   } else {
-    // Target is an actor (NPC) - use UserActorFollow model
+    // Target is an actor (NPC) or user with isActor=true - use UserActorFollow model
     const [existingUserActorFollow, legacyFollowStatus] = await Promise.all([
       prisma.userActorFollow.findUnique({
         where: {
@@ -341,11 +355,12 @@ export const DELETE = withErrorHandling(async (
   
   const params = await context.params;
   const { userId: targetIdentifier } = UserIdParamSchema.parse(params);
-  const targetUser = await findUserByIdentifier(targetIdentifier, { id: true });
+  const targetUser = await findUserByIdentifier(targetIdentifier, { id: true, isActor: true });
   const targetId = targetUser?.id ?? targetIdentifier;
 
-  if (targetUser) {
-    // Target is a user - use Follow model
+  // If targetUser has isActor flag, treat as actor (not regular user)
+  if (targetUser && !targetUser.isActor) {
+    // Target is a regular user - use Follow model
     const follow = await prisma.follow.findUnique({
       where: {
         followerId_followingId: {
@@ -476,11 +491,12 @@ export const GET = withErrorHandling(async (
   // Check if target is a user
   const targetUser = await prisma.user.findUnique({
     where: { id: targetId },
-    select: { id: true },
+    select: { id: true, isActor: true },
   });
 
-  if (targetUser) {
-    // Target is a user - check Follow model
+  // If targetUser has isActor flag, treat as actor (not regular user)
+  if (targetUser && !targetUser.isActor) {
+    // Target is a regular user - check Follow model
     const follow = await prisma.follow.findUnique({
       where: {
         followerId_followingId: {

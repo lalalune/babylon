@@ -6,11 +6,11 @@ Babylon uses Server-Sent Events (SSE) for real-time updates compatible with Verc
 
 Babylon uses **Server-Sent Events (SSE)** instead of WebSocket for real-time features because:
 
-- ✅ **Vercel Compatible**: Works on serverless platforms
-- ✅ **Simpler**: Unidirectional server-to-client
-- ✅ **HTTP-Based**: Works through firewalls
-- ✅ **Auto-Reconnect**: Built-in reconnection
-- ✅ **Efficient**: Less overhead than WebSocket
+- **Vercel Compatible**: Works on serverless platforms
+- **Simpler**: Unidirectional server-to-client
+- **HTTP-Based**: Works through firewalls
+- **Auto-Reconnect**: Built-in reconnection
+- **Efficient**: Less overhead than WebSocket
 
 ## SSE Endpoint
 
@@ -35,35 +35,35 @@ GET /api/sse/events?channels=feed,markets,breaking-news
 ```typescript
 // Connect to SSE endpoint
 const eventSource = new EventSource(
-  '/api/sse/events?channels=feed,markets,breaking-news',
-  { withCredentials: true }
+ '/api/sse/events?channels=feed,markets,breaking-news',
+ { withCredentials: true }
 );
 
 // Listen for feed updates
 eventSource.addEventListener('feed_update', (event) => {
-  const data = JSON.parse(event.data);
-  console.log('New post:', data);
-  // Update UI with new post
+ const data = JSON.parse(event.data);
+ console.log('New post:', data);
+ // Update UI with new post
 });
 
 // Listen for market updates
 eventSource.addEventListener('market_update', (event) => {
-  const data = JSON.parse(event.data);
-  console.log('Price update:', data);
-  // Update market prices in UI
+ const data = JSON.parse(event.data);
+ console.log('Price update:', data);
+ // Update market prices in UI
 });
 
 // Listen for breaking news
 eventSource.addEventListener('breaking_news', (event) => {
-  const data = JSON.parse(event.data);
-  console.log('Breaking news:', data);
-  // Show notification
+ const data = JSON.parse(event.data);
+ console.log('Breaking news:', data);
+ // Show notification
 });
 
 // Handle connection errors
 eventSource.onerror = (error) => {
-  console.error('SSE error:', error);
-  // EventSource will auto-reconnect
+ console.error('SSE error:', error);
+ // EventSource will auto-reconnect
 };
 
 // Close connection when done
@@ -76,41 +76,41 @@ eventSource.onerror = (error) => {
 import { useEffect, useState } from 'react';
 
 export function useSSE(channels: string[]) {
-  const [data, setData] = useState<any[]>([]);
-  
-  useEffect(() => {
-    const channelParam = channels.join(',');
-    const eventSource = new EventSource(
-      `/api/sse/events?channels=${channelParam}`
-    );
-    
-    // Listen for all event types
-    for (const channel of channels) {
-      eventSource.addEventListener(`${channel}_update`, (event) => {
-        const newData = JSON.parse(event.data);
-        setData(prev => [newData, ...prev]);
-      });
-    }
-    
-    return () => {
-      eventSource.close();
-    };
-  }, [channels.join(',')]);
-  
-  return data;
+ const [data, setData] = useState<any[]>([]);
+ 
+ useEffect(() => {
+ const channelParam = channels.join(',');
+ const eventSource = new EventSource(
+ `/api/sse/events?channels=${channelParam}`
+ );
+ 
+ // Listen for all event types
+ for (const channel of channels) {
+ eventSource.addEventListener(`${channel}_update`, (event) => {
+ const newData = JSON.parse(event.data);
+ setData(prev => [newData, ...prev]);
+ });
+ }
+ 
+ return () => {
+ eventSource.close();
+ };
+ }, [channels.join(',')]);
+ 
+ return data;
 }
 
 // Usage in component
 function FeedComponent() {
-  const updates = useSSE(['feed', 'markets']);
-  
-  return (
-    <div>
-      {updates.map(update => (
-        <div key={update.id}>{update.content}</div>
-      ))}
-    </div>
-  );
+ const updates = useSSE(['feed', 'markets']);
+ 
+ return (
+ <div>
+ {updates.map(update => (
+ <div key={update.id}>{update.content}</div>
+ ))}
+ </div>
+ );
 }
 ```
 
@@ -120,15 +120,15 @@ function FeedComponent() {
 
 ```json
 {
-  "type": "feed_update",
-  "data": {
-    "post": {
-      "id": "post-123",
-      "content": "Just opened a position...",
-      "authorId": "user-456",
-      "timestamp": "2024-11-11T12:00:00Z"
-    }
-  }
+ "type": "feed_update",
+ "data": {
+ "post": {
+ "id": "post-123",
+ "content": "Just opened a position...",
+ "authorId": "user-456",
+ "timestamp": "2024-11-11T12:00:00Z"
+ }
+ }
 }
 ```
 
@@ -136,15 +136,15 @@ function FeedComponent() {
 
 ```json
 {
-  "type": "market_update",
-  "data": {
-    "marketId": "market-123",
-    "yesPrice": 0.67,
-    "noPrice": 0.33,
-    "yesShares": 1340.5,
-    "noShares": 1659.5,
-    "timestamp": "2024-11-11T12:00:00Z"
-  }
+ "type": "market_update",
+ "data": {
+ "marketId": "market-123",
+ "yesPrice": 0.67,
+ "noPrice": 0.33,
+ "yesShares": 1340.5,
+ "noShares": 1659.5,
+ "timestamp": "2024-11-11T12:00:00Z"
+ }
 }
 ```
 
@@ -152,14 +152,14 @@ function FeedComponent() {
 
 ```json
 {
-  "type": "breaking_news",
-  "data": {
-    "id": "news-123",
-    "title": "Major Event Occurred",
-    "content": "Breaking news content...",
-    "relatedQuestions": [42, 43],
-    "timestamp": "2024-11-11T12:00:00Z"
-  }
+ "type": "breaking_news",
+ "data": {
+ "id": "news-123",
+ "title": "Major Event Occurred",
+ "content": "Breaking news content...",
+ "relatedQuestions": [42, 43],
+ "timestamp": "2024-11-11T12:00:00Z"
+ }
 }
 ```
 
@@ -167,14 +167,14 @@ function FeedComponent() {
 
 ```json
 {
-  "type": "chat_message",
-  "data": {
-    "chatId": "chat-789",
-    "messageId": "msg-123",
-    "senderId": "user-456",
-    "content": "Hello chat!",
-    "timestamp": "2024-11-11T12:00:00Z"
-  }
+ "type": "chat_message",
+ "data": {
+ "chatId": "chat-789",
+ "messageId": "msg-123",
+ "senderId": "user-456",
+ "content": "Hello chat!",
+ "timestamp": "2024-11-11T12:00:00Z"
+ }
 }
 ```
 
@@ -186,17 +186,17 @@ Subscribe to multiple channels:
 
 ```typescript
 const eventSource = new EventSource(
-  '/api/sse/events?channels=feed,markets,breaking-news,upcoming-events'
+ '/api/sse/events?channels=feed,markets,breaking-news,upcoming-events'
 );
 
 // Listen to all channel types
 const channels = ['feed', 'markets', 'breaking_news', 'upcoming_events'];
 
 channels.forEach(channel => {
-  eventSource.addEventListener(`${channel}_update`, (event) => {
-    const data = JSON.parse(event.data);
-    handleUpdate(channel, data);
-  });
+ eventSource.addEventListener(`${channel}_update`, (event) => {
+ const data = JSON.parse(event.data);
+ handleUpdate(channel, data);
+ });
 });
 ```
 
@@ -207,12 +207,12 @@ Subscribe to a specific chat:
 ```typescript
 const chatId = 'chat-abc123';
 const eventSource = new EventSource(
-  `/api/sse/events?channels=chat:${chatId}`
+ `/api/sse/events?channels=chat:${chatId}`
 );
 
 eventSource.addEventListener('chat_message', (event) => {
-  const message = JSON.parse(event.data);
-  appendMessage(message);
+ const message = JSON.parse(event.data);
+ appendMessage(message);
 });
 ```
 
@@ -220,36 +220,36 @@ eventSource.addEventListener('chat_message', (event) => {
 
 ```typescript
 class SSEManager {
-  private eventSource: EventSource | null = null;
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  
-  connect(channels: string[]) {
-    const url = `/api/sse/events?channels=${channels.join(',')}`;
-    this.eventSource = new EventSource(url);
-    
-    this.eventSource.onopen = () => {
-      console.log('SSE connected');
-      this.reconnectAttempts = 0;
-    };
-    
-    this.eventSource.onerror = (error) => {
-      console.error('SSE error:', error);
-      
-      if (this.reconnectAttempts < this.maxReconnectAttempts) {
-        this.reconnectAttempts++;
-        // EventSource automatically reconnects
-      } else {
-        console.error('Max reconnect attempts reached');
-        this.eventSource?.close();
-      }
-    };
-  }
-  
-  disconnect() {
-    this.eventSource?.close();
-    this.eventSource = null;
-  }
+ private eventSource: EventSource | null = null;
+ private reconnectAttempts = 0;
+ private maxReconnectAttempts = 5;
+ 
+ connect(channels: string[]) {
+ const url = `/api/sse/events?channels=${channels.join(',')}`;
+ this.eventSource = new EventSource(url);
+ 
+ this.eventSource.onopen = () => {
+ console.log('SSE connected');
+ this.reconnectAttempts = 0;
+ };
+ 
+ this.eventSource.onerror = (error) => {
+ console.error('SSE error:', error);
+ 
+ if (this.reconnectAttempts < this.maxReconnectAttempts) {
+ this.reconnectAttempts++;
+ // EventSource automatically reconnects
+ } else {
+ console.error('Max reconnect attempts reached');
+ this.eventSource?.close();
+ }
+ };
+ }
+ 
+ disconnect() {
+ this.eventSource?.close();
+ this.eventSource = null;
+ }
 }
 ```
 
@@ -264,7 +264,7 @@ import { redis } from '@/lib/redis';
 
 // Broadcast to all instances
 await redis.publish('babylon:feed_update', JSON.stringify({
-  post: newPost
+ post: newPost
 }));
 
 // All Vercel instances receive and broadcast via SSE
@@ -274,14 +274,14 @@ await redis.publish('babylon:feed_update', JSON.stringify({
 
 ```mermaid
 graph LR
-    A[User 1] -->|SSE| I1[Vercel Instance 1]
-    B[User 2] -->|SSE| I2[Vercel Instance 2]
-    I1 -->|Pub| R[Redis]
-    I2 -->|Pub| R
-    R -->|Sub| I1
-    R -->|Sub| I2
-    I1 -->|SSE| A
-    I2 -->|SSE| B
+ A[User 1] -->|SSE| I1[Vercel Instance 1]
+ B[User 2] -->|SSE| I2[Vercel Instance 2]
+ I1 -->|Pub| R[Redis]
+ I2 -->|Pub| R
+ R -->|Sub| I1
+ R -->|Sub| I2
+ I1 -->|SSE| A
+ I2 -->|SSE| B
 ```
 
 ## Performance
@@ -306,12 +306,12 @@ Vercel SSE limits:
 let updateTimer: NodeJS.Timeout;
 
 eventSource.addEventListener('market_update', (event) => {
-  clearTimeout(updateTimer);
-  
-  updateTimer = setTimeout(() => {
-    const data = JSON.parse(event.data);
-    updateUI(data);
-  }, 100); // Update at most every 100ms
+ clearTimeout(updateTimer);
+ 
+ updateTimer = setTimeout(() => {
+ const data = JSON.parse(event.data);
+ updateUI(data);
+ }, 100); // Update at most every 100ms
 });
 ```
 
@@ -321,10 +321,10 @@ eventSource.addEventListener('market_update', (event) => {
 |---------|-----|-----------|
 | Direction | Server → Client | Bidirectional |
 | Protocol | HTTP | WebSocket protocol |
-| Vercel Support | ✅ Yes | ❌ No |
-| Auto-Reconnect | ✅ Built-in | Manual |
-| Browser Support | ✅ All modern | ✅ All modern |
-| Firewall Friendly | ✅ Yes | Sometimes blocked |
+| Vercel Support | Yes | No |
+| Auto-Reconnect | Built-in | Manual |
+| Browser Support | All modern | All modern |
+| Firewall Friendly | Yes | Sometimes blocked |
 | Use Case | Real-time updates | Chat, gaming |
 
 For Babylon, SSE is perfect because:
@@ -346,10 +346,10 @@ SSE connections may drop after 5 minutes on Vercel. This is expected:
 ### No Updates Received
 
 Check:
-- ✅ Correct channel names
-- ✅ User is authenticated
-- ✅ Redis is configured (production)
-- ✅ Game engine is running
+- Correct channel names
+- User is authenticated
+- Redis is configured (production)
+- Game engine is running
 
 ### CORS Issues
 
@@ -358,15 +358,15 @@ SSE requests must be same-origin or properly configured:
 ```typescript
 // vercel.json includes CORS headers
 {
-  "headers": [
-    {
-      "source": "/api/:path*",
-      "headers": [
-        { "key": "Access-Control-Allow-Credentials", "value": "true" },
-        { "key": "Access-Control-Allow-Origin", "value": "*" }
-      ]
-    }
-  ]
+ "headers": [
+ {
+ "source": "/api/:path*",
+ "headers": [
+ { "key": "Access-Control-Allow-Credentials", "value": "true" },
+ { "key": "Access-Control-Allow-Origin", "value": "*" }
+ ]
+ }
+ ]
 }
 ```
 

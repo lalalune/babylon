@@ -5,11 +5,12 @@
  * Called on server startup to ensure Babylon is discoverable by agents.
  */
 
-import { Agent0Client } from '@/agents/agent0/Agent0Client'
+import { getAgent0Client } from '@/agents/agent0/Agent0Client'
 import type { AgentMetadata } from '@/agents/agent0/IPFSPublisher'
 import { logger } from '@/lib/logger'
 import { prisma } from '@/lib/prisma'
 import { generateSnowflakeId } from '@/lib/snowflake'
+import type { JsonValue } from '@/types/common'
 
 export interface BabylonRegistrationResult {
   tokenId: number
@@ -29,7 +30,7 @@ export async function registerBabylonGame(): Promise<BabylonRegistrationResult |
     })
     
     if (config?.value) {
-      const value = config.value as Record<string, unknown>
+      const value = config.value as Record<string, JsonValue>
       return {
         tokenId: Number(value.tokenId),
         metadataCID: String(value.metadataCID || ''),
@@ -74,7 +75,7 @@ export async function registerBabylonGame(): Promise<BabylonRegistrationResult |
       
       capabilities: {
         strategies: [],
-        markets: ['prediction', 'perpetuals', 'pools'],
+        markets: ['prediction', 'perpetuals'],
         actions: [
           // Market Operations
           'query_markets',
@@ -87,12 +88,6 @@ export async function registerBabylonGame(): Promise<BabylonRegistrationResult |
           'get_positions',
           'open_perp_position',
           'close_perp_position',
-          // Liquidity Pools
-          'get_pools',
-          'get_pool_info',
-          'deposit_pool',
-          'withdraw_pool',
-          'get_pool_deposits',
           // Social Features
           'create_post',
           'reply_post',
@@ -208,58 +203,6 @@ export async function registerBabylonGame(): Promise<BabylonRegistrationResult |
               properties: {
                 marketType: { type: 'string', enum: ['prediction', 'perpetuals', 'all'] }
               }
-            }
-          },
-          // Liquidity Pools
-          {
-            name: 'get_pools',
-            description: 'Get all available liquidity pools',
-            inputSchema: {
-              type: 'object',
-              properties: {}
-            }
-          },
-          {
-            name: 'get_pool_info',
-            description: 'Get detailed information about a specific pool',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                poolId: { type: 'string', description: 'Pool ID' }
-              },
-              required: ['poolId']
-            }
-          },
-          {
-            name: 'deposit_pool',
-            description: 'Deposit funds into a liquidity pool',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                poolId: { type: 'string', description: 'Pool ID' },
-                amount: { type: 'number', description: 'Amount to deposit' }
-              },
-              required: ['poolId', 'amount']
-            }
-          },
-          {
-            name: 'withdraw_pool',
-            description: 'Withdraw funds from a liquidity pool',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                poolId: { type: 'string', description: 'Pool ID' },
-                amount: { type: 'number', description: 'Amount to withdraw' }
-              },
-              required: ['poolId', 'amount']
-            }
-          },
-          {
-            name: 'get_pool_deposits',
-            description: 'Get all pool deposits for a user',
-            inputSchema: {
-              type: 'object',
-              properties: {}
             }
           },
           // Social Features
@@ -423,19 +366,14 @@ export async function registerBabylonGame(): Promise<BabylonRegistrationResult |
     logger.info('Game operates on Base network with cross-chain discovery via agent0', undefined, 'BabylonRegistry')
 
     // Use Ethereum Sepolia RPC (where agent0 contracts are deployed)
-    const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || process.env.SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com'
+    // const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || process.env.SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com'
 
     // Configure IPFS - use Pinata if available, otherwise use public IPFS node
-    const ipfsConfig = process.env.PINATA_JWT
-      ? { ipfsProvider: 'pinata' as const, pinataJwt: process.env.PINATA_JWT }
-      : { ipfsProvider: 'node' as const, ipfsNodeUrl: process.env.IPFS_NODE_URL || 'https://ipfs.io' }
+    // const ipfsConfig = process.env.PINATA_JWT
+    //   ? { ipfsProvider: 'pinata' as const, pinataJwt: process.env.PINATA_JWT }
+    //   : { ipfsProvider: 'node' as const, ipfsNodeUrl: process.env.IPFS_NODE_URL || 'https://ipfs.io' }
 
-    const agent0Client = new Agent0Client({
-      network: (process.env.AGENT0_NETWORK as 'sepolia' | 'mainnet') || 'sepolia',
-      rpcUrl,
-      privateKey: gamePrivateKey,
-      ...ipfsConfig
-    })
+    const agent0Client = getAgent0Client()
 
     // Register Babylon directly with registerAgent to provide full metadata payload
     // - Game metadata and capabilities

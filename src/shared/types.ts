@@ -44,6 +44,26 @@ export interface Actor {
   tradingBalance?: number; // NPC's trading balance
   reputationPoints?: number; // Reputation points for leaderboard
   profileImageUrl?: string; // Actor profile image
+  
+  // NPC Persona (for consistency and learnability)
+  persona?: {
+    reliability: number;           // 0-1, how often tells truth
+    insiderOrgs: string[];        // Org IDs with insider knowledge
+    expertise: string[];          // Domain expertise
+    willingToLie: boolean;        // Will strategically deceive
+    selfInterest: 'wealth' | 'reputation' | 'ideology' | 'chaos';
+    favorsActors: string[];       // Actor IDs they favor
+    opposesActors: string[];      // Actor IDs they oppose
+    favorsOrgs: string[];         // Org IDs they favor
+    opposesOrgs: string[];        // Org IDs they oppose
+  };
+  
+  // Track record (updated as game progresses)
+  trackRecord?: {
+    totalPosts: number;
+    accuratePosts: number;
+    historicalAccuracy: number;   // accuratePosts / totalPosts
+  };
 }
 
 /**
@@ -184,6 +204,9 @@ export interface Organization {
   currentPrice?: number; // Current price
   priceHistory?: StockPrice[]; // Historical prices
   markovState?: MarkovChainState; // Current market state
+  // Name replacement fields (for data files)
+  originalName?: string; // For name replacement
+  originalHandle?: string; // For name replacement
 }
 
 /**
@@ -203,13 +226,17 @@ export interface FeedPost {
   sentiment?: number | null; // -1 to 1
   slant?: string | null;
   category?: string | null;
+  tags?: string[]; // Topic tags for trending detection
   author: string;
   authorId?: string;
   authorName: string;
   authorUsername?: string | null;
   authorProfileImageUrl?: string | null;
   replyTo?: string;
-  relatedEvent?: string;
+  relatedQuestion?: number; // Prediction market question ID
+  // NOTE: relatedEvent is kept in-memory during generation but NOT persisted
+  // or exposed to agents. Used for offline RL training only.
+  relatedEvent?: string | null;
   gameId?: string | null;
   dayNumber?: number | null;
   clueStrength?: number; // 0-1 (how much this reveals)
@@ -319,7 +346,8 @@ export interface ElizaCharacter {
 
 /**
  * Extended Actor definition for data files
- * Includes all fields from actors.json
+ * Includes all fields from individual actor JSON files
+ * (stored in public/data/actors/*.json)
  */
 export interface ActorData extends Actor {
   realName: string;
@@ -371,6 +399,16 @@ export interface Question {
   createdAt?: Date | string; // Database timestamp
   updatedAt?: Date | string; // Database timestamp
   scenarioId?: number; // Alternative scenario field name
+  // Arc planning metadata (for learnability)
+  metadata?: {
+    arcPlan?: {
+      uncertaintyPeakDay: number;
+      clarityOnsetDay: number;
+      verificationDay: number;
+      insiders: string[];
+      deceivers: string[];
+    };
+  };
 }
 
 /**
@@ -385,14 +423,20 @@ export interface GroupChat {
 }
 
 /**
- * Chat message in group chat
+ * Chat message in group chat (for game generation/timeline)
+ * Note: This is different from the system ChatMessage used in useChatMessages
  */
-export interface ChatMessage {
+export interface GroupChatMessage {
   from: string;
   message: string;
   timestamp: string;
   clueStrength: number; // 0-1
 }
+
+/**
+ * @deprecated Use GroupChatMessage instead
+ */
+export type ChatMessage = GroupChatMessage;
 
 /**
  * Luck change event
@@ -421,7 +465,7 @@ export interface DayTimeline {
   day: number;
   summary: string;
   events: WorldEvent[];
-  groupChats: Record<string, ChatMessage[]>;
+  groupChats: Record<string, GroupChatMessage[]>;
   feedPosts: FeedPost[];
   luckChanges: LuckChange[];
   moodChanges: MoodChange[];
@@ -490,7 +534,10 @@ export interface GeneratedGame {
 
 /**
  * Actors database structure
- * Used for loading actors.json data file
+ * Used for loading actor/organization data from split file structure
+ * - Individual files in public/data/actors/*.json
+ * - Individual files in public/data/organizations/*.json
+ * - Loaded via loadActorsData() utility
  */
 export interface ActorsDatabase {
   actors: ActorData[];

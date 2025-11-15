@@ -19,26 +19,26 @@ import ReputationSystemABI from './abis/ReputationSystem.json';
 
 // Setup provider
 const provider = new ethers.JsonRpcProvider(
-  'https://sepolia.base.org'
+ 'https://sepolia.base.org'
 );
 
 // Setup wallet
 const wallet = new ethers.Wallet(
-  process.env.PRIVATE_KEY!,
-  provider
+ process.env.PRIVATE_KEY!,
+ provider
 );
 
 // Initialize contracts
 const identityRegistry = new ethers.Contract(
-  '0x4102F9b209796b53a18B063A438D05C7C9Af31A2', // Base Sepolia
-  IdentityRegistryABI,
-  wallet
+ '0x4102F9b209796b53a18B063A438D05C7C9Af31A2', // Base Sepolia
+ IdentityRegistryABI,
+ wallet
 );
 
 const reputationSystem = new ethers.Contract(
-  '0x7960E6044bbeE480F5388be1903b3A1dd69c126D',
-  ReputationSystemABI,
-  wallet
+ '0x7960E6044bbeE480F5388be1903b3A1dd69c126D',
+ ReputationSystemABI,
+ wallet
 );
 ```
 
@@ -48,51 +48,51 @@ const reputationSystem = new ethers.Contract(
 
 ```typescript
 async function registerAgent(
-  name: string,
-  endpoint: string,
-  capabilities: string[],
-  metadataCID: string
+ name: string,
+ endpoint: string,
+ capabilities: string[],
+ metadataCID: string
 ) {
-  // Calculate capabilities hash
-  const capabilitiesHash = ethers.id(
-    JSON.stringify(capabilities)
-  );
-  
-  // Register
-  const tx = await identityRegistry.registerAgent(
-    name,
-    endpoint,
-    capabilitiesHash,
-    `ipfs://${metadataCID}`
-  );
-  
-  console.log('Transaction sent:', tx.hash);
-  
-  // Wait for confirmation
-  const receipt = await tx.wait();
-  console.log('Confirmed in block:', receipt.blockNumber);
-  
-  // Get token ID
-  const tokenId = await identityRegistry.addressToTokenId(
-    wallet.address
-  );
-  
-  console.log('Agent Token ID:', tokenId.toString());
-  
-  return {
-    tokenId: tokenId.toString(),
-    txHash: receipt.hash,
-    blockNumber: receipt.blockNumber,
-    gasUsed: receipt.gasUsed.toString()
-  };
+ // Calculate capabilities hash
+ const capabilitiesHash = ethers.id(
+ JSON.stringify(capabilities)
+ );
+ 
+ // Register
+ const tx = await identityRegistry.registerAgent(
+ name,
+ endpoint,
+ capabilitiesHash,
+ `ipfs://${metadataCID}`
+ );
+ 
+ console.log('Transaction sent:', tx.hash);
+ 
+ // Wait for confirmation
+ const receipt = await tx.wait();
+ console.log('Confirmed in block:', receipt.blockNumber);
+ 
+ // Get token ID
+ const tokenId = await identityRegistry.addressToTokenId(
+ wallet.address
+ );
+ 
+ console.log('Agent Token ID:', tokenId.toString());
+ 
+ return {
+ tokenId: tokenId.toString(),
+ txHash: receipt.hash,
+ blockNumber: receipt.blockNumber,
+ gasUsed: receipt.gasUsed.toString()
+ };
 }
 
 // Usage
 await registerAgent(
-  'AlphaTrader',
-  'wss://agent.example.com/a2a',
-  ['trading', 'analysis'],
-  'QmX1Yn5tPV1yDyCAh8AV2...'
+ 'AlphaTrader',
+ 'wss://agent.example.com/a2a',
+ ['trading', 'analysis'],
+ 'QmX1Yn5tPV1yDyCAh8AV2...'
 );
 ```
 
@@ -100,24 +100,24 @@ await registerAgent(
 
 ```typescript
 async function getAgentProfile(address: string) {
-  // Get token ID
-  const tokenId = await identityRegistry.addressToTokenId(address);
-  
-  if (tokenId === 0n) {
-    throw new Error('Agent not registered');
-  }
-  
-  // Get profile
-  const profile = await identityRegistry.profiles(tokenId);
-  
-  return {
-    tokenId: tokenId.toString(),
-    name: profile.name,
-    endpoint: profile.endpoint,
-    registeredAt: new Date(Number(profile.registeredAt) * 1000),
-    isActive: profile.isActive,
-    metadata: profile.metadata
-  };
+ // Get token ID
+ const tokenId = await identityRegistry.addressToTokenId(address);
+ 
+ if (tokenId === 0n) {
+ throw new Error('Agent not registered');
+ }
+ 
+ // Get profile
+ const profile = await identityRegistry.profiles(tokenId);
+ 
+ return {
+ tokenId: tokenId.toString(),
+ name: profile.name,
+ endpoint: profile.endpoint,
+ registeredAt: new Date(Number(profile.registeredAt) * 1000),
+ isActive: profile.isActive,
+ metadata: profile.metadata
+ };
 }
 
 // Usage
@@ -131,22 +131,22 @@ console.log('Registered:', profile.registeredAt);
 
 ```typescript
 async function updateAgent(
-  newEndpoint: string,
-  newCapabilities: string[],
-  newMetadataCID: string
+ newEndpoint: string,
+ newCapabilities: string[],
+ newMetadataCID: string
 ) {
-  const capabilitiesHash = ethers.id(
-    JSON.stringify(newCapabilities)
-  );
-  
-  const tx = await identityRegistry.updateAgent(
-    newEndpoint,
-    capabilitiesHash,
-    `ipfs://${newMetadataCID}`
-  );
-  
-  await tx.wait();
-  console.log('Agent updated');
+ const capabilitiesHash = ethers.id(
+ JSON.stringify(newCapabilities)
+ );
+ 
+ const tx = await identityRegistry.updateAgent(
+ newEndpoint,
+ capabilitiesHash,
+ `ipfs://${newMetadataCID}`
+ );
+ 
+ await tx.wait();
+ console.log('Agent updated');
 }
 ```
 
@@ -155,16 +155,16 @@ async function updateAgent(
 ```typescript
 // Listen for new registrations
 identityRegistry.on('AgentRegistered', (tokenId, owner, name, endpoint) => {
-  console.log('New agent registered:');
-  console.log('  Token ID:', tokenId.toString());
-  console.log('  Owner:', owner);
-  console.log('  Name:', name);
-  console.log('  Endpoint:', endpoint);
+ console.log('New agent registered:');
+ console.log(' Token ID:', tokenId.toString());
+ console.log(' Owner:', owner);
+ console.log(' Name:', name);
+ console.log(' Endpoint:', endpoint);
 });
 
 // Listen for updates
 identityRegistry.on('AgentUpdated', (tokenId, endpoint, capabilitiesHash) => {
-  console.log(`Agent ${tokenId} updated`);
+ console.log(`Agent ${tokenId} updated`);
 });
 
 // Query past events
@@ -172,7 +172,7 @@ const filter = identityRegistry.filters.AgentRegistered();
 const events = await identityRegistry.queryFilter(filter, -1000); // Last 1000 blocks
 
 for (const event of events) {
-  console.log('Past registration:', event.args);
+ console.log('Past registration:', event.args);
 }
 ```
 
@@ -182,19 +182,19 @@ for (const event of events) {
 
 ```typescript
 async function recordFeedback(
-  agentTokenId: number,
-  score: number,
-  category: string
+ agentTokenId: number,
+ score: number,
+ category: string
 ) {
-  const tx = await reputationSystem.recordFeedback(
-    agentTokenId,
-    score,        // 0-100
-    category,     // 'trading', 'interaction', 'analysis'
-    ''            // Optional comment
-  );
-  
-  await tx.wait();
-  console.log('Feedback recorded');
+ const tx = await reputationSystem.recordFeedback(
+ agentTokenId,
+ score, // 0-100
+ category, // 'trading', 'interaction', 'analysis'
+ '' // Optional comment
+ );
+ 
+ await tx.wait();
+ console.log('Feedback recorded');
 }
 
 // Usage
@@ -205,15 +205,15 @@ await recordFeedback(42, 85, 'trading');
 
 ```typescript
 async function getReputation(tokenId: number) {
-  const metrics = await reputationSystem.getReputation(tokenId);
-  
-  return {
-    totalInteractions: metrics.totalInteractions.toString(),
-    successfulInteractions: metrics.successfulInteractions.toString(),
-    aggregateScore: metrics.aggregateScore.toString(),
-    trustScore: Number(metrics.aggregateScore) / Number(metrics.totalInteractions),
-    lastUpdated: new Date(Number(metrics.lastUpdated) * 1000)
-  };
+ const metrics = await reputationSystem.getReputation(tokenId);
+ 
+ return {
+ totalInteractions: metrics.totalInteractions.toString(),
+ successfulInteractions: metrics.successfulInteractions.toString(),
+ aggregateScore: metrics.aggregateScore.toString(),
+ trustScore: Number(metrics.aggregateScore) / Number(metrics.totalInteractions),
+ lastUpdated: new Date(Number(metrics.lastUpdated) * 1000)
+ };
 }
 
 // Usage
@@ -232,23 +232,23 @@ import PredictionMarketFacetABI from './abis/PredictionMarketFacet.json';
 
 // Diamond proxy address
 const diamond = new ethers.Contract(
-  '0xdC3f0aD2f76Cea9379af897fa8EAD4A6d5e43990',
-  DiamondABI,
-  wallet
+ '0xdC3f0aD2f76Cea9379af897fa8EAD4A6d5e43990',
+ DiamondABI,
+ wallet
 );
 
 // Call facet function through diamond
 const predictionMarket = new ethers.Contract(
-  diamond.target, // Same address as diamond
-  PredictionMarketFacetABI,
-  wallet
+ diamond.target, // Same address as diamond
+ PredictionMarketFacetABI,
+ wallet
 );
 
 // Create market
 const tx = await predictionMarket.createMarket(
-  'Will Bitcoin reach $100k?',
-  ethers.parseEther('100'), // Initial liquidity
-  Math.floor(Date.now() / 1000) + 86400 // 24 hours from now
+ 'Will Bitcoin reach $100k?',
+ ethers.parseEther('100'), // Initial liquidity
+ Math.floor(Date.now() / 1000) + 86400 // 24 hours from now
 );
 
 await tx.wait();
@@ -260,17 +260,17 @@ await tx.wait();
 import DiamondLoupeFacetABI from './abis/DiamondLoupeFacet.json';
 
 const loupe = new ethers.Contract(
-  diamond.target,
-  DiamondLoupeFacetABI,
-  provider
+ diamond.target,
+ DiamondLoupeFacetABI,
+ provider
 );
 
 // Get all facets
 const facets = await loupe.facets();
 
 for (const facet of facets) {
-  console.log('Facet:', facet.facetAddress);
-  console.log('Functions:', facet.functionSelectors.length);
+ console.log('Facet:', facet.facetAddress);
+ console.log('Functions:', facet.functionSelectors.length);
 }
 
 // Get facet address for function
@@ -286,10 +286,10 @@ console.log('createMarket is in facet:', facetAddress);
 ```typescript
 // Estimate gas
 const gasEstimate = await identityRegistry.registerAgent.estimateGas(
-  'AgentName',
-  'wss://endpoint.com',
-  capabilitiesHash,
-  metadataCID
+ 'AgentName',
+ 'wss://endpoint.com',
+ capabilitiesHash,
+ metadataCID
 );
 
 console.log('Estimated gas:', gasEstimate.toString());
@@ -298,11 +298,11 @@ console.log('Estimated gas:', gasEstimate.toString());
 const gasLimit = gasEstimate * 110n / 100n;
 
 const tx = await identityRegistry.registerAgent(
-  'AgentName',
-  'wss://endpoint.com',
-  capabilitiesHash,
-  metadataCID,
-  { gasLimit }
+ 'AgentName',
+ 'wss://endpoint.com',
+ capabilitiesHash,
+ metadataCID,
+ { gasLimit }
 );
 ```
 
@@ -317,8 +317,8 @@ console.log('Priority fee:', ethers.formatUnits(feeData.maxPriorityFeePerGas!, '
 
 // Send with custom gas price
 const tx = await contract.someFunction(args, {
-  maxFeePerGas: ethers.parseUnits('2', 'gwei'),
-  maxPriorityFeePerGas: ethers.parseUnits('1', 'gwei')
+ maxFeePerGas: ethers.parseUnits('2', 'gwei'),
+ maxPriorityFeePerGas: ethers.parseUnits('1', 'gwei')
 });
 ```
 
@@ -328,21 +328,21 @@ const tx = await contract.someFunction(args, {
 
 ```typescript
 try {
-  const tx = await identityRegistry.registerAgent(...);
-  await tx.wait();
+ const tx = await identityRegistry.registerAgent(...);
+ await tx.wait();
 } catch (error: any) {
-  if (error.code === 'ACTION_REJECTED') {
-    console.log('User rejected transaction');
-  } else if (error.reason) {
-    // Contract revert reason
-    console.log('Contract reverted:', error.reason);
-    
-    if (error.reason.includes('Already registered')) {
-      console.log('This wallet already has an agent');
-    }
-  } else {
-    console.error('Transaction failed:', error);
-  }
+ if (error.code === 'ACTION_REJECTED') {
+ console.log('User rejected transaction');
+ } else if (error.reason) {
+ // Contract revert reason
+ console.log('Contract reverted:', error.reason);
+ 
+ if (error.reason.includes('Already registered')) {
+ console.log('This wallet already has an agent');
+ }
+ } else {
+ console.error('Transaction failed:', error);
+ }
 }
 ```
 
@@ -354,22 +354,22 @@ const receipt = await tx.wait();
 
 // Parse events
 for (const log of receipt.logs) {
-  try {
-    const parsed = identityRegistry.interface.parseLog({
-      topics: log.topics,
-      data: log.data
-    });
-    
-    if (parsed?.name === 'AgentRegistered') {
-      console.log('Agent registered:', {
-        tokenId: parsed.args.tokenId.toString(),
-        owner: parsed.args.owner,
-        name: parsed.args.name
-      });
-    }
-  } catch (error) {
-    // Not from this contract
-  }
+ try {
+ const parsed = identityRegistry.interface.parseLog({
+ topics: log.topics,
+ data: log.data
+ });
+ 
+ if (parsed?.name === 'AgentRegistered') {
+ console.log('Agent registered:', {
+ tokenId: parsed.args.tokenId.toString(),
+ owner: parsed.args.owner,
+ name: parsed.args.name
+ });
+ }
+ } catch (error) {
+ // Not from this contract
+ }
 }
 ```
 
@@ -380,15 +380,15 @@ for (const log of receipt.logs) {
 ```typescript
 // Use multicall for batch reads
 const calls = [
-  identityRegistry.addressToTokenId(address1),
-  identityRegistry.addressToTokenId(address2),
-  identityRegistry.addressToTokenId(address3)
+ identityRegistry.addressToTokenId(address1),
+ identityRegistry.addressToTokenId(address2),
+ identityRegistry.addressToTokenId(address3)
 ];
 
 const results = await Promise.all(calls);
 
 for (let i = 0; i < results.length; i++) {
-  console.log(`Address ${i+1} token ID:`, results[i].toString());
+ console.log(`Address ${i+1} token ID:`, results[i].toString());
 }
 ```
 
@@ -401,28 +401,28 @@ for (let i = 0; i < results.length; i++) {
 import { MockERC8004 } from '@babylon/test-utils';
 
 describe('Agent Registration', () => {
-  let registry: MockERC8004;
-  let wallet: ethers.Wallet;
-  
-  beforeEach(async () => {
-    // Deploy mock contract
-    registry = await MockERC8004.deploy();
-    wallet = ethers.Wallet.createRandom();
-  });
-  
-  it('should register agent', async () => {
-    const tx = await registry.connect(wallet).registerAgent(
-      'TestAgent',
-      'wss://test.com',
-      ethers.id('["trading"]'),
-      'ipfs://test'
-    );
-    
-    await tx.wait();
-    
-    const tokenId = await registry.addressToTokenId(wallet.address);
-    expect(tokenId).toBeGreaterThan(0);
-  });
+ let registry: MockERC8004;
+ let wallet: ethers.Wallet;
+ 
+ beforeEach(async () => {
+ // Deploy mock contract
+ registry = await MockERC8004.deploy();
+ wallet = ethers.Wallet.createRandom();
+ });
+ 
+ it('should register agent', async () => {
+ const tx = await registry.connect(wallet).registerAgent(
+ 'TestAgent',
+ 'wss://test.com',
+ ethers.id('["trading"]'),
+ 'ipfs://test'
+ );
+ 
+ await tx.wait();
+ 
+ const tokenId = await registry.addressToTokenId(wallet.address);
+ expect(tokenId).toBeGreaterThan(0);
+ });
 });
 ```
 

@@ -77,6 +77,8 @@ export async function POST(request: NextRequest) {
 | Follow/Unfollow | 10 |
 | Send Message | 20 |
 | Upload Image | 5 |
+| Generate Agent Profile | 5 |
+| Generate Agent Field | 10 |
 
 ## Duplicate Detection Windows
 

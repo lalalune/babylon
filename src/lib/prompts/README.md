@@ -81,7 +81,10 @@ function validateNoRealNames(text: string): string[] {
 
 ## Actor Names Reference
 
-The system automatically loads **ONLY PARODY NAMES** from `public/data/actors.json`:
+The system automatically loads **ONLY PARODY NAMES** from the actors data structure:
+- Individual actor files in `public/data/actors/`
+- Individual organization files in `public/data/organizations/`
+- Loaded via `loadActorsData()` utility
 
 **Valid Names (Use These)**:
 - AIlon Musk (@ailonmusk)

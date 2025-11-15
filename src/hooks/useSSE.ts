@@ -181,12 +181,16 @@ async function ensureConnection(forceReconnect = false) {
   };
 
   eventSource.addEventListener('message', (event) => {
-    const message: SSEMessage = JSON.parse(event.data);
-    const subs = channelSubscribers.get(message.channel);
-    if (subs && subs.size > 0) {
-      subs.forEach((callback) => {
-        callback(message);
-      });
+    try {
+      const message: SSEMessage = JSON.parse(event.data);
+      const subs = channelSubscribers.get(message.channel);
+      if (subs && subs.size > 0) {
+        subs.forEach((callback) => {
+          callback(message);
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to parse SSE message', { error, data: event.data }, 'useSSE');
     }
   });
 
@@ -291,12 +295,18 @@ export function useSSE(options: SSEHookOptions = {}): SSEHookReturn {
       if (!subscriptionsRef.current.has(channel)) {
         subscriptionsRef.current.set(channel, new Set());
       }
-      subscriptionsRef.current.get(channel)!.add(callback);
+      const refSubs = subscriptionsRef.current.get(channel);
+      if (refSubs) {
+        refSubs.add(callback);
+      }
 
       if (!channelSubscribers.has(channel)) {
         channelSubscribers.set(channel, new Set());
       }
-      channelSubscribers.get(channel)!.add(callback);
+      const globalSubs = channelSubscribers.get(channel);
+      if (globalSubs) {
+        globalSubs.add(callback);
+      }
 
       const previousSize = requestedChannels.size;
       requestedChannels.add(channel);

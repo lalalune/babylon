@@ -36,6 +36,23 @@ export interface AgentAction {
   type: AgentActionType;
   data: Record<string, unknown>;
   duration: number; // How long agent took to respond
+  correctness?: {
+    // Prediction market correctness
+    predictionCorrect?: boolean;
+    actualOutcome?: boolean;
+    predictedOutcome?: boolean;
+    
+    // Perp trade correctness
+    perpCorrect?: boolean;
+    sentimentAtTrade?: number;
+    priceChange?: number;
+    expectedDirection?: 'up' | 'down';
+    
+    // Sentiment analysis accuracy
+    sentimentAccuracy?: number;
+    sentimentAtTime?: number;
+    actualSentiment?: number;
+  };
 }
 
 export type AgentActionType =
@@ -286,15 +303,63 @@ export class SimulationEngine {
     const actionStart = Date.now();
     
     let result: unknown;
+    let correctness: AgentAction['correctness'];
     
     switch (type) {
-      case 'buy_prediction':
+      case 'buy_prediction': {
         result = this.handleBuyPrediction(data);
-        break;
+        const { marketId, outcome } = data as { marketId: string; outcome: 'YES' | 'NO' };
         
-      case 'open_perp':
-        result = this.handleOpenPerp(data);
+        // Track correctness for prediction markets
+        const marketOutcome = this.config.snapshot.groundTruth.marketOutcomes[marketId];
+        if (marketOutcome !== undefined) {
+          const predictedOutcome = outcome === 'YES';
+          const isCorrect = predictedOutcome === marketOutcome;
+          
+          correctness = {
+            predictionCorrect: isCorrect,
+            actualOutcome: marketOutcome,
+            predictedOutcome,
+          };
+        }
         break;
+      }
+        
+      case 'open_perp': {
+        result = this.handleOpenPerp(data);
+        const { ticker, side } = data as { ticker: string; side: 'LONG' | 'SHORT' };
+        
+        // Track correctness for perp trades based on sentiment and price movement
+        const state = this.getGameState();
+        const market = state.perpetualMarkets.find((m: { ticker: string }) => m.ticker === ticker);
+        
+        if (market) {
+          // Calculate sentiment (simplified: based on price change)
+          const priceHistory = this.config.snapshot.groundTruth.priceHistory[ticker];
+          const currentPrice = market.price;
+          const futurePrice = priceHistory?.[Math.min(this.currentTick + 10, priceHistory.length - 1)]?.price;
+          
+          if (futurePrice !== undefined) {
+            const priceChange = (futurePrice - currentPrice) / currentPrice;
+            const sentimentAtTrade = priceChange > 0 ? 0.5 : -0.5; // Simplified sentiment
+            
+            // Determine if trade was correct
+            // If sentiment is negative and we went short, that's correct
+            // If sentiment is positive and we went long, that's correct
+            const expectedDirection = sentimentAtTrade < 0 ? 'down' : 'up';
+            const tradeDirection = side === 'SHORT' ? 'down' : 'up';
+            const isCorrect = expectedDirection === tradeDirection;
+            
+            correctness = {
+              perpCorrect: isCorrect,
+              sentimentAtTrade,
+              priceChange,
+              expectedDirection,
+            };
+          }
+        }
+        break;
+      }
         
       case 'close_perp':
         result = this.handleClosePerp(data);
@@ -312,13 +377,14 @@ export class SimulationEngine {
         return { success: false, error: `Unknown action type: ${type}` };
     }
     
-    // Record action
+    // Record action with correctness metadata
     this.actions.push({
       tick: this.currentTick,
       timestamp: Date.now(),
       type,
       data,
       duration: Date.now() - actionStart,
+      correctness,
     });
     
     return { success: true, result };
@@ -553,7 +619,7 @@ export class SimulationEngine {
       socialMetrics: {
         postsCreated: this.socialStats.postsCreated,
         groupsJoined: this.socialStats.groupsJoined,
-        messagesReceived: 0, // TODO: Track from events
+        messagesReceived: this.socialStats.messagesReceived,
         reputationGained: correctPredictions * 10 - incorrectPredictions * 5,
       },
       timing: {

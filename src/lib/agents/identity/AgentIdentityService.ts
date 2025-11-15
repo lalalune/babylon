@@ -15,6 +15,7 @@ import { getAgent0Client } from '@/agents/agent0/Agent0Client'
 import type { User } from '@prisma/client'
 import { agentWalletService } from '@/lib/agents/identity/AgentWalletService'
 import { generateSnowflakeId } from '@/lib/snowflake'
+import { syncAfterAgent0Registration } from '@/lib/reputation/agent0-reputation-sync'
 
 export class AgentIdentityService {
   /**
@@ -62,23 +63,26 @@ export class AgentIdentityService {
         ? ['autonomous-trading', 'prediction-markets', 'social-interaction']
         : ['chat', 'analysis'],
       markets: ['prediction', 'perp', 'crypto'],
-      actions: ['trade', 'analyze', 'chat', 'post', 'comment'],
+      actions: ['trade', 'analyze', 'chat', 'post', 'comment', 'moderation-escrow', 'appeal-ban'],
       version: '1.0.0',
       platform: 'babylon',
       userType: 'agent',
-      x402Support: false,
+      x402Support: true,
+      moderationEscrowSupport: true,
       autonomousTrading: agentUser.autonomousTrading,
       autonomousPosting: agentUser.autonomousPosting,
     }
+
+    // Use individual agent's A2A endpoint, not the game's endpoint
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const individualAgentA2AEndpoint = `${baseUrl}/api/agents/${agentUserId}/a2a`
 
     const registration = await agent0Client.registerAgent({
       name: agentUser.displayName || agentUser.username || 'Agent',
       description: agentUser.bio || `Autonomous AI agent in Babylon`,
       imageUrl: agentUser.profileImageUrl || undefined,
       walletAddress: agentUser.walletAddress,
-      a2aEndpoint: process.env.NEXT_PUBLIC_APP_URL 
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/a2a`
-        : undefined,
+      a2aEndpoint: individualAgentA2AEndpoint,
       capabilities
     })
 
@@ -90,6 +94,11 @@ export class AgentIdentityService {
         registrationTxHash: registration.txHash,
         onChainRegistered: true
       }
+    })
+
+    // Fire-and-forget reputation sync; log but do not block registration
+    syncAfterAgent0Registration(agentUserId, registration.tokenId).catch((error) => {
+      logger.warn('Agent0 reputation sync failed after registration', { agentUserId, tokenId: registration.tokenId, error }, 'AgentIdentityService')
     })
 
     await prisma.agentLog.create({

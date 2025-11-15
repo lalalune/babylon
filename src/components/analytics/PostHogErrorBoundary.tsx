@@ -7,6 +7,7 @@
 
 import React, { Component, type ReactNode } from 'react'
 import { posthog } from '@/lib/posthog/client'
+import { logger } from '@/lib/logger'
 
 interface Props {
   children: ReactNode
@@ -41,10 +42,8 @@ export class PostHogErrorBoundary extends Component<Props, State> {
       })
     }
 
-    // Also log to console in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Error caught by PostHogErrorBoundary:', error, errorInfo)
-    }
+    // Also log using logger
+    logger.error('Error caught by PostHogErrorBoundary', { error, errorInfo }, 'PostHogErrorBoundary')
   }
 
   render() {

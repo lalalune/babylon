@@ -34,6 +34,10 @@ export class AlphaGroupInviteService {
   
   // Maximum invites per tick (prevent too many at once)
   private static readonly MAX_INVITES_PER_TICK = 5;
+  
+  // User group participation limits (prevent unlimited accumulation)
+  private static readonly MAX_ACTIVE_USER_GROUPS = 5; // Max groups a user can be in simultaneously
+  private static readonly INVITE_COOLDOWN_HOURS = 4; // Hours after joining before next invite eligible
 
   /**
    * Process alpha group invites for one tick
@@ -99,6 +103,47 @@ export class AlphaGroupInviteService {
 
       if (existingMembership) {
         continue; // Already in a group
+      }
+      
+      // Check if user is at their group limit
+      const activeGroupCount = await prisma.groupChatMembership.count({
+        where: {
+          userId: userScore.userId,
+          isActive: true,
+        },
+      });
+      
+      if (activeGroupCount >= this.MAX_ACTIVE_USER_GROUPS) {
+        logger.debug('User at group limit, skipping invite', {
+          userId: userScore.userId,
+          activeGroups: activeGroupCount,
+          maxGroups: this.MAX_ACTIVE_USER_GROUPS,
+        }, 'AlphaGroupInviteService');
+        continue;
+      }
+      
+      // Check if user is in invite cooldown
+      const latestMembership = await prisma.groupChatMembership.findFirst({
+        where: {
+          userId: userScore.userId,
+          isActive: true,
+        },
+        orderBy: {
+          joinedAt: 'desc',
+        },
+      });
+      
+      if (latestMembership) {
+        const hoursSinceJoin = (Date.now() - latestMembership.joinedAt.getTime()) / (1000 * 60 * 60);
+        
+        if (hoursSinceJoin < this.INVITE_COOLDOWN_HOURS) {
+          logger.debug('User in invite cooldown, skipping', {
+            userId: userScore.userId,
+            hoursSinceJoin: hoursSinceJoin.toFixed(2),
+            cooldownRequired: this.INVITE_COOLDOWN_HOURS,
+          }, 'AlphaGroupInviteService');
+          continue;
+        }
       }
 
       // Calculate invite probability based on engagement score

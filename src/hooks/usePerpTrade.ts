@@ -114,7 +114,12 @@ export function usePerpTrade(options: UsePerpTradeOptions = {}) {
         headers,
       });
 
-      const data = await response.json() as Record<string, unknown>;
+      let data: Record<string, unknown>;
+      try {
+        data = await response.json() as Record<string, unknown>;
+      } catch (error) {
+        throw new Error(`Failed to parse response: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
 
       if (!response.ok) {
         throw new Error(extractErrorMessage(data, response.status));

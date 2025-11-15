@@ -67,7 +67,10 @@ One sentence summary:`
     max_tokens: 50,
   })
 
-  let cleanSummary = response.choices[0]!.message.content!.trim()
+  if (!response.choices || response.choices.length === 0 || !response.choices[0]?.message?.content) {
+    throw new Error('Invalid response from LLM: missing choices or content');
+  }
+  let cleanSummary = response.choices[0].message.content.trim()
     .replace(/^["']|["']$/g, '')
     .replace(/\.$/, '')
     .trim()

@@ -6,8 +6,8 @@ Complete reference for Babylon's PostgreSQL database schema.
 
 Babylon uses **PostgreSQL** with **Prisma ORM** for type-safe database access.
 
-**Total Models**: 30+  
-**Relationships**: Complex graph with many-to-many  
+**Total Models**: 30+ 
+**Relationships**: Complex graph with many-to-many 
 **Special Features**: Snowflake IDs, Row-Level Security, Soft deletes
 
 ## Core Models
@@ -18,40 +18,40 @@ Represents both real players and NPCs.
 
 ```prisma
 model User {
-  id              String   @id @default(uuid())
-  privyId         String   @unique
-  walletAddress   String?  @unique
-  username        String?  @unique
-  displayName     String?
-  bio             String?
-  profileImageUrl String?
-  coverImageUrl   String?
-  isActor         Boolean  @default(false)  // true = NPC
-  
-  // Virtual wallet
-  virtualBalance  Decimal  @default(1000)
-  totalDeposited  Decimal  @default(1000)
-  lifetimePnL     Decimal  @default(0)
-  
-  // On-chain identity
-  onChainRegistered   Boolean  @default(false)
-  nftTokenId          Int?     @unique
-  agent0TokenId       Int?
-  
-  // Reputation
-  reputationPoints    Int      @default(1000)
-  
-  // Relationships
-  comments        Comment[]
-  reactions       Reaction[]
-  positions       Position[]
-  followedBy      Follow[]     @relation("following")
-  following       Follow[]     @relation("follower")
-  
-  @@index([walletAddress])
-  @@index([username])
-  @@index([isActor])
-  @@index([reputationPoints(sort: Desc)])
+ id String @id @default(uuid())
+ privyId String @unique
+ walletAddress String? @unique
+ username String? @unique
+ displayName String?
+ bio String?
+ profileImageUrl String?
+ coverImageUrl String?
+ isActor Boolean @default(false) // true = NPC
+ 
+ // Virtual wallet
+ virtualBalance Decimal @default(1000)
+ totalDeposited Decimal @default(1000)
+ lifetimePnL Decimal @default(0)
+ 
+ // On-chain identity
+ onChainRegistered Boolean @default(false)
+ nftTokenId Int? @unique
+ agent0TokenId Int?
+ 
+ // Reputation
+ reputationPoints Int @default(1000)
+ 
+ // Relationships
+ comments Comment[]
+ reactions Reaction[]
+ positions Position[]
+ followedBy Follow[] @relation("following")
+ following Follow[] @relation("follower")
+ 
+ @@index([walletAddress])
+ @@index([username])
+ @@index([isActor])
+ @@index([reputationPoints(sort: Desc)])
 }
 ```
 
@@ -67,28 +67,28 @@ Social media posts and articles.
 
 ```prisma
 model Post {
-  id          String   @id // Snowflake ID
-  type        String   @default("post") // "post" | "article"
-  content     String
-  fullContent String?  @db.Text // For articles
-  
-  // Article fields
-  articleTitle String?
-  biasScore    Float?   // -1 to 1
-  sentiment    String?
-  category     String?
-  
-  authorId    String
-  timestamp   DateTime @default(now())
-  
-  comments    Comment[]
-  reactions   Reaction[]
-  shares      Share[]
-  postTags    PostTag[]
-  
-  @@index([authorId, timestamp(sort: Desc)])
-  @@index([timestamp(sort: Desc)])
-  @@index([type, timestamp(sort: Desc)])
+ id String @id // Snowflake ID
+ type String @default("post") // "post" | "article"
+ content String
+ fullContent String? @db.Text // For articles
+ 
+ // Article fields
+ articleTitle String?
+ biasScore Float? // -1 to 1
+ sentiment String?
+ category String?
+ 
+ authorId String
+ timestamp DateTime @default(now())
+ 
+ comments Comment[]
+ reactions Reaction[]
+ shares Share[]
+ postTags PostTag[]
+ 
+ @@index([authorId, timestamp(sort: Desc)])
+ @@index([timestamp(sort: Desc)])
+ @@index([type, timestamp(sort: Desc)])
 }
 ```
 
@@ -104,20 +104,20 @@ Prediction market for binary questions.
 
 ```prisma
 model Market {
-  id          String   @id @default(uuid())
-  question    String
-  description String?
-  yesShares   Decimal  @default(0)
-  noShares    Decimal  @default(0)
-  liquidity   Decimal
-  resolved    Boolean  @default(false)
-  resolution  Boolean? // true = YES won
-  endDate     DateTime
-  
-  positions Position[]
-  
-  @@index([resolved, endDate])
-  @@index([createdAt(sort: Desc)])
+ id String @id @default(uuid())
+ question String
+ description String?
+ yesShares Decimal @default(0)
+ noShares Decimal @default(0)
+ liquidity Decimal
+ resolved Boolean @default(false)
+ resolution Boolean? // true = YES won
+ endDate DateTime
+ 
+ positions Position[]
+ 
+ @@index([resolved, endDate])
+ @@index([createdAt(sort: Desc)])
 }
 ```
 
@@ -133,17 +133,17 @@ User position in a prediction market.
 
 ```prisma
 model Position {
-  id        String   @id @default(uuid())
-  userId    String
-  marketId  String
-  side      Boolean  // true = YES, false = NO
-  shares    Decimal
-  avgPrice  Decimal
-  
-  user   User   @relation(fields: [userId])
-  market Market @relation(fields: [marketId])
-  
-  @@index([userId, marketId])
+ id String @id @default(uuid())
+ userId String
+ marketId String
+ side Boolean // true = YES, false = NO
+ shares Decimal
+ avgPrice Decimal
+ 
+ user User @relation(fields: [userId])
+ market Market @relation(fields: [marketId])
+ 
+ @@index([userId, marketId])
 }
 ```
 
@@ -153,23 +153,23 @@ Perpetual futures position with leverage.
 
 ```prisma
 model PerpPosition {
-  id                   String   @id @default(uuid())
-  userId               String
-  ticker               String
-  side                 String   // 'long' | 'short'
-  entryPrice           Float
-  currentPrice         Float
-  size                 Float
-  leverage             Int      // 1-100x
-  liquidationPrice     Float
-  unrealizedPnL        Float
-  fundingPaid          Float    @default(0)
-  openedAt             DateTime @default(now())
-  closedAt             DateTime?
-  realizedPnL          Float?
-  
-  @@index([userId, closedAt])
-  @@index([ticker])
+ id String @id @default(uuid())
+ userId String
+ ticker String
+ side String // 'long' | 'short'
+ entryPrice Float
+ currentPrice Float
+ size Float
+ leverage Int // 1-100x
+ liquidationPrice Float
+ unrealizedPnL Float
+ fundingPaid Float @default(0)
+ openedAt DateTime @default(now())
+ closedAt DateTime?
+ realizedPnL Float?
+ 
+ @@index([userId, closedAt])
+ @@index([ticker])
 }
 ```
 
@@ -185,17 +185,17 @@ Short: liquidationPrice = entryPrice * (1 + 1/leverage)
 
 ```prisma
 model Comment {
-  id              String   @id @default(uuid())
-  content         String
-  postId          String
-  authorId        String
-  parentCommentId String?  // For threaded replies
-  
-  post    Post     @relation(fields: [postId])
-  author  User     @relation(fields: [authorId])
-  replies Comment[] @relation("CommentReplies")
-  
-  @@index([postId, createdAt(sort: Desc)])
+ id String @id @default(uuid())
+ content String
+ postId String
+ authorId String
+ parentCommentId String? // For threaded replies
+ 
+ post Post @relation(fields: [postId])
+ author User @relation(fields: [authorId])
+ replies Comment[] @relation("CommentReplies")
+ 
+ @@index([postId, createdAt(sort: Desc)])
 }
 ```
 
@@ -203,18 +203,18 @@ model Comment {
 
 ```prisma
 model Reaction {
-  id        String   @id @default(uuid())
-  postId    String?
-  commentId String?
-  userId    String
-  type      String   @default("like")
-  
-  post    Post?    @relation(fields: [postId])
-  comment Comment? @relation(fields: [commentId])
-  user    User     @relation(fields: [userId])
-  
-  @@unique([postId, userId, type])
-  @@unique([commentId, userId, type])
+ id String @id @default(uuid())
+ postId String?
+ commentId String?
+ userId String
+ type String @default("like")
+ 
+ post Post? @relation(fields: [postId])
+ comment Comment? @relation(fields: [commentId])
+ user User @relation(fields: [userId])
+ 
+ @@unique([postId, userId, type])
+ @@unique([commentId, userId, type])
 }
 ```
 
@@ -222,16 +222,16 @@ model Reaction {
 
 ```prisma
 model Follow {
-  id          String   @id @default(uuid())
-  followerId  String
-  followingId String
-  
-  follower  User @relation("follower", fields: [followerId])
-  following User @relation("following", fields: [followingId])
-  
-  @@unique([followerId, followingId])
-  @@index([followerId])
-  @@index([followingId])
+ id String @id @default(uuid())
+ followerId String
+ followingId String
+ 
+ follower User @relation("follower", fields: [followerId])
+ following User @relation("following", fields: [followingId])
+ 
+ @@unique([followerId, followingId])
+ @@index([followerId])
+ @@index([followingId])
 }
 ```
 
@@ -243,22 +243,22 @@ NPC-managed trading pool.
 
 ```prisma
 model Pool {
-  id                  String   @id @default(uuid())
-  npcActorId          String
-  name                String
-  totalValue          Decimal  @default(0)
-  totalDeposits       Decimal  @default(0)
-  lifetimePnL         Decimal  @default(0)
-  performanceFeeRate  Float    @default(0.05)
-  isActive            Boolean  @default(true)
-  
-  npcActor  Actor         @relation(fields: [npcActorId])
-  deposits  PoolDeposit[]
-  positions PoolPosition[]
-  trades    NPCTrade[]
-  
-  @@index([npcActorId])
-  @@index([isActive])
+ id String @id @default(uuid())
+ npcActorId String
+ name String
+ totalValue Decimal @default(0)
+ totalDeposits Decimal @default(0)
+ lifetimePnL Decimal @default(0)
+ performanceFeeRate Float @default(0.05)
+ isActive Boolean @default(true)
+ 
+ npcActor Actor @relation(fields: [npcActorId])
+ deposits PoolDeposit[]
+ positions PoolPosition[]
+ trades NPCTrade[]
+ 
+ @@index([npcActorId])
+ @@index([isActive])
 }
 ```
 
@@ -268,20 +268,20 @@ All NPC trades for transparency.
 
 ```prisma
 model NPCTrade {
-  id          String   @id @default(uuid())
-  npcActorId  String
-  poolId      String?
-  marketType  String   // 'perp' | 'prediction'
-  ticker      String?
-  marketId    String?
-  action      String   // 'buy' | 'sell' | 'open_long' | ...
-  amount      Float
-  price       Float
-  sentiment   Float?   // -1 to 1
-  reason      String?
-  executedAt  DateTime @default(now())
-  
-  @@index([npcActorId, executedAt(sort: Desc)])
+ id String @id @default(uuid())
+ npcActorId String
+ poolId String?
+ marketType String // 'perp' | 'prediction'
+ ticker String?
+ marketId String?
+ action String // 'buy' | 'sell' | 'open_long' | ...
+ amount Float
+ price Float
+ sentiment Float? // -1 to 1
+ reason String?
+ executedAt DateTime @default(now())
+ 
+ @@index([npcActorId, executedAt(sort: Desc)])
 }
 ```
 
@@ -293,16 +293,16 @@ Prediction market questions.
 
 ```prisma
 model Question {
-  id             String   @id @default(uuid())
-  questionNumber Int      // Sequential
-  text           String
-  outcome        Boolean  // Predetermined outcome
-  resolutionDate DateTime
-  status         String   @default("active")
-  resolvedOutcome Boolean?
-  
-  @@index([status, resolutionDate])
-  @@index([questionNumber])
+ id String @id @default(uuid())
+ questionNumber Int // Sequential
+ text String
+ outcome Boolean // Predetermined outcome
+ resolutionDate DateTime
+ status String @default("active")
+ resolvedOutcome Boolean?
+ 
+ @@index([status, resolutionDate])
+ @@index([questionNumber])
 }
 ```
 
@@ -312,19 +312,19 @@ NPC actors with personalities.
 
 ```prisma
 model Actor {
-  id              String   @id // From actors.json
-  name            String
-  description     String?
-  personality     String?
-  tier            String?  // S_TIER, A_TIER, etc.
-  tradingBalance  Decimal  @default(10000)
-  reputationPoints Int     @default(10000)
-  
-  pools      Pool[]
-  npcTrades  NPCTrade[]
-  
-  @@index([tier])
-  @@index([reputationPoints(sort: Desc)])
+ id String @id // From individual actor files (public/data/actors/*.json)
+ name String
+ description String?
+ personality String?
+ tier String? // S_TIER, A_TIER, etc.
+ tradingBalance Decimal @default(10000)
+ reputationPoints Int @default(10000)
+ 
+ pools Pool[]
+ npcTrades NPCTrade[]
+ 
+ @@index([tier])
+ @@index([reputationPoints(sort: Desc)])
 }
 ```
 
@@ -334,16 +334,16 @@ Companies for perpetual futures.
 
 ```prisma
 model Organization {
-  id           String   @id
-  name         String
-  type         String   // 'company' | 'media' | 'government'
-  initialPrice Float?
-  currentPrice Float?
-  
-  stockPrices StockPrice[]
-  
-  @@index([type])
-  @@index([currentPrice])
+ id String @id
+ name String
+ type String // 'company' | 'media' | 'government'
+ initialPrice Float?
+ currentPrice Float?
+ 
+ stockPrices StockPrice[]
+ 
+ @@index([type])
+ @@index([currentPrice])
 }
 ```
 
@@ -355,18 +355,18 @@ Ratings between users and agents.
 
 ```prisma
 model Feedback {
-  id              String   @id @default(uuid())
-  fromUserId      String?
-  toUserId        String?
-  score           Int      // 0-100
-  rating          Int?     // 1-5 stars
-  comment         String?
-  category        String?
-  interactionType String   // "user_to_agent" | ...
-  onChainTxHash   String?
-  
-  @@index([toUserId, interactionType])
-  @@index([score(sort: Desc)])
+ id String @id @default(uuid())
+ fromUserId String?
+ toUserId String?
+ score Int // 0-100
+ rating Int? // 1-5 stars
+ comment String?
+ category String?
+ interactionType String // "user_to_agent" | ...
+ onChainTxHash String?
+ 
+ @@index([toUserId, interactionType])
+ @@index([score(sort: Desc)])
 }
 ```
 
@@ -376,23 +376,23 @@ Aggregated performance data.
 
 ```prisma
 model AgentPerformanceMetrics {
-  id                    String   @id @default(uuid())
-  userId                String   @unique
-  
-  // Game performance
-  gamesPlayed           Int      @default(0)
-  averageGameScore      Float    @default(0)
-  
-  // Trading performance
-  normalizedPnL         Float    @default(0.5)
-  totalTrades           Int      @default(0)
-  winRate               Float    @default(0)
-  
-  // Reputation
-  reputationScore       Float    @default(50)
-  trustLevel            String   @default("UNRATED")
-  
-  @@index([reputationScore(sort: Desc)])
+ id String @id @default(uuid())
+ userId String @unique
+ 
+ // Game performance
+ gamesPlayed Int @default(0)
+ averageGameScore Float @default(0)
+ 
+ // Trading performance
+ normalizedPnL Float @default(0.5)
+ totalTrades Int @default(0)
+ winRate Float @default(0)
+ 
+ // Reputation
+ reputationScore Float @default(50)
+ trustLevel String @default("UNRATED")
+ 
+ @@index([reputationScore(sort: Desc)])
 }
 ```
 
@@ -403,26 +403,26 @@ model AgentPerformanceMetrics {
 **User Follows** (User ↔ User):
 ```prisma
 model Follow {
-  followerId  String
-  followingId String
-  
-  follower  User @relation("follower", fields: [followerId])
-  following User @relation("following", fields: [followingId])
-  
-  @@unique([followerId, followingId])
+ followerId String
+ followingId String
+ 
+ follower User @relation("follower", fields: [followerId])
+ following User @relation("following", fields: [followingId])
+ 
+ @@unique([followerId, followingId])
 }
 ```
 
 **Post Tags** (Post ↔ Tag):
 ```prisma
 model PostTag {
-  postId String
-  tagId  String
-  
-  post Post @relation(fields: [postId])
-  tag  Tag  @relation(fields: [tagId])
-  
-  @@unique([postId, tagId])
+ postId String
+ tagId String
+ 
+ post Post @relation(fields: [postId])
+ tag Tag @relation(fields: [tagId])
+ 
+ @@unique([postId, tagId])
 }
 ```
 
@@ -463,7 +463,7 @@ bunprisma migrate dev --name add_new_field
 
 ```bash
 # Development
-bun run prisma:migrate
+bun run db:migrate
 
 # Production (Vercel)
 # Runs automatically via postinstall
@@ -473,8 +473,10 @@ bun run prisma migrate deploy
 ### Rolling Back
 
 ```bash
-# Reset database (caution: loses data)
-bun run db:reset
+# Manual reset (caution: loses data)
+psql babylon -c "DROP SCHEMA public CASCADE;"
+psql babylon -c "CREATE SCHEMA public;"
+bun run db:migrate
 
 # Or manual rollback
 psql babylon < prisma/migrations/[previous]/migration.sql
@@ -505,14 +507,14 @@ Enforced in application logic:
 
 ```typescript
 const user = await prisma.user.findUnique({
-  where: { id: userId },
-  include: {
-    positions: {
-      include: {
-        market: true
-      }
-    }
-  }
+ where: { id: userId },
+ include: {
+ positions: {
+ include: {
+ market: true
+ }
+ }
+ }
 });
 ```
 
@@ -520,20 +522,20 @@ const user = await prisma.user.findUnique({
 
 ```typescript
 const posts = await prisma.post.findMany({
-  take: 20,
-  orderBy: { timestamp: 'desc' },
-  include: {
-    author: {
-      select: {
-        username: true,
-        displayName: true,
-        profileImageUrl: true
-      }
-    },
-    reactions: {
-      where: { userId }
-    }
-  }
+ take: 20,
+ orderBy: { timestamp: 'desc' },
+ include: {
+ author: {
+ select: {
+ username: true,
+ displayName: true,
+ profileImageUrl: true
+ }
+ },
+ reactions: {
+ where: { userId }
+ }
+ }
 });
 ```
 
@@ -541,17 +543,17 @@ const posts = await prisma.post.findMany({
 
 ```typescript
 const leaderboard = await prisma.user.findMany({
-  where: { isActor: false },
-  orderBy: { reputationPoints: 'desc' },
-  take: 100,
-  select: {
-    id: true,
-    username: true,
-    displayName: true,
-    profileImageUrl: true,
-    reputationPoints: true,
-    lifetimePnL: true
-  }
+ where: { isActor: false },
+ orderBy: { reputationPoints: 'desc' },
+ take: 100,
+ select: {
+ id: true,
+ username: true,
+ displayName: true,
+ profileImageUrl: true,
+ reputationPoints: true,
+ lifetimePnL: true
+ }
 });
 ```
 
@@ -574,18 +576,18 @@ DIRECT_URL="postgresql://user:pass@host:5432/babylon"
 // Prisma automatically manages connections
 // Configure in Prisma schema:
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+ provider = "postgresql"
+ url = env("DATABASE_URL")
 }
 
 // Or programmatically:
 const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL
-    }
-  },
-  log: ['query', 'error'],
+ datasources: {
+ db: {
+ url: process.env.DATABASE_URL
+ }
+ },
+ log: ['query', 'error'],
 });
 ```
 
@@ -598,16 +600,16 @@ import { asUser, asPublic } from '@/lib/db/context';
 
 // Execute query as specific user
 const data = await asUser(authenticatedUser, async (db) => {
-  return await db.position.findMany({
-    where: { userId: authenticatedUser.userId }
-  });
+ return await db.position.findMany({
+ where: { userId: authenticatedUser.userId }
+ });
 });
 
 // Public query
 const data = await asPublic(async (db) => {
-  return await db.market.findMany({
-    where: { resolved: false }
-  });
+ return await db.market.findMany({
+ where: { resolved: false }
+ });
 });
 ```
 
@@ -622,16 +624,16 @@ const data = await asPublic(async (db) => {
 ### Use Select
 
 ```typescript
-// ❌ Fetches all fields
+// Fetches all fields
 const users = await prisma.user.findMany();
 
-// ✅ Fetch only needed fields
+// Fetch only needed fields
 const users = await prisma.user.findMany({
-  select: {
-    id: true,
-    username: true,
-    profileImageUrl: true
-  }
+ select: {
+ id: true,
+ username: true,
+ profileImageUrl: true
+ }
 });
 ```
 
@@ -640,41 +642,41 @@ const users = await prisma.user.findMany({
 ```typescript
 // Cursor-based (better for large datasets)
 const posts = await prisma.post.findMany({
-  take: 20,
-  skip: 1,
-  cursor: {
-    id: lastPostId
-  },
-  orderBy: { timestamp: 'desc' }
+ take: 20,
+ skip: 1,
+ cursor: {
+ id: lastPostId
+ },
+ orderBy: { timestamp: 'desc' }
 });
 
 // Offset-based (simpler)
 const posts = await prisma.post.findMany({
-  take: 20,
-  skip: (page - 1) * 20,
-  orderBy: { timestamp: 'desc' }
+ take: 20,
+ skip: (page - 1) * 20,
+ orderBy: { timestamp: 'desc' }
 });
 ```
 
 ### Batch Operations
 
 ```typescript
-// ❌ Multiple queries
+// Multiple queries
 for (const user of users) {
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { reputationPoints: { increment: 10 } }
-  });
+ await prisma.user.update({
+ where: { id: user.id },
+ data: { reputationPoints: { increment: 10 } }
+ });
 }
 
-// ✅ Single query
+// Single query
 await prisma.user.updateMany({
-  where: {
-    id: { in: userIds }
-  },
-  data: {
-    reputationPoints: { increment: 10 }
-  }
+ where: {
+ id: { in: userIds }
+ },
+ data: {
+ reputationPoints: { increment: 10 }
+ }
 });
 ```
 
@@ -684,30 +686,30 @@ await prisma.user.updateMany({
 
 ```typescript
 await prisma.$transaction(async (tx) => {
-  // Deduct from user balance
-  await tx.user.update({
-    where: { id: userId },
-    data: { virtualBalance: { decrement: amount } }
-  });
-  
-  // Create position
-  await tx.position.create({
-    data: {
-      userId,
-      marketId,
-      shares,
-      avgPrice
-    }
-  });
-  
-  // Log transaction
-  await tx.balanceTransaction.create({
-    data: {
-      userId,
-      type: 'pred_buy',
-      amount: -amount
-    }
-  });
+ // Deduct from user balance
+ await tx.user.update({
+ where: { id: userId },
+ data: { virtualBalance: { decrement: amount } }
+ });
+ 
+ // Create position
+ await tx.position.create({
+ data: {
+ userId,
+ marketId,
+ shares,
+ avgPrice
+ }
+ });
+ 
+ // Log transaction
+ await tx.balanceTransaction.create({
+ data: {
+ userId,
+ type: 'pred_buy',
+ amount: -amount
+ }
+ });
 });
 ```
 
@@ -730,8 +732,10 @@ bunx prisma db pull
 # Restore from backup
 psql babylon < backup-20241111.sql
 
-# Or reset and migrate
-bun run db:reset
+# Or reset and migrate (manual)
+psql babylon -c "DROP SCHEMA public CASCADE;"
+psql babylon -c "CREATE SCHEMA public;"
+bun run db:migrate
 ```
 
 ## Next Steps

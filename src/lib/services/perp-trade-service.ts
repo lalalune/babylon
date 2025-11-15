@@ -373,17 +373,32 @@ export class PerpTradeService {
     );
 
     await asUser(authUser, async (db) => {
-      await db.perpPosition.update({
-        where: { id: positionId },
-        data: {
-          closedAt: new Date(),
-          realizedPnL: realizedPnL,
-          currentPrice: position.currentPrice,
-          unrealizedPnL: 0,
-          unrealizedPnLPercent: 0,
-          lastUpdated: new Date(),
-        },
-      });
+      try {
+        await db.perpPosition.update({
+          where: { id: positionId },
+          data: {
+            closedAt: new Date(),
+            realizedPnL: realizedPnL,
+            currentPrice: position.currentPrice,
+            unrealizedPnL: 0,
+            unrealizedPnLPercent: 0,
+            lastUpdated: new Date(),
+          },
+        });
+      } catch (error: unknown) {
+        // Handle case where position was deleted between fetch and update
+        if ((error as { code?: string })?.code === 'P2025') {
+          logger.warn(
+            'Position not found during update (may have been deleted)',
+            { positionId, userId: authUser.userId },
+            'PerpTradeService.closePosition'
+          );
+          // Position doesn't exist - this is okay, it may have been deleted
+          // The position was already closed in the engine, so we can continue
+          return;
+        }
+        throw error;
+      }
     });
 
     const feeResult =

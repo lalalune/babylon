@@ -18,6 +18,7 @@ import { trackServerEvent } from '@/lib/posthog/server'
 import { notifyNewAccount } from '@/lib/services/notification-service'
 import { generateSnowflakeId } from '@/lib/snowflake'
 import { withRetry, isRetryableError } from '@/lib/prisma-retry'
+import type { JsonValue } from '@/types/common'
 
 interface SignupRequestBody {
   username: string
@@ -66,7 +67,7 @@ const SignupSchema = OnboardingProfileSchema.extend({
 
 export const POST = withErrorHandling(async (request: NextRequest) => {
   const authUser = await authenticate(request)
-  const body = await request.json().catch(() => ({})) as SignupRequestBody | Record<string, unknown>
+  const body = await request.json() as SignupRequestBody | Record<string, JsonValue>
 
   const parsedBody = SignupSchema.parse(body)
   const { identityToken, referralCode: rawReferralCode, isWaitlist, ...profileData } = parsedBody

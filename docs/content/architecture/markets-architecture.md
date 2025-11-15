@@ -121,7 +121,7 @@ noPrice = noShares / (yesShares + noShares)
 
 ## Architecture Principles
 
-### ✅ Why This Works Well
+### Why This Works Well
 
 1. **Clear Separation:** Each market type has dedicated components
 2. **No Code Duplication:** Perps, predictions, and pools are distinct
@@ -134,17 +134,17 @@ noPrice = noShares / (yesShares + noShares)
 **Feed/Trending Pages:**
 ```tsx
 <WidgetSidebar>
-  <LatestNewsPanel />
-  <TrendingPanel />
-  <MarketsPanel /> {/* Prediction markets */}
+ <LatestNewsPanel />
+ <TrendingPanel />
+ <MarketsPanel /> {/* Prediction markets */}
 </WidgetSidebar>
 ```
 
 **Markets Page:**
 ```tsx
 <MarketsWidgetSidebar>
-  <MarketOverviewPanel />
-  <TopMoversPanel /> {/* Perp futures */}
+ <MarketOverviewPanel />
+ <TopMoversPanel /> {/* Perp futures */}
 </MarketsWidgetSidebar>
 ```
 

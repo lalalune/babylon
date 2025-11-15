@@ -6,12 +6,7 @@
  */
 
 import { GraphQLClient } from 'graphql-request'
-import { z } from 'zod'
-
-const CapabilitiesSchema = z.object({
-  strategies: z.array(z.string()).optional(),
-  markets: z.array(z.string()).optional(),
-});
+import { parseCapabilities } from './capabilities-schema'
 
 // Raw subgraph response structure
 interface RawSubgraphAgent {
@@ -54,12 +49,20 @@ export interface SubgraphAgent {
 }
 
 export class SubgraphClient {
-  private client: GraphQLClient
+  private client: GraphQLClient | null
+  private isLocalnet: boolean
 
   constructor() {
     const subgraphUrl = process.env.AGENT0_SUBGRAPH_URL
+    const network = process.env.AGENT0_NETWORK || 'sepolia'
+    this.isLocalnet = network === 'localnet'
     
     if (!subgraphUrl) {
+      // For localnet, subgraph might not be available - allow graceful degradation
+      if (this.isLocalnet) {
+        this.client = null
+        return
+      }
       throw new Error('AGENT0_SUBGRAPH_URL environment variable is required')
     }
     
@@ -94,9 +97,15 @@ export class SubgraphClient {
     const meta = this.parseMetadata(raw.metadata)
     
     const capabilities = meta.capabilities
-      ? CapabilitiesSchema.safeParse(JSON.parse(meta.capabilities)).success
-        ? meta.capabilities
-        : undefined
+      ? (() => {
+          try {
+            const parsed = JSON.parse(meta.capabilities)
+            parseCapabilities(parsed) // Validate
+            return meta.capabilities
+          } catch {
+            return undefined
+          }
+        })()
       : undefined
 
     return {
@@ -118,6 +127,10 @@ export class SubgraphClient {
    * Get agent by token ID
    */
   async getAgent(tokenId: number): Promise<SubgraphAgent> {
+    if (!this.client) {
+      throw new Error('Subgraph client not available (localnet mode or AGENT0_SUBGRAPH_URL not set)')
+    }
+
     const query = `
       query GetAgent($agentId: String!) {
         agents(where: { agentId: $agentId }) {
@@ -153,6 +166,11 @@ export class SubgraphClient {
     minTrustScore?: number
     limit?: number
   }): Promise<SubgraphAgent[]> {
+    if (!this.client) {
+      // For localnet without subgraph, return empty array
+      return []
+    }
+
     const limit = filters.limit || 100
     
     // Query all agents, we'll filter in-memory since metadata is key-value
@@ -189,8 +207,8 @@ export class SubgraphClient {
     if (filters.strategies && filters.strategies.length > 0) {
       results = results.filter(agent => {
         const caps = JSON.parse(agent.capabilities!)
-        const validation = CapabilitiesSchema.parse(caps)
-        const agentStrategies = validation.strategies ?? []
+        const parsed = parseCapabilities(caps)
+        const agentStrategies = parsed.strategies ?? []
         return filters.strategies!.some(s => agentStrategies.includes(s))
       })
     }
@@ -198,8 +216,8 @@ export class SubgraphClient {
     if (filters.markets && filters.markets.length > 0) {
       results = results.filter(agent => {
         const caps = JSON.parse(agent.capabilities!)
-        const validation = CapabilitiesSchema.parse(caps)
-        const agentMarkets = validation.markets ?? []
+        const parsed = parseCapabilities(caps)
+        const agentMarkets = parsed.markets ?? []
         return filters.markets!.some(m => agentMarkets.includes(m))
       })
     }
@@ -214,6 +232,7 @@ export class SubgraphClient {
     markets?: string[]
     minTrustScore?: number
   }): Promise<SubgraphAgent[]> {
+    // searchAgents already handles null client case
     return this.searchAgents({
       type: 'game-platform',
       markets: filters?.markets,
@@ -231,6 +250,10 @@ export class SubgraphClient {
     comment: string
     timestamp: number
   }>> {
+    if (!this.client) {
+      // For localnet without subgraph, return empty array
+      return []
+    }
     const agent = await this.getAgent(tokenId)
     return agent.feedbacks!
   }

@@ -86,7 +86,6 @@
   },
   "include": [
     "src/**/*",
-    "tests/**/*",
     "scripts/**/*",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
@@ -95,6 +94,8 @@
     "node_modules",
     "dist",
     "**/*.disabled",
-    "examples/**/*"
+    "examples/**/*",
+    "tests/**/*",
+    "src/**/__tests__/**/*"
   ]
 }

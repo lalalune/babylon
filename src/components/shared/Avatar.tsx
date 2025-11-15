@@ -155,7 +155,18 @@ export function GroupAvatar({ members, size = 'md', className }: GroupAvatarProp
   }
 
   if (displayMembers.length === 1) {
-    const member = displayMembers[0]!;
+    const member = displayMembers[0];
+    if (!member) {
+      return (
+        <div className={cn(
+          'bg-primary/20 flex items-center justify-center',
+          sizeClasses[size],
+          className
+        )}>
+          <div className="text-primary font-bold">G</div>
+        </div>
+      );
+    }
     return <Avatar id={member.id} name={member.name} type={member.type} size={size} className={className} />
   }
 

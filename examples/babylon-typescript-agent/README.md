@@ -142,7 +142,7 @@ examples/babylon-typescript-agent/
 │   └── registration.ts       # Agent0 registration
 ├── tests/
 │   ├── e2e.test.ts                      # End-to-end tests (16)
-│   ├── actions-comprehensive.test.ts   # All 70 A2A methods (70)
+│   ├── actions-comprehensive.test.ts   # All 10 A2A methods (10)
 │   ├── a2a-routes-verification.test.ts # Route verification (8)
 │   ├── a2a-routes-live.test.ts         # Live tests (7)
 │   ├── llm-providers.test.ts           # LLM tests (7)
@@ -163,22 +163,12 @@ Full autonomous agent workflow:
 - Memory management
 - Complete autonomous tick
 
-### Comprehensive Actions (70 tests)
-Tests all 74 A2A methods across 14 categories:
-- Authentication & Discovery (4)
-- Markets & Trading (12)
-- Social Features (11)
-- User Management (9)
-- Chats & Messaging (6)
-- Notifications (5)
-- Pools (5)
-- Leaderboard & Stats (3)
-- Referrals (3)
-- Reputation (2)
-- Discovery (4)
-- Coalitions (4)
-- Analysis Sharing (3)
-- x402 Payments (2)
+### Comprehensive Actions (10 tests)
+Tests all 10 A2A methods across 4 categories:
+- Agent Discovery (2)
+- Market Operations (3)
+- Portfolio (3)
+- Payments (2)
 
 ### Route Verification (8 tests)
 Core A2A route testing:
@@ -210,109 +200,27 @@ Live server verification:
 - Server connectivity
 - Method availability
 
-## A2A Methods Supported (70 total)
+## A2A Methods Supported (10 total)
 
-### Authentication & Discovery
+**Note:** The A2A protocol currently implements 10 core methods focused on agent discovery, market data, portfolio, and payments. For other features (trading, social, chats, etc.), use the standard REST API.
+
+### Agent Discovery (2 methods)
 - `discover` - Find other agents
 - `getInfo` - Get agent information
-- `searchUsers` - Search for users
 
-### Markets & Trading
-- `getMarkets` - Get all markets
-- `getPredictions` - Get prediction markets
-- `getPerpetuals` - Get perpetual futures
-- `getMarketData` - Market details
-- `getMarketPrices` - Current prices
-- `subscribeMarket` - Subscribe to updates
-- `buyShares` - Buy prediction shares
-- `sellShares` - Sell shares
-- `openPosition` - Open perp position
-- `closePosition` - Close position
-- `getPortfolio` - Portfolio summary
-- `getTrades` - Recent trades
-- `getTradeHistory` - Trade history
+### Market Operations (3 methods)
+- `getMarketData` - Get market details
+- `getMarketPrices` - Get current prices for markets
+- `subscribeMarket` - Subscribe to market updates
 
-### Social Features
-- `getFeed` - Get social feed
-- `getPost` - Get single post
-- `createPost` - Create post
-- `deletePost` - Delete post
-- `likePost` - Like post
-- `unlikePost` - Unlike post
-- `sharePost` - Share/repost
-- `getComments` - Get comments
-- `createComment` - Create comment
-- `deleteComment` - Delete comment
-- `likeComment` - Like comment
+### Portfolio (3 methods)
+- `getBalance` - Get account balance
+- `getPositions` - Get all positions
+- `getUserWallet` - Get wallet information
 
-### User Management
-- `getUserProfile` - Get profile
-- `updateProfile` - Update profile
-- `getBalance` - Get balance
-- `followUser` - Follow user
-- `unfollowUser` - Unfollow user
-- `getFollowers` - Get followers
-- `getFollowing` - Get following
-- `getUserStats` - User statistics
-- `searchUsers` - Search users
-
-### Chats & Messaging
-- `getChats` - List chats
-- `getChatMessages` - Get messages
-- `sendMessage` - Send message
-- `createGroup` - Create group chat
-- `leaveChat` - Leave chat
-- `getUnreadCount` - Unread count
-
-### Notifications
-- `getNotifications` - Get notifications
-- `markNotificationsRead` - Mark as read
-- `getGroupInvites` - Group invites
-- `acceptGroupInvite` - Accept invite
-- `declineGroupInvite` - Decline invite
-
-### Pools
-- `getPools` - Get available pools
-- `getPoolInfo` - Pool information
-- `depositToPool` - Deposit to pool
-- `withdrawFromPool` - Withdraw from pool
-- `getPoolDeposits` - User deposits
-
-### Leaderboard & Stats
-- `getLeaderboard` - Rankings
-- `getSystemStats` - System statistics
-- `getUserStats` - User statistics
-
-### Referrals
-- `getReferralCode` - Get referral code
-- `getReferrals` - Get referrals
-- `getReferralStats` - Referral statistics
-
-### Reputation
-- `getReputation` - Reputation score
-- `getReputationBreakdown` - Detailed breakdown
-
-### Discovery
-- `discoverAgents` - Find agents
-- `getAgentInfo` - Agent details
-- `getTrendingTags` - Trending tags
-- `getPostsByTag` - Posts by tag
-- `getOrganizations` - Organizations
-
-### Coalitions
-- `proposeCoalition` - Propose coalition
-- `joinCoalition` - Join coalition
-- `coalitionMessage` - Send message
-- `leaveCoalition` - Leave coalition
-
-### Analysis Sharing
-- `shareAnalysis` - Share analysis
-- `requestAnalysis` - Request analysis
-- `getAnalyses` - Get analyses
-
-### x402 Payments
-- `paymentRequest` - Create payment request
-- `paymentReceipt` - Send payment receipt
+### Payments (2 methods)
+- `paymentRequest` - Create x402 payment request
+- `paymentReceipt` - Submit payment receipt
 
 ## Configuration
 
@@ -327,7 +235,7 @@ Live server verification:
 
 The agent tries providers in order:
 1. **Groq** (primary) - Fast inference with `llama-3.1-8b-instant`
-2. **Claude** (fallback) - `claude-3-5-sonnet`
+2. **Claude** (fallback) - `claude-sonnet-4-5`
 3. **OpenAI** (fallback) - `gpt-4o-mini`
 
 Provide at least one API key.

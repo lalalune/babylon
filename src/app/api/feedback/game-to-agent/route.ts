@@ -13,6 +13,7 @@ import { updateGameMetrics, updateFeedbackMetrics } from '@/lib/reputation/reput
 import { requireUserByIdentifier } from '@/lib/users/user-lookup'
 import { logger } from '@/lib/logger'
 import { generateSnowflakeId } from '@/lib/snowflake'
+import { submitFeedbackToAgent0 } from '@/lib/reputation/agent0-reputation-sync'
 import { z } from 'zod'
 
 const GameFeedbackSchema = z.object({
@@ -32,7 +33,8 @@ export async function POST(request: NextRequest) {
 
   const agent = await requireUserByIdentifier(body.agentId)
 
-  await prisma.feedback.findFirst({
+  // Check if feedback already exists for this game
+  const existingFeedback = await prisma.feedback.findFirst({
     where: {
       toUserId: agent.id,
       gameId: body.gameId,
@@ -40,7 +42,21 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  logger.warn('Feedback already exists for this game', { agentId: agent.id, gameId: body.gameId })
+  if (existingFeedback) {
+    logger.warn('Feedback already exists for this game', {
+      feedbackId: existingFeedback.id,
+      agentId: agent.id,
+      gameId: body.gameId,
+    })
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Feedback already exists for this game',
+        feedbackId: existingFeedback.id,
+      },
+      { status: 409 }
+    )
+  }
 
   const now = new Date()
   const feedback = await prisma.feedback.create({
@@ -67,6 +83,16 @@ export async function POST(request: NextRequest) {
 
   await updateGameMetrics(agent.id, body.score, body.won)
   await updateFeedbackMetrics(agent.id, body.score)
+
+  // Submit to Agent0 network (fire-and-forget with error handling)
+  submitFeedbackToAgent0(feedback.id).catch((error) => {
+    logger.error('Failed to submit game feedback to Agent0', {
+      feedbackId: feedback.id,
+      agentId: agent.id,
+      gameId: body.gameId,
+      error,
+    })
+  })
 
   const metrics = await prisma.agentPerformanceMetrics.findUnique({
     where: { userId: agent.id },

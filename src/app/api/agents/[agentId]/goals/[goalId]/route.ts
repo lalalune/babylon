@@ -8,6 +8,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authenticate } from '@/lib/api/auth-middleware'
+import { logger } from '@/lib/logger'
 
 /**
  * GET - Get single goal
@@ -93,19 +94,33 @@ export async function PUT(
     }
     
     // Parse updates
-    const body = await req.json()
+    let body: { name?: string; description?: string; target?: string; priority?: number | null; status?: string }
+    try {
+      body = await req.json() as { name?: string; description?: string; target?: string; priority?: number | null; status?: string }
+    } catch (error) {
+      logger.error('Failed to parse request body', { error, agentId, goalId }, 'PUT /api/agents/[agentId]/goals/[goalId]')
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
     const { name, description, target, priority, status } = body
     
     // Build update object
-    const updates: Record<string, unknown> = {
+    const updates: {
+      updatedAt: Date
+      name?: string
+      description?: string
+      target?: string
+      priority?: number
+      status?: string
+      completedAt?: Date
+    } = {
       updatedAt: new Date()
     }
     
-    if (name !== undefined) updates.name = name
-    if (description !== undefined) updates.description = description
-    if (target !== undefined) updates.target = target
-    if (priority !== undefined) {
-      if (priority < 1 || priority > 10) {
+    if (name !== undefined && typeof name === 'string') updates.name = name
+    if (description !== undefined && typeof description === 'string') updates.description = description
+    if (target !== undefined && typeof target === 'string') updates.target = target
+    if (priority !== undefined && priority !== null) {
+      if (typeof priority !== 'number' || priority < 1 || priority > 10) {
         return NextResponse.json(
           { error: 'Priority must be between 1 and 10' },
           { status: 400 }

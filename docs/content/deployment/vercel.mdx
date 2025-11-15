@@ -18,11 +18,11 @@ Before deploying, ensure you have:
 
 1. **Sign up** at [neon.tech](https://neon.tech)
 2. **Create a new project**
-   - Name: `babylon-production`
-   - Region: Choose closest to your users
+ - Name: `babylon-production`
+ - Region: Choose closest to your users
 3. **Copy connection strings**:
-   - Pooled connection (for API routes)
-   - Direct connection (for migrations)
+ - Pooled connection (for API routes)
+ - Direct connection (for migrations)
 
 Example URLs:
 ```
@@ -42,10 +42,10 @@ From your local machine:
 export DATABASE_URL="postgresql://..."
 
 # Run migrations
-bun run prisma:migrate deploy
+bun run db:migrate deploy
 
 # Seed initial data
-bun run prisma:seed
+bun run db:seed
 ```
 
 ## Step 2: Redis Setup (Upstash)
@@ -54,12 +54,12 @@ bun run prisma:seed
 
 1. **Sign up** at [upstash.com](https://upstash.com)
 2. **Create new database**
-   - Name: `babylon-production`
-   - Region: Same as your Vercel deployment
-   - Type: Regional (or Global for multi-region)
+ - Name: `babylon-production`
+ - Region: Same as your Vercel deployment
+ - Type: Regional (or Global for multi-region)
 3. **Copy credentials**:
-   - REST URL
-   - REST Token
+ - REST URL
+ - REST Token
 
 Example:
 ```
@@ -74,10 +74,10 @@ UPSTASH_REDIS_REST_TOKEN=AabBcc...
 1. Go to [vercel.com/new](https://vercel.com/new)
 2. Import your GitHub repository
 3. Configure project:
-   - **Framework Preset**: Next.js
-   - **Root Directory**: `./` (or leave empty)
-   - **Build Command**: `bun run build`
-   - **Install Command**: `bun install`
+ - **Framework Preset**: Next.js
+ - **Root Directory**: `./` (or leave empty)
+ - **Build Command**: `bun run build`
+ - **Install Command**: `bun install`
 
 ### Environment Variables
 
@@ -179,16 +179,16 @@ Vercel automatically configures cron jobs from `vercel.json`:
 
 ```json
 {
-  "crons": [
-    {
-      "path": "/api/cron/game-tick",
-      "schedule": "* * * * *"
-    },
-    {
-      "path": "/api/reputation/sync",
-      "schedule": "0 */3 * * *"
-    }
-  ]
+ "crons": [
+ {
+ "path": "/api/cron/game-tick",
+ "schedule": "* * * * *"
+ },
+ {
+ "path": "/api/reputation/sync",
+ "schedule": "0 */3 * * *"
+ }
+ ]
 }
 ```
 
@@ -233,24 +233,24 @@ Configure in `next.config.mjs`:
 
 ```javascript
 export default {
-  // Enable edge caching for static assets
-  images: {
-    domains: ['babylon.market'],
-  },
-  // Configure headers for caching
-  async headers() {
-    return [
-      {
-        source: '/api/markets/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 's-maxage=60, stale-while-revalidate',
-          },
-        ],
-      },
-    ];
-  },
+ // Enable edge caching for static assets
+ images: {
+ domains: ['babylon.market'],
+ },
+ // Configure headers for caching
+ async headers() {
+ return [
+ {
+ source: '/api/markets/:path*',
+ headers: [
+ {
+ key: 'Cache-Control',
+ value: 's-maxage=60, stale-while-revalidate',
+ },
+ ],
+ },
+ ];
+ },
 };
 ```
 
@@ -289,9 +289,9 @@ bun install --production
 **Solution**: Add to `package.json`:
 ```json
 {
-  "scripts": {
-    "postinstall": "prisma generate"
-  }
+ "scripts": {
+ "postinstall": "prisma generate"
+ }
 }
 ```
 

@@ -13,6 +13,7 @@ interface MuteUserModalProps {
   onClose: () => void;
   targetUserId: string;
   targetDisplayName: string;
+  isNPC?: boolean;
   onSuccess?: () => void;
 }
 
@@ -21,6 +22,7 @@ export function MuteUserModal({
   onClose,
   targetUserId,
   targetDisplayName,
+  isNPC: _isNPC,
   onSuccess,
 }: MuteUserModalProps) {
   const [reason, setReason] = useState('');

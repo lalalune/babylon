@@ -13,16 +13,18 @@ import { generateSnowflakeId } from '@/lib/snowflake';
 import type { Prisma, RSSHeadline } from '@prisma/client';
 import { parseStringPromise } from 'xml2js';
 
+import type { JsonValue } from '@/types/common'
+
 type Xml2JsFeed = {
   rss?: {
     channel?: Array<{
       title?: string[];
-      item?: Record<string, unknown>[];
+      item?: Array<Record<string, JsonValue>>;
     }>;
   };
   feed?: {
     title?: string[];
-    entry?: Record<string, unknown>[];
+    entry?: Array<Record<string, JsonValue>>;
   };
 };
 
@@ -83,18 +85,28 @@ export class RSSFeedService {
         const channel = parsed.rss.channel[0];
         return {
           title: channel.title?.[0] || 'Unknown Feed',
-          items: (channel.item || []).map((item: Record<string, unknown>) => ({
-            title: Array.isArray(item.title) ? item.title[0] : item.title || '',
-            link: Array.isArray(item.link) ? item.link[0] : item.link,
-            pubDate: Array.isArray(item.pubDate) ? item.pubDate[0] : item.pubDate,
-            description: Array.isArray(item.description) ? item.description[0] : item.description,
-            content: Array.isArray(item['content:encoded']) 
+          items: (channel.item || []).map((item: Record<string, JsonValue>) => {
+            const title = Array.isArray(item.title) ? item.title[0] : item.title;
+            const link = Array.isArray(item.link) ? item.link[0] : item.link;
+            const pubDate = Array.isArray(item.pubDate) ? item.pubDate[0] : item.pubDate;
+            const description = Array.isArray(item.description) ? item.description[0] : item.description;
+            const content = Array.isArray(item['content:encoded']) 
               ? item['content:encoded'][0] 
-              : item['content:encoded'],
-            guid: Array.isArray(item.guid) 
-              ? (typeof item.guid[0] === 'object' && item.guid[0]?._ ? item.guid[0]._ : item.guid[0])
-              : item.guid,
-          })),
+              : item['content:encoded'];
+            const guidRaw = Array.isArray(item.guid) ? item.guid[0] : item.guid;
+            const guid = typeof guidRaw === 'object' && guidRaw !== null && !Array.isArray(guidRaw) && '_' in guidRaw
+              ? (guidRaw as { _?: JsonValue })._
+              : guidRaw;
+            
+            return {
+              title: typeof title === 'string' ? title : '',
+              link: typeof link === 'string' ? link : undefined,
+              pubDate: typeof pubDate === 'string' ? pubDate : undefined,
+              description: typeof description === 'string' ? description : undefined,
+              content: typeof content === 'string' ? content : undefined,
+              guid: typeof guid === 'string' ? guid : (typeof guid === 'number' ? String(guid) : undefined),
+            };
+          }),
         };
       }
 
@@ -102,16 +114,27 @@ export class RSSFeedService {
       if (parsed.feed?.entry) {
         return {
           title: parsed.feed.title?.[0] || 'Unknown Feed',
-          items: (parsed.feed.entry || []).map((entry: Record<string, unknown>) => ({
-            title: Array.isArray(entry.title) ? entry.title[0] : entry.title || '',
-            link: Array.isArray(entry.link) && entry.link[0]?.$ 
-              ? entry.link[0].$.href 
-              : undefined,
-            pubDate: Array.isArray(entry.published) ? entry.published[0] : entry.published,
-            description: Array.isArray(entry.summary) ? entry.summary[0] : entry.summary,
-            content: Array.isArray(entry.content) ? entry.content[0] : entry.content,
-            guid: Array.isArray(entry.id) ? entry.id[0] : entry.id,
-          })),
+          items: (parsed.feed.entry || []).map((entry: Record<string, JsonValue>) => {
+            const title = Array.isArray(entry.title) ? entry.title[0] : entry.title;
+            const linkRaw = Array.isArray(entry.link) ? entry.link[0] : entry.link;
+            const linkObj = typeof linkRaw === 'object' && linkRaw !== null && !Array.isArray(linkRaw) && '$' in linkRaw
+              ? (linkRaw as { $?: { href?: JsonValue } }).$
+              : undefined;
+            const link = linkObj?.href;
+            const pubDate = Array.isArray(entry.published) ? entry.published[0] : entry.published;
+            const description = Array.isArray(entry.summary) ? entry.summary[0] : entry.summary;
+            const content = Array.isArray(entry.content) ? entry.content[0] : entry.content;
+            const guid = Array.isArray(entry.id) ? entry.id[0] : entry.id;
+            
+            return {
+              title: typeof title === 'string' ? title : '',
+              link: typeof link === 'string' ? link : undefined,
+              pubDate: typeof pubDate === 'string' ? pubDate : undefined,
+              description: typeof description === 'string' ? description : undefined,
+              content: typeof content === 'string' ? content : undefined,
+              guid: typeof guid === 'string' ? guid : (typeof guid === 'number' ? String(guid) : undefined),
+            };
+          }),
         };
       }
 

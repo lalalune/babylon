@@ -24,13 +24,14 @@
  * Per-actor context preserved (personality, mood, luck)
  */
 
-import { readFileSync } from 'fs';
-import { join } from 'path';
+// readFileSync, join - not used
 import { FeedGenerator } from '../engine/FeedGenerator';
 import { BabylonLLMClient } from './llm/openai-client';
 import { logger } from '@/lib/logger';
 import { generateActorContext } from '../engine/EmotionSystem';
 import { shuffleArray, toQuestionIdNumberOrNull } from '@/shared/utils';
+import { NPCPersonaGenerator } from '@/lib/services/npc-persona-generator';
+import { QuestionArcPlanner } from '@/lib/services/question-arc-planner';
 import { 
   renderPrompt,
   scenarios as scenariosPrompt,
@@ -283,8 +284,8 @@ export type {
 };
 
 // Load actors database
-const actorsPath = join(process.cwd(), 'public/data/actors.json');
-const actorsData = JSON.parse(readFileSync(actorsPath, 'utf-8')) as ActorsDatabase;
+import { loadActorsData } from '@/lib/data/actors-loader';
+const actorsData = loadActorsData() as ActorsDatabase;
 const actors = actorsData;
 
 /**
@@ -336,6 +337,36 @@ export class GameGenerator {
     // Extract organizations first for context
     const organizations = this.extractOrganizations(selectedActors);
     
+    // ✅ NEW: Generate NPC personas for consistency and learnability
+    logger.info('Generating NPC personas for consistency...', undefined, 'GameGenerator');
+    const allActors = [...selectedActors.mains, ...selectedActors.supporting, ...selectedActors.extras];
+    const personaGenerator = new NPCPersonaGenerator();
+    const personas = personaGenerator.assignPersonas(allActors, organizations);
+    
+    // Apply personas to actors
+    for (const actor of allActors) {
+      const persona = personas.get(actor.id);
+      if (persona) {
+        actor.persona = {
+          reliability: persona.reliability,
+          insiderOrgs: persona.insiderOrgs,
+          expertise: persona.expertise,
+          willingToLie: persona.willingToLie,
+          selfInterest: persona.selfInterest,
+          favorsActors: persona.favorsActors,
+          opposesActors: persona.opposesActors,
+          favorsOrgs: persona.favorsOrgs,
+          opposesOrgs: persona.opposesOrgs,
+        };
+      }
+    }
+    
+    logger.info(`Assigned ${personas.size} NPC personas`, {
+      avgReliability: (Array.from(personas.values()).reduce((sum, p) => sum + p.reliability, 0) / personas.size).toFixed(2),
+      insiders: Array.from(personas.values()).filter(p => p.insiderOrgs.length > 0).length,
+      liars: Array.from(personas.values()).filter(p => p.willingToLie).length,
+    }, 'GameGenerator');
+    
     const scenarios = await this.generateScenarios(selectedActors.mains, organizations);
     logger.info(`Generated ${scenarios.length} scenarios`, undefined, 'GameGenerator');
     
@@ -344,6 +375,26 @@ export class GameGenerator {
     
     const topQuestions = await this.rankAndSelectQuestions(questions);
     logger.info('Selected top 3 questions', undefined, 'GameGenerator');
+    
+    // ✅ NEW: Generate arc plans for selected questions (ensures learnable information gradient)
+    logger.info('Generating arc plans for questions...', undefined, 'GameGenerator');
+    const arcPlanner = new QuestionArcPlanner();
+    
+    for (const question of topQuestions) {
+      const arcPlan = arcPlanner.planQuestionArc(question, allActors, organizations);
+      
+      // Store arc plan in question metadata
+      question.metadata = {
+        arcPlan: {
+          uncertaintyPeakDay: arcPlan.uncertaintyPeakDay,
+          clarityOnsetDay: arcPlan.clarityOnsetDay,
+          verificationDay: arcPlan.verificationDay,
+          insiders: arcPlan.insiders,
+          deceivers: arcPlan.deceivers,
+        },
+      };
+    }
+    logger.info('Arc plans generated for all questions', undefined, 'GameGenerator');
 
     // Phase 3: World Building
     logger.info('Phase 3: Building world...', undefined, 'GameGenerator');
@@ -363,6 +414,9 @@ export class GameGenerator {
     
     // Set organizations in FeedGenerator once before timeline generation
     this.feedGenerator.setOrganizations(organizations);
+    
+    // ✅ NEW: Set NPC personas in FeedGenerator for consistent behavior
+    this.feedGenerator.setNPCPersonas(personas);
     
     for (let day = 1; day <= 30; day++) {
       const currentDate = new Date(gameStartDate);
@@ -477,7 +531,7 @@ export class GameGenerator {
       // Apply ambient mood drift with correct parameters
       this.applyAmbientMoodDrift(allActors, luckMood);
       
-      // Generate feed posts
+      // Generate feed posts (no outcome parameter - prevents leakage)
       const feedPosts = await this.feedGenerator.generateDayFeed(
         day,
         events.map(e => ({
@@ -488,8 +542,7 @@ export class GameGenerator {
           actors: e.actors,
           visibility: e.visibility,
         })),
-        allActors,
-        true // Neutral baseline
+        allActors
       );
 
       // Generate group messages (function signature: day, events, groupChats, allActors)
@@ -802,19 +855,59 @@ Otherwise, start fresh.`;
       maxTokens: 8000,
     });
     
-    // Handle XML structure
-    const result = 'response' in rawResult && rawResult.response
-      ? rawResult.response
-      : rawResult as { scenarios: Scenario[] };
+    // Handle XML structure - may be nested like { scenarios: { scenario: [...] } }
+    let scenarios: Scenario[];
     
-    // Validate scenarios - LLM must provide all required fields
-    if (!result || !result.scenarios || !Array.isArray(result.scenarios)) {
-      logger.error('Invalid scenarios response from LLM:', JSON.stringify(result, null, 2), 'GameGenerator');
-      throw new Error('LLM returned invalid scenarios response');
+    if ('response' in rawResult && rawResult.response && rawResult.response.scenarios) {
+      const responseSc = rawResult.response.scenarios;
+      if (Array.isArray(responseSc)) {
+        scenarios = responseSc;
+      } else if (typeof responseSc === 'object' && 'scenario' in responseSc) {
+        const nested = (responseSc as { scenario: Scenario[] | Scenario }).scenario;
+        scenarios = Array.isArray(nested) ? nested : [nested];
+      } else {
+        logger.error('Invalid scenarios in response:', JSON.stringify(responseSc, null, 2), 'GameGenerator');
+        throw new Error('LLM returned invalid scenarios in response');
+      }
+    } else if (rawResult && 'scenarios' in rawResult && rawResult.scenarios) {
+      if (Array.isArray(rawResult.scenarios)) {
+        scenarios = rawResult.scenarios;
+      } else if (typeof rawResult.scenarios === 'object' && 'scenario' in rawResult.scenarios) {
+        const nested = (rawResult.scenarios as { scenario: Scenario[] | Scenario }).scenario;
+        scenarios = Array.isArray(nested) ? nested : [nested];
+      } else {
+        logger.error('Invalid scenarios structure:', JSON.stringify(rawResult.scenarios, null, 2), 'GameGenerator');
+        throw new Error('LLM returned invalid scenarios structure');
+      }
+    } else {
+      logger.error('No scenarios found in response:', JSON.stringify(rawResult, null, 2), 'GameGenerator');
+      throw new Error('LLM returned no scenarios');
+    }
+    
+    // Validate scenarios array exists
+    if (!scenarios || scenarios.length === 0) {
+      logger.error('No scenarios returned from LLM', undefined, 'GameGenerator');
+      throw new Error('LLM returned empty scenarios');
     }
 
     // Validate each scenario has required fields
-    for (const scenario of result.scenarios) {
+    for (const scenario of scenarios) {
+      // Handle XML nested structures in mainActors
+      if (scenario.mainActors) {
+        if (typeof scenario.mainActors === 'object' && 'actorId' in scenario.mainActors) {
+          const actorIds = scenario.mainActors.actorId;
+          scenario.mainActors = Array.isArray(actorIds) ? actorIds : [actorIds];
+        }
+      }
+      
+      // Handle XML nested structures in involvedOrganizations
+      if (scenario.involvedOrganizations && typeof scenario.involvedOrganizations === 'object') {
+        if ('orgId' in scenario.involvedOrganizations) {
+          const orgIds = scenario.involvedOrganizations.orgId;
+          scenario.involvedOrganizations = Array.isArray(orgIds) ? orgIds : [orgIds];
+        }
+      }
+      
       if (!scenario.mainActors || !Array.isArray(scenario.mainActors)) {
         logger.error('Scenario missing mainActors:', JSON.stringify(scenario, null, 2), 'GameGenerator');
         throw new Error(`Scenario "${scenario.title}" is missing mainActors array`);
@@ -825,7 +918,7 @@ Otherwise, start fresh.`;
       }
     }
     
-    return result.scenarios;
+    return scenarios;
   }
 
   /**
@@ -842,21 +935,31 @@ Otherwise, start fresh.`;
     // Handle both possible response formats:
     // 1. { questions: [...] } - expected format
     // 2. [{ questions: [...] }, { questions: [...] }] - grouped by scenario
-    let result: { questions: Question[] };
+    // 3. { questions: { question: [...] } } - XML nested structure
+    let questions: Question[];
     
     if (Array.isArray(rawResult)) {
       // LLM returned array of objects - flatten into single object
       logger.warn('LLM returned array format, flattening...', undefined, 'GameGenerator');
-      const allQuestions = rawResult.flatMap(item => {
+      questions = rawResult.flatMap(item => {
         if (item && item.questions && Array.isArray(item.questions)) {
           return item.questions;
         }
         return [];
       });
-      result = { questions: allQuestions };
-    } else if (rawResult && rawResult.questions && Array.isArray(rawResult.questions)) {
-      // LLM returned expected object format
-      result = rawResult;
+    } else if (rawResult && 'questions' in rawResult && rawResult.questions) {
+      // Check if it's an array or nested structure
+      if (Array.isArray(rawResult.questions)) {
+        questions = rawResult.questions;
+      } else if (typeof rawResult.questions === 'object' && 'question' in rawResult.questions) {
+        // XML nested structure: { questions: { question: [...] } }
+        const nested = (rawResult.questions as { question: Question[] | Question }).question;
+        questions = Array.isArray(nested) ? nested : [nested];
+        logger.warn('LLM returned XML nested structure, extracting...', undefined, 'GameGenerator');
+      } else {
+        logger.error('Invalid questions structure:', JSON.stringify(rawResult.questions, null, 2), 'GameGenerator');
+        throw new Error('LLM returned invalid questions structure');
+      }
     } else {
       // Invalid format
       logger.error('Invalid response from LLM:', JSON.stringify(rawResult, null, 2), 'GameGenerator');
@@ -866,12 +969,12 @@ Otherwise, start fresh.`;
       );
     }
 
-    if (result.questions.length === 0) {
+    if (!questions || questions.length === 0) {
       throw new Error('LLM returned empty questions array');
     }
     
     // Assign predetermined outcomes to each question
-    const questionsWithOutcomes = result.questions.map((q, i) => ({
+    const questionsWithOutcomes = questions.map((q, i) => ({
       ...q,
       outcome: Math.random() > 0.5, // Random YES or NO outcome
       rank: q.rank || (i + 1), // Default rank if not provided
@@ -893,14 +996,29 @@ Otherwise, start fresh.`;
 
     const rawResult = await this.llm.generateJSON<{ rankings: { questionId: number; rank: number }[] } | { response: { rankings: { questionId: number; rank: number }[] } }>(prompt);
     
-    // Handle XML structure
-    const result = 'response' in rawResult && rawResult.response
-      ? rawResult.response
-      : rawResult as { rankings: { questionId: number; rank: number }[] };
+    // Handle XML structure - may be nested like { rankings: { ranking: [...] } }
+    let rankings: Array<{ questionId: number; rank: number }> = [];
+    
+    if ('response' in rawResult && rawResult.response) {
+      const responseRankings = rawResult.response.rankings;
+      if (Array.isArray(responseRankings)) {
+        rankings = responseRankings;
+      } else if (responseRankings && typeof responseRankings === 'object' && 'ranking' in responseRankings) {
+        const nested = (responseRankings as { ranking: Array<{ questionId: number; rank: number }> | { questionId: number; rank: number } }).ranking;
+        rankings = Array.isArray(nested) ? nested : [nested];
+      }
+    } else if (rawResult && 'rankings' in rawResult && rawResult.rankings) {
+      if (Array.isArray(rawResult.rankings)) {
+        rankings = rawResult.rankings;
+      } else if (typeof rawResult.rankings === 'object' && 'ranking' in rawResult.rankings) {
+        const nested = (rawResult.rankings as { ranking: Array<{ questionId: number; rank: number }> | { questionId: number; rank: number } }).ranking;
+        rankings = Array.isArray(nested) ? nested : [nested];
+      }
+    }
     
     // Apply rankings (with safety check)
-    if (result?.rankings) {
-      result.rankings.forEach(r => {
+    if (rankings && rankings.length > 0) {
+      rankings.forEach(r => {
         const q = questions.find(q => q.id === r.questionId);
         if (q) q.rank = r.rank;
       });
@@ -1231,8 +1349,7 @@ Otherwise, start fresh.`;
         actors: e.actors,
         visibility: e.visibility,
       })),
-      allActors,
-      questions[0]!.outcome
+      allActors
     );
     feedPosts.push(...eventFeedPosts);
 
@@ -1341,22 +1458,47 @@ Otherwise, start fresh.`;
       }
     }>(prompt, undefined, { temperature: 0.9, maxTokens: 5000 });
 
-    // Handle XML structure
-    const response = 'response' in rawResponse && rawResponse.response
-      ? rawResponse.response
-      : rawResponse as { events: Array<{ eventNumber: number; event: string; pointsToward: 'YES' | 'NO' | null }> };
+    // Handle XML structure - may be nested like { events: { event: [...] } }
+    let events: Array<{ eventNumber: number; event: string; pointsToward: 'YES' | 'NO' | null }> = [];
+    
+    if ('response' in rawResponse && rawResponse.response && rawResponse.response.events) {
+      if (Array.isArray(rawResponse.response.events)) {
+        events = rawResponse.response.events;
+      } else if (typeof rawResponse.response.events === 'object' && 'event' in rawResponse.response.events) {
+        const nested = (rawResponse.response.events as { event: Array<{ eventNumber: number; event: string; pointsToward: 'YES' | 'NO' | null }> }).event;
+        events = Array.isArray(nested) ? nested : [nested];
+      }
+    } else if (rawResponse && 'events' in rawResponse && rawResponse.events) {
+      if (Array.isArray(rawResponse.events)) {
+        events = rawResponse.events;
+      } else if (typeof rawResponse.events === 'object' && 'event' in rawResponse.events) {
+        const nested = (rawResponse.events as { event: Array<{ eventNumber: number; event: string; pointsToward: 'YES' | 'NO' | null }> }).event;
+        events = Array.isArray(nested) ? nested : [nested];
+      }
+    }
 
-    return response.events || [];
+    return events;
   }
 
   /**
    * Should this day's events reveal the answer?
+   * 
+   * Returns true if this event should include a pointsToward hint.
+   * Probability increases over time to create information gradient:
+   * - Early (Days 1-10): 15% reveal rate (mostly ambiguous)
+   * - Middle (Days 11-20): 45% reveal rate (some clarity)
+   * - Late (Days 21-25): 75% reveal rate (clear signals)
+   * - Climax (Days 26-29): 90% reveal rate (very clear)
+   * - Resolution (Day 30): 100% reveal (definitive proof)
+   * 
+   * This creates a learnable gradient where early bets are risky/valuable
+   * and late bets are safe/lower-value.
    */
   private shouldRevealAnswer(_day: number, phase: string): boolean {
-    if (phase === 'Early') return Math.random() > 0.0;
-    if (phase === 'Middle') return Math.random() > 0.1; // 40% chance
-    if (phase === 'Late') return Math.random() > 0.6; // 60% chance
-    if (phase === 'Climax') return Math.random() > 0.3; // 80% chance
+    if (phase === 'Early') return Math.random() > 0.85;   // 15% reveal
+    if (phase === 'Middle') return Math.random() > 0.55;  // 45% reveal
+    if (phase === 'Late') return Math.random() > 0.25;    // 75% reveal
+    if (phase === 'Climax') return Math.random() > 0.10;  // 90% reveal
     return true; // Resolution always reveals
   }
 

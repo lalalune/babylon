@@ -38,6 +38,9 @@ export interface BenchmarkRunConfig {
   
   /** Output directory for results */
   outputDir: string;
+  
+  /** Force specific model (bypasses W&B lookup) - for baseline testing */
+  forceModel?: string;
 }
 
 export interface BenchmarkComparisonResult {
@@ -91,6 +94,49 @@ export class BenchmarkRunner {
     }
     (config.agentRuntime as RuntimeWithA2A).a2aClient = a2aInterface;
     
+    // Force model if specified (for baseline testing)
+    if (config.forceModel) {
+      logger.info('Forcing model for benchmark', { 
+        agentUserId: config.agentUserId,
+        forcedModel: config.forceModel 
+      });
+      
+      // Set model in runtime settings to bypass W&B lookup
+      const runtime = config.agentRuntime as RuntimeWithA2A & { 
+        character?: { settings?: Record<string, string> };
+        getSetting?: (key: string) => string | undefined;
+        setSetting?: (key: string, value: string) => void;
+      };
+      
+      // Determine if it's a Groq model or W&B model
+      const isGroqModel = config.forceModel.includes('qwen') || config.forceModel.includes('llama');
+      
+      if (runtime.character?.settings) {
+        if (isGroqModel) {
+          // Force Groq model by disabling W&B
+          runtime.character.settings.WANDB_ENABLED = 'false';
+          runtime.character.settings.LARGE_GROQ_MODEL = config.forceModel;
+          runtime.character.settings.SMALL_GROQ_MODEL = config.forceModel;
+        } else {
+          // Force W&B model
+          runtime.character.settings.WANDB_ENABLED = 'true';
+          runtime.character.settings.WANDB_MODEL = config.forceModel;
+        }
+      }
+      
+      // Also set via setSetting if available
+      if (runtime.setSetting) {
+        if (isGroqModel) {
+          runtime.setSetting('WANDB_ENABLED', 'false');
+          runtime.setSetting('LARGE_GROQ_MODEL', config.forceModel);
+          runtime.setSetting('SMALL_GROQ_MODEL', config.forceModel);
+        } else {
+          runtime.setSetting('WANDB_ENABLED', 'true');
+          runtime.setSetting('WANDB_MODEL', config.forceModel);
+        }
+      }
+    }
+    
     // 4. Set up trajectory recording if enabled
     let trajectoryRecorder: TrajectoryRecorder | undefined;
     let trajectoryId: string | undefined;
@@ -108,10 +154,76 @@ export class BenchmarkRunner {
       }
     }
     
-    // 5. Run simulation
+    // 5. Initialize simulation
+    engine.initialize();
+    
+    // 6. Run simulation loop
+    logger.info('Starting simulation loop', {
+      agentUserId: config.agentUserId,
+      totalTicks: snapshot.ticks.length,
+    });
+    
+    // Import AutonomousCoordinator for running agent ticks
+    const { AutonomousCoordinator } = await import('@/lib/agents/autonomous/AutonomousCoordinator');
+    const coordinator = new AutonomousCoordinator();
+    
+    // Run autonomous ticks for each simulation tick
+    let ticksCompleted = 0;
+    while (!engine.isComplete()) {
+      const currentTick = engine.getCurrentTickNumber();
+      
+      if (currentTick % 100 === 0 || currentTick < 5) {
+        logger.info(`Benchmark progress: ${currentTick}/${snapshot.ticks.length} ticks`, {
+          agentUserId: config.agentUserId,
+        });
+      }
+      
+      // Execute autonomous tick (agent makes decisions via A2A)
+      const tickResult = await coordinator.executeAutonomousTick(
+        config.agentUserId,
+        config.agentRuntime
+      ).catch((error: Error) => {
+        logger.error('Tick execution error', { error, tick: currentTick });
+        return { success: false, actionsExecuted: {}, duration: 0, method: 'error' };
+      });
+      
+      if (tickResult.success && tickResult.actionsExecuted && 'trades' in tickResult.actionsExecuted && (tickResult.actionsExecuted.trades > 0 || tickResult.actionsExecuted.posts > 0)) {
+        logger.debug('Agent took actions', {
+          tick: currentTick,
+          actions: tickResult.actionsExecuted,
+        });
+      }
+      
+      // Advance simulation tick
+      engine.advanceTick();
+      ticksCompleted++;
+      
+      // Small delay to avoid overwhelming the system (can be made faster)
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    
+    logger.info('Simulation loop complete', {
+      agentUserId: config.agentUserId,
+      ticksCompleted,
+      totalTicks: snapshot.ticks.length,
+    });
+    
+    // 7. Calculate final results
     const result = await engine.run();
     
-    // 6. Save trajectory if enabled
+    // 8. Validate results - ensure agent actually did something
+    if (result.ticksProcessed === 0) {
+      throw new Error('Benchmark failed: No ticks were processed');
+    }
+    
+    if (result.actions.length === 0) {
+      logger.warn('Benchmark completed but agent took no actions', {
+        agentUserId: config.agentUserId,
+        ticksProcessed: result.ticksProcessed,
+      });
+    }
+    
+    // 9. Save trajectory if enabled
     if (trajectoryRecorder && trajectoryId) {
       try {
         await trajectoryRecorder.endTrajectory(trajectoryId, {
@@ -124,7 +236,7 @@ export class BenchmarkRunner {
       }
     }
     
-    // 7. Save results
+    // 10. Save results
     await this.saveResult(result, config.outputDir);
     
     logger.info('Benchmark run completed', {

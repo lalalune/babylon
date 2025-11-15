@@ -1,123 +1,76 @@
 /**
- * Training Cron Endpoint
- *
- * Invoked by Vercel Cron to trigger the automated training pipeline.
- * Supports optional `force=true` and `batchSize` query parameters for
- * manual overrides.
+ * Training Status Cron
+ * 
+ * Runs daily to:
+ * 1. Check if system is ready to train
+ * 2. Report readiness status  
+ * 3. Log training metrics
+ * 
+ * Triggered by Vercel Cron: 0 0 * * * (daily at midnight)
+ * 
+ * NOTE: Training is triggered by GitHub Actions cron (2 AM UTC daily)
+ * This endpoint just monitors readiness and reports status
  */
 
 import { NextResponse } from 'next/server';
 import { automationPipeline } from '@/lib/training/AutomationPipeline';
 import { logger } from '@/lib/logger';
-import type { TrainingTriggerResult, AutomationStatus } from '@/lib/training/types';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300;
+export const maxDuration = 60; // 1 minute
 
-const CRON_SECRET_HEADER = 'authorization';
-
-const TRAINING_NOT_READY_STATUS = 202;
-
-interface TriggerOptions {
-  force: boolean;
-  batchSize?: number;
-}
-
-function authorize(request: Request): NextResponse | null {
-  const token = request.headers.get(CRON_SECRET_HEADER);
-  if (token === `Bearer ${process.env.CRON_SECRET}`) {
-    return null;
-  }
-
-  return NextResponse.json(
-    { success: false, error: 'Unauthorized' },
-    { status: 401 }
-  );
-}
-
-function parseTriggerOptions(request: Request): TriggerOptions | NextResponse {
-  const url = new URL(request.url);
-  const force = url.searchParams.get('force') === 'true';
-  const batchSizeParam = url.searchParams.get('batchSize');
-
-  if (batchSizeParam === null || batchSizeParam === '') {
-    return { force };
-  }
-
-  const batchSize = Number(batchSizeParam);
-
-  if (!Number.isFinite(batchSize) || batchSize <= 0) {
-    return NextResponse.json(
-      { success: false, error: 'Invalid batchSize parameter' },
-      { status: 400 }
-    );
-  }
-
-  return { force, batchSize };
-}
-
-function buildResponse(
-  result: TrainingTriggerResult,
-  statusSnapshot: AutomationStatus | null
-): NextResponse {
-  if (!result.success) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: result.error ?? 'Training not triggered',
-        status: statusSnapshot,
-      },
-      { status: TRAINING_NOT_READY_STATUS }
-    );
-  }
-
-  return NextResponse.json({
-    success: true,
-    jobId: result.jobId ?? null,
-    status: statusSnapshot,
-  });
-}
-
-export async function GET(request: Request): Promise<NextResponse> {
-  const authError = authorize(request);
-  if (authError) {
-    return authError;
-  }
-
-  const optionsOrResponse = parseTriggerOptions(request);
-  if (optionsOrResponse instanceof NextResponse) {
-    return optionsOrResponse;
-  }
-
-  const { force, batchSize } = optionsOrResponse;
-
+/**
+ * Daily training status check and reporting
+ */
+export async function GET() {
   try {
-    logger.info('🧠 Training cron triggered', { force, batchSize });
+    logger.info('Checking training system status', undefined, 'TrainingStatusCron');
 
-    const triggerResult = await automationPipeline.triggerTraining({
-      force,
-      batchSize,
+    // 1. Check if ready to train
+    const readiness = await automationPipeline.checkTrainingReadiness();
+    
+    // 2. Get overall system status
+    const status = await automationPipeline.getStatus();
+    
+    // 3. Log readiness status
+    if (readiness.ready) {
+      logger.info('✅ System ready for training', {
+        trajectories: readiness.stats.totalTrajectories,
+        scenarioGroups: readiness.stats.scenarioGroups,
+        dataQuality: readiness.stats.dataQuality
+      }, 'TrainingStatusCron');
+    } else {
+      logger.info('⏳ System not ready for training', {
+        reason: readiness.reason,
+        stats: readiness.stats
+      }, 'TrainingStatusCron');
+    }
+    
+    // 4. Log recent activity
+    logger.info('Training system metrics', {
+      dataCollection: status.dataCollection,
+      latestModel: status.models.latest,
+      deployedModels: status.models.deployed,
+      lastTraining: status.training.lastCompleted
+    }, 'TrainingStatusCron');
+
+    return NextResponse.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      readiness,
+      status,
+      message: readiness.ready 
+        ? '✅ Ready for training - will run via GitHub Actions at 2 AM UTC'
+        : `⏳ Not ready: ${readiness.reason}`
     });
 
-    if (triggerResult.success) {
-      logger.info('✅ Training job queued', { jobId: triggerResult.jobId });
-    } else {
-      logger.info('ℹ️ Training not started', { reason: triggerResult.error });
-    }
-
-    const statusSnapshot = await automationPipeline.getStatus();
-
-    return buildResponse(triggerResult, statusSnapshot);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unknown training error';
-
-    logger.error('❌ Training cron failed', { error: message });
-
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    logger.error('Training status check failed', error, 'TrainingStatusCron');
+    
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    }, { status: 500 });
   }
 }
-

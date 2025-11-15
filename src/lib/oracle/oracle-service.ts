@@ -9,6 +9,7 @@ import { ethers } from 'ethers'
 import { CommitmentStore } from './commitment-store'
 import { logger } from '../logger'
 import { getContractAddressesFromEnv } from '../deployment/validation'
+import { getContractAddresses, getRpcUrl } from '../deployment/addresses'
 import type {
   OracleConfig,
   CommitTransactionResult,
@@ -27,11 +28,12 @@ export class OracleService {
   constructor(config?: Partial<OracleConfig>) {
     // Load config from environment or use provided
     const addresses = getContractAddressesFromEnv()
+    const deployedAddresses = getContractAddresses()
     
     this.config = {
-      oracleAddress: config?.oracleAddress || addresses.babylonOracle || '',
-      privateKey: config?.privateKey || process.env.ORACLE_PRIVATE_KEY || '',
-      rpcUrl: config?.rpcUrl || process.env.NEXT_PUBLIC_RPC_URL || 'http://localhost:8545',
+      oracleAddress: config?.oracleAddress || addresses.babylonOracle || deployedAddresses.babylonOracle,
+      privateKey: config?.privateKey || process.env.ORACLE_PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY || '',
+      rpcUrl: config?.rpcUrl || getRpcUrl(),
       chainId: config?.chainId || parseInt(process.env.NEXT_PUBLIC_CHAIN_ID || '31337'),
       gasMultiplier: config?.gasMultiplier || 1.2,
       maxGasPrice: config?.maxGasPrice,

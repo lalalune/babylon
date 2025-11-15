@@ -14,8 +14,10 @@ export {
   getParodyActorNames,
   getForbiddenRealNames,
   type WorldContextOptions,
-  type Actor,
 } from './world-context';
+
+// Re-export ActorData from shared types for convenience
+export type { ActorData } from '@/shared/types';
 
 // Output validation
 export {

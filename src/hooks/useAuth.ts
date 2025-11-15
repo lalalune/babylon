@@ -130,7 +130,14 @@ export function useAuth(): UseAuthReturn {
       }
 
       const response = await apiFetch('/api/users/me');
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (error) {
+        logger.error('Failed to parse /api/users/me response', { error, userId: privyUser.id }, 'useAuth');
+        setIsLoadingProfile(false);
+        return;
+      }
 
         const me = data as {
           authenticated: boolean;

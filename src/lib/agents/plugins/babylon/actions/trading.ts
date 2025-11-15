@@ -4,7 +4,7 @@
  */
 
 import type { Action, IAgentRuntime, Memory, State, HandlerCallback } from '@elizaos/core'
-import { logger } from '@/lib/logger'
+// import { logger } from '@/lib/logger' // Commented out - not needed
 import type { BabylonRuntime } from '../types'
 
 /**
@@ -56,7 +56,7 @@ export const buySharesAction: Action = {
     const content = message.content.text || ''
     const marketIdMatch = content.match(/market[:\s-]+([a-zA-Z0-9-]+)/)
     const amountMatch = content.match(/(\d+(?:\.\d+)?)\s*(?:shares|dollars|\$)/)
-    const sideMatch = content.match(/\b(YES|NO)\b/i)
+    // const _sideMatch = content.match(/\b(YES|NO)\b/i)
     
     if (!marketIdMatch || !amountMatch) {
       if (callback) {
@@ -70,23 +70,37 @@ export const buySharesAction: Action = {
     
     const marketId = marketIdMatch[1]!
     const amount = parseFloat(amountMatch[1]!)
+    const sideMatch = content.match(/\b(YES|NO)\b/i)
     const side = (sideMatch?.[1]?.toUpperCase() || 'YES') as 'YES' | 'NO'
     
-    // Execute trade via A2A
-    const result = await babylonRuntime.a2aClient.sendRequest('a2a.buyShares', {
-      marketId,
-      outcome: side,
-      amount
-    }) as { shares?: number; avgPrice?: number; costBasis?: number }
-    
-    if (callback) {
-      callback({
-        text: `Successfully bought ${result.shares || 0} ${side} shares at avg price ${result.avgPrice || 0}. Cost: $${result.costBasis || 0}`,
-        action: 'BUY_PREDICTION_SHARES'
-      })
+    try {
+      const result = await babylonRuntime.a2aClient.buyShares(
+        marketId,
+        side,
+        amount
+      ) as { shares?: number; avgPrice?: number; cost?: number; success?: boolean; message?: string }
+      
+      if (callback) {
+        if (result.success === false) {
+          callback({
+            text: `Failed to buy shares: ${result.message || 'Unknown error'}`,
+            action: 'BUY_PREDICTION_SHARES'
+          })
+        } else {
+          callback({
+            text: `Successfully bought ${result.shares || 0} ${side} shares at avg price ${result.avgPrice || 0}. Cost: $${result.cost || amount}`,
+            action: 'BUY_PREDICTION_SHARES'
+          })
+        }
+      }
+    } catch (error) {
+      if (callback) {
+        callback({
+          text: `Error buying shares: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          action: 'BUY_PREDICTION_SHARES'
+        })
+      }
     }
-    
-    logger.info('Agent executed prediction trade', { marketId, side, amount, result })
   }
 }
 
@@ -153,20 +167,33 @@ export const sellSharesAction: Action = {
     const positionId = positionIdMatch[1]!
     const shares = parseFloat(amountMatch[1]!)
     
-    // Execute trade via A2A
-    const result = await babylonRuntime.a2aClient.sendRequest('a2a.sellShares', {
-      positionId,
-      shares
-    }) as { success?: boolean; remainingShares?: number; proceeds?: number }
-    
-    if (callback) {
-      callback({
-        text: `Successfully sold ${shares} shares. Proceeds: $${result.proceeds || 0}. Remaining: ${result.remainingShares || 0} shares`,
-        action: 'SELL_PREDICTION_SHARES'
-      })
+    try {
+      const result = await babylonRuntime.a2aClient.sellShares(
+        positionId,
+        shares
+      ) as { success?: boolean; remainingShares?: number; proceeds?: number; message?: string }
+      
+      if (callback) {
+        if (result.success === false) {
+          callback({
+            text: `Failed to sell shares: ${result.message || 'Unknown error'}`,
+            action: 'SELL_PREDICTION_SHARES'
+          })
+        } else {
+          callback({
+            text: `Successfully sold ${shares} shares. Proceeds: $${result.proceeds || 0}. Remaining: ${result.remainingShares || 0} shares`,
+            action: 'SELL_PREDICTION_SHARES'
+          })
+        }
+      }
+    } catch (error) {
+      if (callback) {
+        callback({
+          text: `Error selling shares: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          action: 'SELL_PREDICTION_SHARES'
+        })
+      }
     }
-    
-    logger.info('Agent executed prediction sell', { positionId, shares, result })
   }
 }
 
@@ -220,8 +247,8 @@ export const openPerpPositionAction: Action = {
     const content = message.content.text || ''
     const tickerMatch = content.match(/\b([A-Z]{2,5})\b/)
     const amountMatch = content.match(/\$?(\d+(?:\.\d+)?)\s*(?:dollars|\$)?/)
-    const leverageMatch = content.match(/(\d+)x/)
-    const sideMatch = content.match(/\b(long|short)\b/i)
+    // const _leverageMatch = content.match(/(\d+)x/)
+    // const _sideMatch = content.match(/\b(long|short)\b/i)
     
     if (!tickerMatch || !amountMatch) {
       if (callback) {
@@ -235,25 +262,40 @@ export const openPerpPositionAction: Action = {
     
     const ticker = tickerMatch[1]!
     const amount = parseFloat(amountMatch[1]!)
+    const leverageMatch = content.match(/(\d+)x/)
     const leverage = leverageMatch ? parseInt(leverageMatch[1]!) : 1
+    const sideMatch = content.match(/\b(long|short)\b/i)
     const side = (sideMatch?.[1]?.toLowerCase() || 'long') as 'long' | 'short'
     
-    // Execute trade via A2A
-    const result = await babylonRuntime.a2aClient.sendRequest('a2a.openPosition', {
-      ticker,
-      side,
-      amount,
-      leverage
-    }) as { success?: boolean; positionId?: string; entryPrice?: number }
-    
-    if (callback) {
-      callback({
-        text: `Successfully opened ${leverage}x ${side} position on ${ticker}. Entry price: $${result.entryPrice || 0}. Position ID: ${result.positionId || 'unknown'}`,
-        action: 'OPEN_PERP_POSITION'
-      })
+    try {
+      const result = await babylonRuntime.a2aClient.openPosition(
+        ticker,
+        side.toUpperCase() as 'LONG' | 'SHORT',
+        amount,
+        leverage
+      ) as { success?: boolean; positionId?: string; entryPrice?: number; message?: string }
+      
+      if (callback) {
+        if (result.success === false) {
+          callback({
+            text: `Failed to open position: ${result.message || 'Unknown error'}`,
+            action: 'OPEN_PERP_POSITION'
+          })
+        } else {
+          callback({
+            text: `Successfully opened ${leverage}x ${side} position on ${ticker}. Entry price: $${result.entryPrice || 0}. Position ID: ${result.positionId || 'unknown'}`,
+            action: 'OPEN_PERP_POSITION'
+          })
+        }
+      }
+    } catch (error) {
+      if (callback) {
+        callback({
+          text: `Error opening position: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          action: 'OPEN_PERP_POSITION'
+        })
+      }
     }
-    
-    logger.info('Agent opened perpetual position', { ticker, side, amount, leverage, result })
   }
 }
 
@@ -317,20 +359,44 @@ export const closePerpPositionAction: Action = {
       return
     }
     
-    // Execute close via A2A
-    const result = await babylonRuntime.a2aClient.sendRequest('a2a.closePosition', {
-      ticker: tickerMatch?.[1] || '',
-      positionId: positionIdMatch?.[1] || ''
-    }) as { exitPrice?: number; pnl?: number }
+    const positionId = positionIdMatch?.[1] || (tickerMatch ? `perp-${tickerMatch[1]}` : '')
     
-    if (callback) {
-      callback({
-        text: `Successfully closed position. Exit price: $${result?.exitPrice || 0}. P&L: ${result?.pnl && result.pnl >= 0 ? '+' : ''}$${result?.pnl || 0}`,
-        action: 'CLOSE_PERP_POSITION'
-      })
+    if (!positionId) {
+      if (callback) {
+        callback({
+          text: 'Could not determine position ID. Please specify ticker or position ID.',
+          action: 'CLOSE_PERP_POSITION'
+        })
+      }
+      return
     }
     
-    logger.info('Agent closed perpetual position', { result })
+    try {
+      const result = await babylonRuntime.a2aClient.closePosition(
+        positionId
+      ) as { success?: boolean; exitPrice?: number; pnl?: number; message?: string }
+      
+      if (callback) {
+        if (result.success === false) {
+          callback({
+            text: `Failed to close position: ${result.message || 'Unknown error'}`,
+            action: 'CLOSE_PERP_POSITION'
+          })
+        } else {
+          callback({
+            text: `Successfully closed position. Exit price: $${result.exitPrice || 0}. P&L: ${result.pnl && result.pnl >= 0 ? '+' : ''}$${result.pnl || 0}`,
+            action: 'CLOSE_PERP_POSITION'
+          })
+        }
+      }
+    } catch (error) {
+      if (callback) {
+        callback({
+          text: `Error closing position: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          action: 'CLOSE_PERP_POSITION'
+        })
+      }
+    }
   }
 }
 

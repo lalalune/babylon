@@ -8,7 +8,7 @@ import { PageContainer } from '@/components/shared/PageContainer'
 import { Skeleton } from '@/components/shared/Skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { Bot, ArrowLeft, MessageCircle, Activity, TrendingUp, FileText, Settings, Trash2 } from 'lucide-react'
+import { Bot, ArrowLeft, MessageCircle, Activity, TrendingUp, FileText, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -45,6 +45,7 @@ interface Agent {
   walletAddress?: string
   agent0TokenId?: number
   onChainRegistered: boolean
+  a2aEnabled?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -57,7 +58,6 @@ export default function AgentDetailPage() {
   
   const [agent, setAgent] = useState<Agent | null>(null)
   const [loading, setLoading] = useState(true)
-  const [deleting, setDeleting] = useState(false)
 
   const fetchAgent = useCallback(async () => {
     setLoading(true)
@@ -97,42 +97,6 @@ export default function AgentDetailPage() {
       fetchAgent()
     }
   }, [ready, authenticated, agentId, fetchAgent])
-
-  const handleDelete = async () => {
-    if (!confirm(`Are you sure you want to delete ${agent?.name}? This cannot be undone.`)) {
-      return
-    }
-
-    setDeleting(true)
-    const token = await getAccessToken()
-    
-    if (!token) {
-      toast.error('Authentication required')
-      setDeleting(false)
-      return
-    }
-    
-    const res = await fetch(`/api/agents/${agentId}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    }).catch(() => {
-      toast.error('Failed to delete agent')
-      setDeleting(false)
-      throw new Error('Failed to delete agent')
-    })
-
-    if (res.ok) {
-      toast.success('Agent deleted successfully')
-      router.push('/agents')
-    } else {
-      const error = await res.json()
-      toast.error(error.error || 'Failed to delete agent')
-    }
-    
-    setDeleting(false)
-  }
 
   if (!ready || !authenticated) {
     return (
@@ -200,52 +164,41 @@ export default function AgentDetailPage() {
 
         {/* Agent Info Card */}
         <div className="p-6 rounded-lg bg-card/50 backdrop-blur border border-border">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <Avatar
-              id={agent.id}
-              name={agent.name}
-              type="user"
-              size="lg"
-              src={agent.profileImageUrl}
-              imageUrl={agent.profileImageUrl}
-            />
-            <div>
-              <h1 className="text-2xl font-bold mb-1">{agent.name}</h1>
-              {agent.description && (
-                <p className="text-foreground/80 mb-2">{agent.description}</p>
-              )}
-              <div className="flex items-center gap-4 text-sm">
-                <span className={agent.autonomousEnabled ? 'text-green-400' : 'text-foreground/80'}>
-                  {agent.autonomousEnabled ? (
-                    <>
-                      <Activity className="w-3 h-3 inline mr-1" />
-                      Autonomous Active
-                    </>
-                  ) : (
-                    'Autonomous Disabled'
-                  )}
-                </span>
-                <span className="text-foreground">•</span>
-                <span className="text-foreground/80 capitalize">{agent.modelTier} Mode</span>
-                {agent.onChainRegistered && (
+        <div className="flex items-center gap-4">
+          <Avatar
+            id={agent.id}
+            name={agent.name}
+            type="user"
+            size="lg"
+            src={agent.profileImageUrl}
+            imageUrl={agent.profileImageUrl}
+          />
+          <div>
+            <h1 className="text-2xl font-bold mb-1">{agent.name}</h1>
+            {agent.description && (
+              <p className="text-foreground/80 mb-2">{agent.description}</p>
+            )}
+            <div className="flex items-center gap-4 text-sm">
+              <span className={agent.autonomousEnabled ? 'text-green-400' : 'text-foreground/80'}>
+                {agent.autonomousEnabled ? (
                   <>
-                    <span className="text-gray-600">•</span>
-                    <span className="text-blue-400">Agent0 #{agent.agent0TokenId}</span>
+                    <Activity className="w-3 h-3 inline mr-1" />
+                    Autonomous Active
                   </>
+                ) : (
+                  'Autonomous Disabled'
                 )}
-              </div>
+              </span>
+              <span className="text-foreground">•</span>
+              <span className="text-foreground/80 capitalize">{agent.modelTier} Mode</span>
+              {agent.onChainRegistered && (
+                <>
+                  <span className="text-gray-600">•</span>
+                  <span className="text-blue-400">Agent0 #{agent.agent0TokenId}</span>
+                </>
+              )}
             </div>
           </div>
-          <Button
-            onClick={handleDelete}
-            disabled={deleting}
-            variant="outline"
-            className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/20 hover:border-red-500/30 disabled:opacity-50"
-          >
-            <Trash2 className="w-4 h-4" />
-            {deleting ? 'Deleting...' : 'Delete'}
-          </Button>
         </div>
 
         {/* Stats Row */}

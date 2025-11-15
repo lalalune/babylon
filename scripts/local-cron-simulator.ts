@@ -62,6 +62,33 @@ async function executeTick() {
   }, 'LocalCron');
 }
 
+async function waitForServer(maxAttempts = 30, delayMs = 2000): Promise<boolean> {
+  logger.info('Waiting for Next.js server to be ready...', undefined, 'LocalCron');
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetch('http://localhost:3000/api/health', {
+        method: 'GET',
+        signal: AbortSignal.timeout(1000),
+      });
+      
+      if (response.ok) {
+        logger.info(`✅ Server ready after ${attempt} attempt(s)`, undefined, 'LocalCron');
+        return true;
+      }
+    } catch (error) {
+      // Server not ready yet, continue waiting
+      if (attempt < maxAttempts) {
+        logger.info(`Attempt ${attempt}/${maxAttempts}: Server not ready, waiting ${delayMs}ms...`, undefined, 'LocalCron');
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  
+  logger.error('❌ Server did not become ready after maximum attempts', undefined, 'LocalCron');
+  return false;
+}
+
 async function main() {
   logger.info('🔄 LOCAL CRON SIMULATOR', undefined, 'LocalCron');
   logger.info('======================', undefined, 'LocalCron');
@@ -69,9 +96,12 @@ async function main() {
   logger.info('Press Ctrl+C to stop', undefined, 'LocalCron');
   logger.info('', undefined, 'LocalCron');
 
-  // Wait 5 seconds for Next.js to be ready
-  logger.info('Waiting 5 seconds for Next.js to be ready...', undefined, 'LocalCron');
-  await new Promise(resolve => setTimeout(resolve, 5000));
+  // Wait for server to be ready with health check
+  const serverReady = await waitForServer();
+  if (!serverReady) {
+    logger.error('Cannot start cron simulator - server is not ready', undefined, 'LocalCron');
+    process.exit(1);
+  }
 
   // Execute first tick immediately
   await executeTick();
@@ -81,11 +111,23 @@ async function main() {
     await executeTick();
   }, CRON_INTERVAL);
 
-  // Handle shutdown
-  process.on('SIGINT', () => {
+  // Handle shutdown gracefully
+  const cleanup = () => {
     logger.info('Stopping local cron simulator...', undefined, 'LocalCron');
-    if (intervalId) clearInterval(intervalId);
+    if (intervalId) {
+      clearInterval(intervalId);
+      intervalId = null;
+    }
     logger.info(`Total ticks executed: ${tickCount}`, undefined, 'LocalCron');
+  };
+
+  process.on('SIGINT', () => {
+    cleanup();
+    process.exit(0);
+  });
+
+  process.on('SIGTERM', () => {
+    cleanup();
     process.exit(0);
   });
 

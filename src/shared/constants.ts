@@ -14,7 +14,7 @@ export const ACTOR_TIERS = {
   C_TIER: 'C_TIER',
 } as const;
 
-export type ActorTier = (typeof ACTOR_TIERS)[keyof typeof ACTOR_TIERS];
+// Note: ActorTier type is exported from @/shared/types to avoid duplication
 
 /**
  * Feed Widget Configuration
@@ -55,7 +55,7 @@ export const POST_TYPES = {
   ARTICLE: 'article',
 } as const;
 
-export type PostType = (typeof POST_TYPES)[keyof typeof POST_TYPES];
+// Note: PostType is exported from @/shared/types to avoid duplication
 
 /**
  * Day ranges for escalation rules

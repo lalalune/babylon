@@ -82,6 +82,12 @@ import {
  */
 export const POST = withErrorHandling(async (request: NextRequest) => {
   const body = await request.json();
+
+  // Check if body is empty or not an object
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new Error('Request body must be a JSON object containing agentId and agentSecret fields.');
+  }
+
   const { agentId, agentSecret } = AgentAuthSchema.parse(body);
 
   // Verify agent credentials

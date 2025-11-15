@@ -7,6 +7,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { agentRuntimeManager } from '@/lib/agents/runtime/AgentRuntimeManager';
 
 export interface DeploymentOptions {
   modelVersion: string;
@@ -118,10 +119,16 @@ export class ModelDeployer {
         }
       });
 
+      // Clear agent runtimes so they pick up the new model
+      for (const agent of targetAgents) {
+        agentRuntimeManager.clearRuntime(agent.id);
+      }
+
       logger.info('Model deployed successfully', {
         version: options.modelVersion,
         agentsUpdated: targetAgents.length,
-        deploymentId
+        deploymentId,
+        runtimesCleared: targetAgents.length
       });
 
       return {

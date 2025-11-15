@@ -127,13 +127,19 @@ export class TrajectoryRecorder {
       return;
     }
 
+    // Merge correctness from action if present
+    const finalAction: Action = {
+      ...action,
+      correctness: action.correctness || undefined
+    };
+
     const completeStep: TrajectoryStep = {
       stepNumber: traj.currentStep.stepNumber!,
       timestamp: traj.currentStep.timestamp!,
       environmentState: traj.currentStep.environmentState!,
       providerAccesses: traj.currentStep.providerAccesses || [],
       llmCalls: traj.currentStep.llmCalls || [],
-      action,
+      action: finalAction,
       reward
     };
 
@@ -257,7 +263,10 @@ export class TrajectoryRecorder {
               response: llmCall.response,
               reasoning: llmCall.reasoning,
               temperature: llmCall.temperature,
-              maxTokens: llmCall.maxTokens
+              maxTokens: llmCall.maxTokens,
+              metadata: JSON.stringify({
+                modelVersion: llmCall.modelVersion // Store model version in metadata
+              })
             }
           });
         }

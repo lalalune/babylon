@@ -34,13 +34,19 @@ export async function storeTagsForPost(
   if (tagsToCreate.length > 0) {
     const tagIds = await Promise.all(tagsToCreate.map(() => generateSnowflakeId()));
     await prisma.tag.createMany({
-      data: tagsToCreate.map((tag, index) => ({
-        id: tagIds[index]!,
-        name: tag.name,
-        displayName: tag.displayName,
-        category: tag.category || null,
-        updatedAt: new Date(),
-      })),
+      data: tagsToCreate.map((tag, index) => {
+        const tagId = tagIds[index];
+        if (!tagId) {
+          throw new Error(`Failed to generate tag ID for index ${index}`);
+        }
+        return {
+          id: tagId,
+          name: tag.name,
+          displayName: tag.displayName,
+          category: tag.category || null,
+          updatedAt: new Date(),
+        };
+      }),
       skipDuplicates: true,
     });
 
@@ -67,9 +73,16 @@ export async function storeTagsForPost(
   );
 
   const postTagData = tags.map((tag, idx) => {
-    const dbTag = existingTagMap.get(tag.name)!
+    const dbTag = existingTagMap.get(tag.name);
+    if (!dbTag) {
+      throw new Error(`Tag ${tag.name} not found in existing tags`);
+    }
+    const postTagId = postTagIds[idx];
+    if (!postTagId) {
+      throw new Error(`Failed to generate post tag ID for index ${idx}`);
+    }
     return {
-      id: postTagIds[idx]!,
+      id: postTagId,
       postId,
       tagId: dbTag.id,
     }
@@ -150,7 +163,7 @@ export async function getPostsByTag(
 
   return {
     tag,
-    posts: postTags.map((pt) => pt.Post),
+    posts: postTags.map((pt) => pt.Post).filter((post): post is NonNullable<typeof post> => post !== null),
     total,
   };
 }
@@ -260,10 +273,14 @@ export async function storeTrendingTags(
   // Store all trending tags in a transaction
   await prisma.$transaction(async (tx) => {
     await Promise.all(
-      tags.map((tag, idx) =>
-        tx.trendingTag.create({
+      tags.map((tag, idx) => {
+        const trendingTagId = trendingTagIds[idx];
+        if (!trendingTagId) {
+          throw new Error(`Failed to generate trending tag ID for index ${idx}`);
+        }
+        return tx.trendingTag.create({
           data: {
-            id: trendingTagIds[idx]!,
+            id: trendingTagId,
             tagId: tag.tagId,
             score: tag.score,
             postCount: tag.postCount,
@@ -272,8 +289,8 @@ export async function storeTrendingTags(
             windowEnd,
             relatedContext: tag.relatedContext || null,
           },
-        })
-      )
+        });
+      })
     );
   });
 

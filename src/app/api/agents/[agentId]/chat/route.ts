@@ -21,7 +21,7 @@
  * - Conversation context (last 10 messages)
  * - Content safety filtering (input and output)
  * - Automatic response regeneration if unsafe
- * - Points deduction (1 point per message)
+ * - Points deduction (varies by tier: lite=0, standard=1, pro=2)
  * - Multi-tier model support (free: Groq 8B, pro: Groq 70B)
  * - Transaction logging and audit trail
  * 
@@ -99,7 +99,16 @@ export const POST = withErrorHandling(async (
   const { agentId } = await params
   logger.info('Agent chat endpoint hit', { agentId }, 'AgentChat')
   
-  const body = await req.json() as { message: string; usePro: boolean }
+  let body: { message: string; usePro: boolean }
+  try {
+    body = await req.json() as { message: string; usePro: boolean }
+  } catch (error) {
+    logger.error('Failed to parse request body', { error, agentId }, 'AgentChat')
+    return NextResponse.json({
+      success: false,
+      error: 'Invalid request body'
+    }, { status: 400 })
+  }
   logger.info('Body parsed successfully', { 
     agentId,
     hasMessage: !!body.message,
@@ -124,9 +133,19 @@ export const POST = withErrorHandling(async (
   }
 
   const user = await authenticateUser(req)
+  
+  // Verify user owns this agent before allowing chat
   const agent = await agentService.getAgent(agentId, user.id)
+  if (!agent) {
+    return NextResponse.json({
+      success: false,
+      error: 'Agent not found'
+    }, { status: 404 })
+  }
+  
   const pointsCost = usePro ? 1 : 1
 
+  // Deduct points before generating response
   const newBalance = await agentService.deductPoints(
     agentId,
     pointsCost,
@@ -146,6 +165,7 @@ export const POST = withErrorHandling(async (
     }
   })
 
+  // Prepare runtime and prompt outside try-catch so they're available for regeneration
   const runtime = await agentRuntimeManager.getRuntime(agentId)
 
   const recentMessages = await prisma.agentMessage.findMany({
@@ -167,7 +187,9 @@ export const POST = withErrorHandling(async (
     })
     .join('\n')
 
-  const modelType = usePro || agent!.agentModelTier === 'pro' ? ModelType.TEXT_LARGE : ModelType.TEXT_SMALL
+  // Always use qwen 32b (TEXT_LARGE) - free chat, 1pt per tick
+  // If WANDB_API_KEY is available, runtime will check for latest trained model
+  const modelType = ModelType.TEXT_LARGE
   
   const prompt = `${agent!.agentSystem}
 
@@ -177,11 +199,39 @@ ${conversationHistory ? `Recent conversation:\n${conversationHistory}\n\n` : ''}
 
 ${agent!.displayName} (respond in 1-3 sentences, conversational):`
 
-  let response = await runtime.useModel(modelType, {
-    prompt,
-    temperature: 0.8,
-    maxTokens: 200
-  })
+  // Wrap response generation in try-catch to refund points on failure
+  let response: string
+  try {
+    response = await runtime.useModel(modelType, {
+      prompt,
+      temperature: 0.8,
+      maxTokens: 200
+    })
+  } catch (error) {
+    // Refund points if response generation fails
+    logger.error('Failed to generate agent response', { error, agentId }, 'AgentChat')
+    await agentService.depositPoints(agentId, user.id, pointsCost)
+    
+    // Delete user message since we failed
+    await prisma.agentMessage.delete({ where: { id: userMessageId } }).catch(() => {})
+    
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to generate response. Points have been refunded.'
+    }, { status: 500 })
+  }
+
+  // Verify response is not empty
+  if (!response || typeof response !== 'string' || response.trim().length === 0) {
+    logger.error('Agent generated empty response', { agentId }, 'AgentChat')
+    await agentService.depositPoints(agentId, user.id, pointsCost)
+    await prisma.agentMessage.delete({ where: { id: userMessageId } }).catch(() => {})
+    
+    return NextResponse.json({
+      success: false,
+      error: 'Agent generated empty response. Points have been refunded.'
+    }, { status: 500 })
+  }
 
   // Check output safety - only regenerate if unsafe
   const outputCheck = checkAgentOutput(response)
@@ -193,11 +243,34 @@ ${agent!.displayName} (respond in 1-3 sentences, conversational):`
     }, 'AgentChat')
     
     logger.info('Attempting regeneration with safety prompt', { agentId }, 'AgentChat')
-    response = await runtime.useModel(modelType, {
-      prompt: `${prompt}\n\nIMPORTANT: Keep your response professional, helpful, and appropriate. No profanity or inappropriate content.`,
-      temperature: 0.6,
-      maxTokens: 200
-    })
+    try {
+      response = await runtime.useModel(modelType, {
+        prompt: `${prompt}\n\nIMPORTANT: Keep your response professional, helpful, and appropriate. No profanity or inappropriate content.`,
+        temperature: 0.6,
+        maxTokens: 200
+      })
+    } catch (error) {
+      logger.error('Failed to regenerate response', { error, agentId }, 'AgentChat')
+      await agentService.depositPoints(agentId, user.id, pointsCost)
+      await prisma.agentMessage.delete({ where: { id: userMessageId } }).catch(() => {})
+      
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to regenerate response. Points have been refunded.'
+      }, { status: 500 })
+    }
+    
+    // Verify regenerated response is not empty
+    if (!response || typeof response !== 'string' || response.trim().length === 0) {
+      logger.error('Agent generated empty response after regeneration', { agentId }, 'AgentChat')
+      await agentService.depositPoints(agentId, user.id, pointsCost)
+      await prisma.agentMessage.delete({ where: { id: userMessageId } }).catch(() => {})
+      
+      return NextResponse.json({
+        success: false,
+        error: 'Agent generated empty response after regeneration. Points have been refunded.'
+      }, { status: 500 })
+    }
     
     // Check again after regeneration
     const secondCheck = checkAgentOutput(response)
@@ -208,14 +281,28 @@ ${agent!.displayName} (respond in 1-3 sentences, conversational):`
       }, 'AgentChat')
       // Refund points and return error
       await agentService.depositPoints(agentId, user.id, pointsCost)
+      await prisma.agentMessage.delete({ where: { id: userMessageId } }).catch(() => {})
+      
       return NextResponse.json({
         success: false,
-        error: 'Unable to generate safe response. Please try again.'
+        error: 'Unable to generate safe response. Points have been refunded.'
       }, { status: 500 })
     }
   }
 
   response = response.trim().replace(/^["']|["']$/g, '')
+  
+  // Final check after trimming
+  if (response.length === 0) {
+    logger.error('Response became empty after trimming', { agentId }, 'AgentChat')
+    await agentService.depositPoints(agentId, user.id, pointsCost)
+    await prisma.agentMessage.delete({ where: { id: userMessageId } }).catch(() => {})
+    
+    return NextResponse.json({
+      success: false,
+      error: 'Response became empty after processing. Points have been refunded.'
+    }, { status: 500 })
+  }
 
   const assistantMessageId = uuidv4()
   await prisma.agentMessage.create({

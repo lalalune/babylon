@@ -1,5 +1,6 @@
 import { type Provider, type IAgentRuntime, type Memory, type State, logger } from '@elizaos/core';
 import type { ExperienceService } from '../service';
+import type { JsonValue } from '@/types/common';
 
 /**
  * Simple experience provider that injects relevant experiences into context
@@ -13,7 +14,7 @@ export const experienceProvider: Provider = {
     runtime: IAgentRuntime,
     message: Memory,
     state?: State
-  ): Promise<{ text?: string; data?: Record<string, unknown> }> {
+  ): Promise<{ text?: string; data?: Record<string, JsonValue> }> {
     void state; // State currently unused in provider lookup
 
     const experienceService = runtime.getService('EXPERIENCE') as ExperienceService;
@@ -56,7 +57,7 @@ export const experienceProvider: Provider = {
     return {
       text: contextText,
       data: {
-        experiences: relevantExperiences,
+        experiences: relevantExperiences as unknown as JsonValue,
         count: relevantExperiences.length,
       },
     };

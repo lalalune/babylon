@@ -66,7 +66,11 @@ export class CapitalAllocationService {
       'C_TIER': 10000,  // Influencers, reporters ($10k)
     };
     
-    return tierCapital[tier] || tierCapital['C_TIER']!;
+    const capital = tierCapital[tier] || tierCapital['C_TIER'];
+    if (!capital) {
+      throw new Error(`Invalid tier: ${tier}`);
+    }
+    return capital;
   }
   
   /**

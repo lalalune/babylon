@@ -40,11 +40,11 @@ type SSEPayload = PredictionTradeSSE | PredictionResolutionSSE;
 
 const isPredictionPayload = (data: unknown): data is SSEPayload => {
   if (!data || typeof data !== 'object' || data === null) return false;
-  const type = (data as { type?: unknown }).type;
+  const type = (data as { type?: string }).type;
   if (type !== 'prediction_trade' && type !== 'prediction_resolution') {
     return false;
   }
-  return typeof (data as { marketId?: unknown }).marketId === 'string';
+  return typeof (data as { marketId?: string }).marketId === 'string';
 };
 
 interface UsePredictionMarketStreamOptions {

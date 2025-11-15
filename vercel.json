@@ -5,12 +5,12 @@
       "schedule": "* * * * *"
     },
     {
-      "path": "/api/cron/training-check",
-      "schedule": "0 * * * *"
+      "path": "/api/cron/reputation-sync",
+      "schedule": "0 2 * * *"
     },
     {
-      "path": "/api/cron/training",
-      "schedule": "0 0 * * *"
+      "path": "/api/cron/training-check",
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/cron/health-check",

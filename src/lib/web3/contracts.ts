@@ -6,7 +6,9 @@
 
 import type { Address } from 'viem'
 
-export interface ContractAddresses {
+// Subset of contract addresses for web3 operations
+// For full deployment contract addresses, see @/lib/deployment/validation
+export interface Web3ContractAddresses {
   identityRegistry: Address
   reputationSystem: Address
   diamond: Address
@@ -15,7 +17,7 @@ export interface ContractAddresses {
 }
 
 // Base Sepolia (Primary Testnet) - Chain ID: 84532
-export const BASE_SEPOLIA_CONTRACTS: ContractAddresses = {
+export const BASE_SEPOLIA_CONTRACTS: Web3ContractAddresses = {
   identityRegistry: (process.env.NEXT_PUBLIC_IDENTITY_REGISTRY_BASE_SEPOLIA || '0x0000000000000000000000000000000000000000') as Address,
   reputationSystem: (process.env.NEXT_PUBLIC_REPUTATION_SYSTEM_BASE_SEPOLIA || '0x0000000000000000000000000000000000000000') as Address,
   diamond: (process.env.NEXT_PUBLIC_DIAMOND_BASE_SEPOLIA || '0x0000000000000000000000000000000000000000') as Address,
@@ -24,7 +26,7 @@ export const BASE_SEPOLIA_CONTRACTS: ContractAddresses = {
 }
 
 // Ethereum Sepolia (Legacy Testnet) - Chain ID: 11155111
-export const SEPOLIA_CONTRACTS: ContractAddresses = {
+export const SEPOLIA_CONTRACTS: Web3ContractAddresses = {
   identityRegistry: (process.env.NEXT_PUBLIC_IDENTITY_REGISTRY_SEPOLIA || '0x0000000000000000000000000000000000000000') as Address,
   reputationSystem: (process.env.NEXT_PUBLIC_REPUTATION_SYSTEM_SEPOLIA || '0x0000000000000000000000000000000000000000') as Address,
   diamond: (process.env.NEXT_PUBLIC_DIAMOND_SEPOLIA || '0x0000000000000000000000000000000000000000') as Address,
@@ -33,7 +35,7 @@ export const SEPOLIA_CONTRACTS: ContractAddresses = {
 }
 
 // Ethereum Mainnet - Chain ID: 1
-export const MAINNET_CONTRACTS: ContractAddresses = {
+export const MAINNET_CONTRACTS: Web3ContractAddresses = {
   identityRegistry: (process.env.NEXT_PUBLIC_IDENTITY_REGISTRY_MAINNET || '0x0000000000000000000000000000000000000000') as Address,
   reputationSystem: (process.env.NEXT_PUBLIC_REPUTATION_SYSTEM_MAINNET || '0x0000000000000000000000000000000000000000') as Address,
   diamond: (process.env.NEXT_PUBLIC_DIAMOND_MAINNET || '0x0000000000000000000000000000000000000000') as Address,
@@ -44,7 +46,7 @@ export const MAINNET_CONTRACTS: ContractAddresses = {
 /**
  * Get contract addresses for the current chain
  */
-export function getContractAddresses(chainId: number): ContractAddresses {
+export function getContractAddresses(chainId: number): Web3ContractAddresses {
   switch (chainId) {
     case 84532: // Base Sepolia (primary)
       return BASE_SEPOLIA_CONTRACTS

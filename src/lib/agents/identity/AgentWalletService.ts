@@ -28,7 +28,7 @@ interface PrivyUser {
 
 interface PrivyCreateUserParams {
   create_embedded_wallet: boolean;
-  linked_accounts: unknown[];
+  linked_accounts: Array<Record<string, unknown>>;
 }
 
 interface PrivySignTransactionParams {
@@ -171,10 +171,12 @@ export class AgentWalletService {
         ? ['autonomous-trading', 'prediction-markets', 'social-interaction']
         : ['chat', 'analysis'],
       markets: ['prediction', 'perp', 'crypto'],
-      actions: ['trade', 'analyze', 'chat', 'post', 'comment'],
+      actions: ['trade', 'analyze', 'chat', 'post', 'comment', 'moderation-escrow', 'appeal-ban'],
       version: '1.0.0',
       platform: 'babylon',
       userType: 'agent',
+      x402Support: true,
+      moderationEscrowSupport: true,
       autonomousTrading: agent.autonomousTrading,
       autonomousPosting: agent.autonomousPosting,
     }
@@ -182,14 +184,16 @@ export class AgentWalletService {
     // Step 2: Register via Agent0Client (handles signing and gas server-side)
     const agent0Client = getAgent0Client()
     
+    // Use individual agent's A2A endpoint, not the game's endpoint
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const individualAgentA2AEndpoint = `${baseUrl}/api/agents/${agentUserId}/a2a`
+
     const registration = await agent0Client.registerAgent({
       name: agent.displayName || agent.username || 'Agent',
       description: agent.bio || `Autonomous AI agent in Babylon`,
       imageUrl: agent.profileImageUrl || undefined,
       walletAddress: agent.walletAddress,
-      a2aEndpoint: process.env.NEXT_PUBLIC_APP_URL
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/a2a`
-        : undefined,
+      a2aEndpoint: individualAgentA2AEndpoint,
       capabilities
     })
 

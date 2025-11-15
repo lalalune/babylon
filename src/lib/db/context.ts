@@ -48,7 +48,7 @@ async function executeWithRLS<T>(
   // Execute within a transaction to ensure session variable is scoped
   return await client.$transaction(async (tx: TransactionClient) => {
     // TEMPORARILY DISABLED: Force RLS even for table owners (Neon uses owner role for connections)
-    // TODO: Re-enable once RLS policies are properly defined in migrations
+    // Note: Will be re-enabled once RLS policies are properly defined in migrations
     // await tx.$executeRaw(Prisma.sql`SET LOCAL row_security = on`)
     
     // Set the current user ID using PostgreSQL's set_config function which supports parameterization
@@ -83,7 +83,7 @@ async function executeAsSystem<T>(
     // Execute within a transaction with system context
     const result = await client.$transaction(async (tx: TransactionClient) => {
       // TEMPORARILY DISABLED: Force RLS even for table owners (but system policies will allow access)
-      // TODO: Re-enable once RLS policies are properly defined in migrations
+      // Note: Will be re-enabled once RLS policies are properly defined in migrations
       // await tx.$executeRaw(Prisma.sql`SET LOCAL row_security = on`)
       
       // Set system context marker (policies should check for 'system')
@@ -117,7 +117,7 @@ async function executeAsPublic<T>(
   // Execute within a transaction with no user context
   return await client.$transaction(async (tx: TransactionClient) => {
     // TEMPORARILY DISABLED: Force RLS even for table owners
-    // TODO: Re-enable once RLS policies are properly defined in migrations
+    // Note: Will be re-enabled once RLS policies are properly defined in migrations
     // await tx.$executeRaw(Prisma.sql`SET LOCAL row_security = on`)
     
     // Empty string indicates public/unauthenticated access

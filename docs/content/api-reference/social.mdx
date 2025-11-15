@@ -19,35 +19,35 @@ GET /api/posts?page=1&limit=20
 **Response**:
 ```json
 {
-  "success": true,
-  "posts": [
-    {
-      "id": "post-123",
-      "type": "post",
-      "content": "Just opened a long position on $TECH",
-      "authorId": "user-456",
-      "author": {
-        "username": "trader_pro",
-        "displayName": "Pro Trader",
-        "profileImageUrl": "/uploads/profiles/user-456.jpg"
-      },
-      "timestamp": "2024-11-11T12:00:00Z",
-      "reactions": {
-        "like": 15,
-        "total": 15
-      },
-      "commentsCount": 3,
-      "sharesCount": 2,
-      "userReacted": false,
-      "userShared": false
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 20,
-    "total": 500,
-    "pages": 25
-  }
+ "success": true,
+ "posts": [
+ {
+ "id": "post-123",
+ "type": "post",
+ "content": "Just opened a long position on $TECH",
+ "authorId": "user-456",
+ "author": {
+ "username": "trader_pro",
+ "displayName": "Pro Trader",
+ "profileImageUrl": "/uploads/profiles/user-456.jpg"
+ },
+ "timestamp": "2024-11-11T12:00:00Z",
+ "reactions": {
+ "like": 15,
+ "total": 15
+ },
+ "commentsCount": 3,
+ "sharesCount": 2,
+ "userReacted": false,
+ "userShared": false
+ }
+ ],
+ "pagination": {
+ "page": 1,
+ "limit": 20,
+ "total": 500,
+ "pages": 25
+ }
 }
 ```
 
@@ -60,26 +60,26 @@ GET /api/posts/{id}
 **Response**:
 ```json
 {
-  "success": true,
-  "post": {
-    "id": "post-123",
-    "type": "post",
-    "content": "Market analysis...",
-    "authorId": "user-456",
-    "author": {
-      "username": "trader_pro",
-      "displayName": "Pro Trader",
-      "profileImageUrl": "/uploads/profiles/user-456.jpg",
-      "reputationPoints": 1500
-    },
-    "timestamp": "2024-11-11T12:00:00Z",
-    "reactions": {
-      "like": 15
-    },
-    "commentsCount": 3,
-    "sharesCount": 2,
-    "tags": ["trading", "analysis"]
-  }
+ "success": true,
+ "post": {
+ "id": "post-123",
+ "type": "post",
+ "content": "Market analysis...",
+ "authorId": "user-456",
+ "author": {
+ "username": "trader_pro",
+ "displayName": "Pro Trader",
+ "profileImageUrl": "/uploads/profiles/user-456.jpg",
+ "reputationPoints": 1500
+ },
+ "timestamp": "2024-11-11T12:00:00Z",
+ "reactions": {
+ "like": 15
+ },
+ "commentsCount": 3,
+ "sharesCount": 2,
+ "tags": ["trading", "analysis"]
+ }
 }
 ```
 
@@ -104,26 +104,26 @@ GET /api/posts/{id}/comments
 **Response**:
 ```json
 {
-  "success": true,
-  "comments": [
-    {
-      "id": "comment-789",
-      "content": "Great analysis!",
-      "authorId": "user-111",
-      "author": {
-        "username": "reader1",
-        "displayName": "Reader",
-        "profileImageUrl": "/uploads/profiles/user-111.jpg"
-      },
-      "postId": "post-123",
-      "parentCommentId": null,
-      "createdAt": "2024-11-11T12:05:00Z",
-      "reactions": {
-        "like": 3
-      },
-      "repliesCount": 1
-    }
-  ]
+ "success": true,
+ "comments": [
+ {
+ "id": "comment-789",
+ "content": "Great analysis!",
+ "authorId": "user-111",
+ "author": {
+ "username": "reader1",
+ "displayName": "Reader",
+ "profileImageUrl": "/uploads/profiles/user-111.jpg"
+ },
+ "postId": "post-123",
+ "parentCommentId": null,
+ "createdAt": "2024-11-11T12:05:00Z",
+ "reactions": {
+ "like": 3
+ },
+ "repliesCount": 1
+ }
+ ]
 }
 ```
 
@@ -136,22 +136,22 @@ POST /api/posts/{id}/comments
 **Request Body**:
 ```json
 {
-  "content": "Great analysis!",
-  "parentCommentId": null
+ "content": "Great analysis!",
+ "parentCommentId": null
 }
 ```
 
 **Response**:
 ```json
 {
-  "success": true,
-  "comment": {
-    "id": "comment-789",
-    "content": "Great analysis!",
-    "authorId": "user-123",
-    "postId": "post-123",
-    "createdAt": "2024-11-11T12:05:00Z"
-  }
+ "success": true,
+ "comment": {
+ "id": "comment-789",
+ "content": "Great analysis!",
+ "authorId": "user-123",
+ "postId": "post-123",
+ "createdAt": "2024-11-11T12:05:00Z"
+ }
 }
 ```
 
@@ -164,8 +164,8 @@ POST /api/posts/{id}/reply
 **Request Body**:
 ```json
 {
-  "content": "Thanks!",
-  "parentId": "comment-789"
+ "content": "Thanks!",
+ "parentId": "comment-789"
 }
 ```
 
@@ -180,7 +180,7 @@ PATCH /api/comments/{id}
 **Request Body**:
 ```json
 {
-  "content": "Updated comment text"
+ "content": "Updated comment text"
 }
 ```
 
@@ -203,9 +203,9 @@ POST /api/posts/{id}/like
 **Response**:
 ```json
 {
-  "success": true,
-  "liked": true,
-  "reactionCount": 16
+ "success": true,
+ "liked": true,
+ "reactionCount": 16
 }
 ```
 
@@ -240,13 +240,13 @@ Creates a share/repost of the original post.
 **Response**:
 ```json
 {
-  "success": true,
-  "share": {
-    "id": "share-123",
-    "userId": "user-123",
-    "postId": "post-456",
-    "createdAt": "2024-11-11T12:00:00Z"
-  }
+ "success": true,
+ "share": {
+ "id": "share-123",
+ "userId": "user-123",
+ "postId": "post-456",
+ "createdAt": "2024-11-11T12:00:00Z"
+ }
 }
 ```
 
@@ -271,26 +271,26 @@ GET /api/notifications?unread=true
 **Response**:
 ```json
 {
-  "success": true,
-  "notifications": [
-    {
-      "id": "notif-123",
-      "type": "comment",
-      "actorId": "user-456",
-      "actor": {
-        "username": "commenter",
-        "displayName": "Commenter",
-        "profileImageUrl": "/uploads/profiles/user-456.jpg"
-      },
-      "postId": "post-789",
-      "commentId": "comment-111",
-      "title": "New comment",
-      "message": "commenter commented on your post",
-      "read": false,
-      "createdAt": "2024-11-11T12:00:00Z"
-    }
-  ],
-  "unreadCount": 5
+ "success": true,
+ "notifications": [
+ {
+ "id": "notif-123",
+ "type": "comment",
+ "actorId": "user-456",
+ "actor": {
+ "username": "commenter",
+ "displayName": "Commenter",
+ "profileImageUrl": "/uploads/profiles/user-456.jpg"
+ },
+ "postId": "post-789",
+ "commentId": "comment-111",
+ "title": "New comment",
+ "message": "commenter commented on your post",
+ "read": false,
+ "createdAt": "2024-11-11T12:00:00Z"
+ }
+ ],
+ "unreadCount": 5
 }
 ```
 
@@ -312,8 +312,8 @@ PATCH /api/notifications
 **Request Body**:
 ```json
 {
-  "notificationIds": ["notif-123", "notif-456"],
-  "read": true
+ "notificationIds": ["notif-123", "notif-456"],
+ "read": true
 }
 ```
 
@@ -321,8 +321,8 @@ Or mark all as read:
 
 ```json
 {
-  "all": true,
-  "read": true
+ "all": true,
+ "read": true
 }
 ```
 
@@ -337,24 +337,24 @@ GET /api/posts/{id}/interactions
 **Response**:
 ```json
 {
-  "success": true,
-  "reactions": [
-    {
-      "userId": "user-111",
-      "type": "like",
-      "username": "liker1",
-      "createdAt": "2024-11-11T12:00:00Z"
-    }
-  ],
-  "shares": [
-    {
-      "userId": "user-222",
-      "username": "sharer1",
-      "createdAt": "2024-11-11T12:05:00Z"
-    }
-  ],
-  "totalReactions": 15,
-  "totalShares": 2
+ "success": true,
+ "reactions": [
+ {
+ "userId": "user-111",
+ "type": "like",
+ "username": "liker1",
+ "createdAt": "2024-11-11T12:00:00Z"
+ }
+ ],
+ "shares": [
+ {
+ "userId": "user-222",
+ "username": "sharer1",
+ "createdAt": "2024-11-11T12:05:00Z"
+ }
+ ],
+ "totalReactions": 15,
+ "totalShares": 2
 }
 ```
 
@@ -369,17 +369,17 @@ GET /api/feed/widgets/trending-posts
 **Response**:
 ```json
 {
-  "success": true,
-  "posts": [
-    {
-      "id": "post-999",
-      "content": "Viral post content...",
-      "score": 95.5,
-      "reactions": 150,
-      "comments": 45,
-      "shares": 30
-    }
-  ]
+ "success": true,
+ "posts": [
+ {
+ "id": "post-999",
+ "content": "Viral post content...",
+ "score": 95.5,
+ "reactions": 150,
+ "comments": 45,
+ "shares": 30
+ }
+ ]
 }
 ```
 
@@ -408,9 +408,9 @@ POST /api/upload/image
 **Response**:
 ```json
 {
-  "success": true,
-  "url": "/uploads/posts/abc123.jpg",
-  "publicUrl": "https://babylon.market/uploads/posts/abc123.jpg"
+ "success": true,
+ "url": "/uploads/posts/abc123.jpg",
+ "publicUrl": "https://babylon.market/uploads/posts/abc123.jpg"
 }
 ```
 

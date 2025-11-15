@@ -127,9 +127,10 @@ export class ReplyRateLimiter {
 
     let streak = 0;
     for (let i = 0; i < interactions.length - 1; i++) {
-      const current = interactions[i]!.timestamp;
-      const previous = interactions[i + 1]!.timestamp;
-      const gap = current.getTime() - previous.getTime();
+      const current = interactions[i];
+      const previous = interactions[i + 1];
+      if (!current || !previous) continue;
+      const gap = current.timestamp.getTime() - previous.timestamp.getTime();
 
       // If gap is within ideal window (55-65 minutes), continue streak
       if (gap >= this.MIN_REPLY_INTERVAL_MS && gap <= this.MAX_REPLY_INTERVAL_MS) {
@@ -220,9 +221,10 @@ export class ReplyRateLimiter {
     let currentStreak = 1;
 
     for (let i = 0; i < interactions.length - 1; i++) {
-      const current = interactions[i]!.timestamp;
-      const next = interactions[i + 1]!.timestamp;
-      const gap = current.getTime() - next.getTime();
+      const current = interactions[i];
+      const next = interactions[i + 1];
+      if (!current || !next) continue;
+      const gap = current.timestamp.getTime() - next.timestamp.getTime();
 
       // If gap is within ideal window (55-65 minutes), continue streak
       if (gap >= this.MIN_REPLY_INTERVAL_MS && gap <= this.MAX_REPLY_INTERVAL_MS) {

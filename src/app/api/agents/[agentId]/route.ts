@@ -40,7 +40,7 @@
  * @param {string} bio - Biography (optional)
  * @param {string} personality - Personality traits (optional)
  * @param {string} tradingStrategy - Trading strategy (optional)
- * @param {string} modelTier - Model tier: 'free' | 'pro' (optional)
+ * @param {string} modelTier - Model tier: 'lite' | 'standard' | 'pro' (optional)
  * @param {boolean} isActive - Active status (optional)
  * @param {boolean} autonomousEnabled - Enable autonomous actions (optional)
  * 
@@ -106,10 +106,50 @@ export async function GET(
       name: agent!.displayName,
       description: agent!.bio,
       profileImageUrl: agent!.profileImageUrl,
-      system: agent!.agentSystem,
-      bio: agent!.bio!.split('\n').filter(b => b.trim()),
-      personality: agent!.agentPersonality,
-      tradingStrategy: agent!.agentTradingStrategy,
+      // Parse trading strategy from system prompt if it was appended
+      system: (() => {
+        const system = agent!.agentSystem || ''
+        const tradingStrategyMatch = system.match(/\n\nTrading Strategy:\s*(.+)$/s)
+        if (tradingStrategyMatch && agent!.agentTradingStrategy) {
+          // If trading strategy exists in DB and is also in system prompt, extract base system
+          return system.replace(/\n\nTrading Strategy:\s*.+$/s, '').trim()
+        }
+        return system
+      })(),
+      bio: (() => {
+        // Use agentMessageExamples (ElizaOS bio array) if available, otherwise fall back to bio string
+        if (agent!.agentMessageExamples) {
+          try {
+            const parsed = JSON.parse(agent!.agentMessageExamples as string)
+            if (Array.isArray(parsed)) {
+              return parsed.filter((b: string) => b && b.trim())
+            }
+          } catch {
+            // Fall through to bio string
+          }
+        }
+        return agent!.bio ? agent!.bio.split('\n').filter(b => b.trim()) : []
+      })(),
+      personality: agent!.agentPersonality || (() => {
+        // If personality is not set but bio array exists, join it for display
+        if (agent!.agentMessageExamples) {
+          try {
+            const parsed = JSON.parse(agent!.agentMessageExamples as string)
+            if (Array.isArray(parsed)) {
+              return parsed.filter((b: string) => b && b.trim()).join('\n')
+            }
+          } catch {
+            // Fall through
+          }
+        }
+        return ''
+      })(),
+      tradingStrategy: agent!.agentTradingStrategy || (() => {
+        // Extract trading strategy from system prompt if it was appended
+        const system = agent!.agentSystem || ''
+        const tradingStrategyMatch = system.match(/\n\nTrading Strategy:\s*(.+)$/s)
+        return tradingStrategyMatch ? tradingStrategyMatch[1]!.trim() : ''
+      })(),
       pointsBalance: agent!.agentPointsBalance,
       totalDeposited: agent!.agentTotalDeposited,
       totalWithdrawn: agent!.agentTotalWithdrawn,
@@ -121,6 +161,7 @@ export async function GET(
       autonomousCommenting: agent!.autonomousCommenting,
       autonomousDMs: agent!.autonomousDMs,
       autonomousGroupChats: agent!.autonomousGroupChats,
+      a2aEnabled: agent!.a2aEnabled,
       modelTier: agent!.agentModelTier,
       status: agent!.agentStatus,
       errorMessage: agent!.agentErrorMessage,
@@ -145,21 +186,59 @@ export async function PUT(
 ) {
   const user = await authenticateUser(req)
   const { agentId } = await params
-  const body = await req.json()
+  let body: Record<string, unknown>
+  try {
+    body = await req.json() as Record<string, unknown>
+  } catch (error) {
+    logger.error('Failed to parse request body', { error, agentId }, 'PUT /api/agents/[agentId]')
+    return NextResponse.json({
+      success: false,
+      error: 'Invalid request body'
+    }, { status: 400 })
+  }
 
-  const { name, description, profileImageUrl, system, bio, personality, tradingStrategy, modelTier, isActive, autonomousEnabled } = body
+  const { 
+    name, 
+    description, 
+    profileImageUrl, 
+    system, 
+    bio, 
+    personality, 
+    tradingStrategy, 
+    modelTier, 
+    isActive, 
+    autonomousEnabled,
+    autonomousPosting,
+    autonomousCommenting,
+    autonomousDMs,
+    autonomousGroupChats,
+    a2aEnabled
+  } = body
 
   const updates: Record<string, unknown> = {}
   if (name !== undefined) updates.name = name
   if (description !== undefined) updates.description = description
   if (profileImageUrl !== undefined) updates.profileImageUrl = profileImageUrl
   if (system !== undefined) updates.system = system
-  if (bio !== undefined) updates.bio = bio
+  if (bio !== undefined) {
+    if (Array.isArray(bio)) {
+      updates.bio = bio
+    } else if (bio !== null && typeof bio === 'string') {
+      updates.bio = bio.split('\n').filter((b: string) => b.trim())
+    } else {
+      updates.bio = []
+    }
+  }
   if (personality !== undefined) updates.personality = personality
   if (tradingStrategy !== undefined) updates.tradingStrategy = tradingStrategy
   if (modelTier !== undefined) updates.modelTier = modelTier
   if (isActive !== undefined) updates.isActive = isActive
-  if (autonomousEnabled !== undefined) updates.autonomousEnabled = autonomousEnabled
+  if (autonomousEnabled !== undefined) updates.autonomousTrading = autonomousEnabled
+  if (autonomousPosting !== undefined) updates.autonomousPosting = autonomousPosting
+  if (autonomousCommenting !== undefined) updates.autonomousCommenting = autonomousCommenting
+  if (autonomousDMs !== undefined) updates.autonomousDMs = autonomousDMs
+  if (autonomousGroupChats !== undefined) updates.autonomousGroupChats = autonomousGroupChats
+  if (a2aEnabled !== undefined) updates.a2aEnabled = a2aEnabled
 
   const agent = await agentService.updateAgent(agentId, user.id, updates)
 

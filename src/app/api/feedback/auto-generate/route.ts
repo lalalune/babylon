@@ -17,6 +17,8 @@ import {
   generateGameCompletionFeedback,
   CompletionFormat,
 } from '@/lib/reputation/reputation-service'
+import { submitFeedbackToAgent0 } from '@/lib/reputation/agent0-reputation-sync'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
 const GameMetricsSchema = z.object({
@@ -73,6 +75,16 @@ export async function POST(request: NextRequest) {
       body.metrics
     )
 
+    // Submit to Agent0 network (fire-and-forget with error handling)
+    submitFeedbackToAgent0(feedback.id).catch((error) => {
+      logger.error('Failed to submit auto-generated game feedback to Agent0', {
+        feedbackId: feedback.id,
+        agentId: agent.id,
+        gameId: body.gameId,
+        error,
+      })
+    })
+
     return NextResponse.json({
       success: true,
       feedbackId: feedback.id,
@@ -86,6 +98,16 @@ export async function POST(request: NextRequest) {
       body.tradeId,
       body.metrics
     )
+
+    // Submit to Agent0 network (fire-and-forget with error handling)
+    submitFeedbackToAgent0(feedback.id).catch((error) => {
+      logger.error('Failed to submit auto-generated trade feedback to Agent0', {
+        feedbackId: feedback.id,
+        agentId: agent.id,
+        tradeId: body.tradeId,
+        error,
+      })
+    })
 
     return NextResponse.json({
       success: true,

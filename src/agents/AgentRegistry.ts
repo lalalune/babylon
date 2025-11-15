@@ -2,7 +2,7 @@
  * Agent Registry
  * 
  * Local registry of agents with search capabilities.
- * Provides interface for UnifiedDiscoveryService.
+ * Provides interface for AgentDiscoveryService.
  */
 
 import type { AgentProfile } from '@/types/a2a'
@@ -23,7 +23,7 @@ export class AgentRegistry {
    */
   search(_params: SearchParams): AgentResult[] {
     // For now return empty array - this will be populated with actual DB queries later
-    // This is a stub to satisfy the UnifiedDiscovery interface
+    // This is a stub to satisfy the AgentDiscovery interface
     return []
   }
 
@@ -32,7 +32,7 @@ export class AgentRegistry {
    */
   getAgent(_agentId: string): AgentResult | null {
     // For now return null - this will be populated with actual DB queries later
-    // This is a stub to satisfy the UnifiedDiscovery interface
+    // This is a stub to satisfy the AgentDiscovery interface
     return null
   }
 

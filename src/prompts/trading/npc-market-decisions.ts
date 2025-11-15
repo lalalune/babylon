@@ -56,9 +56,11 @@ VALUE RANGES:
 
 OUTPUT FORMAT - Start your response with this EXACT structure (no preamble):
 
+⚠️ CRITICAL: Use the EXACT npcId from the NPC profile (the "ID:" field). Do NOT create new IDs or use names/slugs.
+
 <decisions>
   <decision>
-    <npcId>string</npcId>
+    <npcId>string</npcId>  <!-- MUST match the exact ID from the NPC profile above -->
     <npcName>string</npcName>
     <action>open_long | open_short | buy_yes | buy_no | close_position | hold</action>
     <marketType>perp | prediction | null</marketType>
@@ -88,6 +90,7 @@ DECISION RULES:
 - Relationships matter: rivals bet opposite, allies bet same
 - "hold" is valid - most NPCs should hold if no clear opportunity
 - Personality and tier affect risk-taking
+- ⚠️ CRITICAL: Use the EXACT npcId from the "ID:" field in each NPC's profile. Do NOT invent IDs or use slugified names.
 `.trim()
 });
 

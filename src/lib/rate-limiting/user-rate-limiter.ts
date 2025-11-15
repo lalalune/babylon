@@ -49,6 +49,10 @@ export const RATE_LIMIT_CONFIGS = {
   // Profile updates
   UPDATE_PROFILE: { maxRequests: 5, windowMs: 60000, actionType: 'update_profile' }, // 5 updates per minute
   
+  // Agent actions
+  GENERATE_AGENT_PROFILE: { maxRequests: 5, windowMs: 60000, actionType: 'generate_agent_profile' }, // 5 generations per minute
+  GENERATE_AGENT_FIELD: { maxRequests: 10, windowMs: 60000, actionType: 'generate_agent_field' }, // 10 field generations per minute
+  
   // Market actions
   OPEN_POSITION: { maxRequests: 10, windowMs: 60000, actionType: 'open_position' }, // 10 positions per minute
   CLOSE_POSITION: { maxRequests: 10, windowMs: 60000, actionType: 'close_position' }, // 10 positions per minute

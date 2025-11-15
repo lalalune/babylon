@@ -159,7 +159,7 @@ export class CommitmentStore {
       logger.info(`Deleted commitment for question ${questionId}`, undefined, 'CommitmentStore')
     } catch (error: unknown) {
       // If record not found, that's okay (idempotent)
-      if ((error as { code?: string })?.code === 'P2025') {
+      if (error && typeof error === 'object' && 'code' in error && (error as { code?: string }).code === 'P2025') {
         logger.info(`Commitment already deleted for question ${questionId}`, undefined, 'CommitmentStore')
         return
       }

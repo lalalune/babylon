@@ -69,13 +69,18 @@ function getCurrentLevel(points: number): TrustLevelInfo {
   const level = TRUST_LEVELS.find(
     (level) => points >= level.min && points <= level.max
   )
-  return level ?? TRUST_LEVELS[0]!
+  const defaultLevel = TRUST_LEVELS[0];
+  if (!defaultLevel) {
+    throw new Error('TRUST_LEVELS array is empty');
+  }
+  return level ?? defaultLevel;
 }
 
 function getNextLevel(currentLevel: TrustLevelInfo): TrustLevelInfo | null {
   const currentIndex = TRUST_LEVELS.indexOf(currentLevel)
-  if (currentIndex < TRUST_LEVELS.length - 1) {
-    return TRUST_LEVELS[currentIndex + 1]!
+  if (currentIndex < TRUST_LEVELS.length - 1 && currentIndex >= 0) {
+    const nextLevel = TRUST_LEVELS[currentIndex + 1];
+    return nextLevel ?? null;
   }
   return null
 }

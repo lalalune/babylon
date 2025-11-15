@@ -5,6 +5,7 @@ import { TrendingUp, TrendingDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/shared/Skeleton'
 import { usePredictionMarketsSubscription } from '@/hooks/usePredictionMarketStream'
+import { logger } from '@/lib/logger'
 
 interface TopMover {
   ticker: string
@@ -37,50 +38,59 @@ export function TopMoversPanel({ onMarketClick }: TopMoversPanelProps) {
 
   useEffect(() => {
     const fetchMovers = async () => {
-      setLoading(true)
-      const response = await fetch('/api/markets/perps')
-      const data = await response.json()
-      if (data.markets && Array.isArray(data.markets)) {
-        const markets: TopMover[] = data.markets.map((m: {
-          ticker: string
-          name: string
-          currentPrice?: number
-          change24h?: number
-          changePercent24h?: number
-          organizationId?: string
-          high24h?: number
-          low24h?: number
-          volume24h?: number
-          openInterest?: number
-          fundingRate?: {
-            rate: number
-            nextFundingTime: string
-            predictedRate: number
-          }
-          maxLeverage?: number
-          minOrderSize?: number
-        }) => ({
-          ticker: m.ticker,
-          name: m.name,
-          currentPrice: m.currentPrice || 0,
-          change24h: m.change24h || 0,
-          changePercent24h: m.changePercent24h || 0,
-          organizationId: m.organizationId,
-          high24h: m.high24h,
-          low24h: m.low24h,
-          volume24h: m.volume24h,
-          openInterest: m.openInterest,
-          fundingRate: m.fundingRate,
-          maxLeverage: m.maxLeverage,
-          minOrderSize: m.minOrderSize,
-        }))
+      try {
+        setLoading(true)
+        const response = await fetch('/api/markets/perps')
+        if (!response.ok) {
+          throw new Error(`Failed to fetch: ${response.status}`)
+        }
+        const data = await response.json()
+        if (data.markets && Array.isArray(data.markets)) {
+          const markets: TopMover[] = data.markets.map((m: {
+            ticker: string
+            name: string
+            currentPrice?: number
+            change24h?: number
+            changePercent24h?: number
+            organizationId?: string
+            high24h?: number
+            low24h?: number
+            volume24h?: number
+            openInterest?: number
+            fundingRate?: {
+              rate: number
+              nextFundingTime: string
+              predictedRate: number
+            }
+            maxLeverage?: number
+            minOrderSize?: number
+          }) => ({
+            ticker: m.ticker,
+            name: m.name,
+            currentPrice: m.currentPrice || 0,
+            change24h: m.change24h || 0,
+            changePercent24h: m.changePercent24h || 0,
+            organizationId: m.organizationId,
+            high24h: m.high24h,
+            low24h: m.low24h,
+            volume24h: m.volume24h,
+            openInterest: m.openInterest,
+            fundingRate: m.fundingRate,
+            maxLeverage: m.maxLeverage,
+            minOrderSize: m.minOrderSize,
+          }))
 
-        // Sort by change percentage
-        const sorted = [...markets].sort((a, b) => b.changePercent24h - a.changePercent24h)
-        setTopGainers(sorted.slice(0, 4))
-        setTopLosers(sorted.slice(-4).reverse())
+          // Sort by change percentage
+          const sorted = [...markets].sort((a, b) => b.changePercent24h - a.changePercent24h)
+          setTopGainers(sorted.slice(0, 4))
+          setTopLosers(sorted.slice(-4).reverse())
+        }
+      } catch (error) {
+        logger.error('Failed to fetch top movers', { error }, 'TopMoversPanel')
+        // Keep existing data on error
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
 
     fetchMovers()

@@ -30,7 +30,12 @@ export const POST = withErrorHandling(
     const { id: positionId } = IdParamSchema.parse(await context.params);
 
     // Parse and validate request body (optional for partial close)
-    const body = await request.json().catch(() => ({}));
+    let body: Record<string, unknown> = {};
+    try {
+      body = await request.json();
+    } catch {
+      // Body is optional for this endpoint
+    }
     if (Object.keys(body).length > 0) {
       ClosePerpPositionSchema.parse(body);
     }

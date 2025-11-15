@@ -12,11 +12,17 @@
 import dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
 
-import { registerAgent } from './registration.js'
-import { BabylonA2AClient } from './a2a-client.js'
-import { AgentMemory } from './memory.js'
-import { AgentDecisionMaker, type PredictionMarket, type PerpMarket, type FeedPost } from './decision.js'
-import { executeAction } from './actions.js'
+import { registerAgent } from './registration'
+import { BabylonA2AClient } from './a2a-client'
+import { AgentMemory } from './memory'
+import { 
+  AgentDecisionMaker, 
+  type PredictionMarket, 
+  type PerpMarket, 
+  type FeedPost,
+  type DecisionContext 
+} from './decision'
+import { executeAction } from './actions'
 import fs from 'fs'
 
 const LOG_FILE = './logs/agent.log'
@@ -48,15 +54,16 @@ async function main() {
     // Phase 2: Connect to Babylon A2A
     log('🔌 Phase 2: Connecting to Babylon A2A...')
     const a2aClient = new BabylonA2AClient({
-      apiUrl: process.env.BABYLON_API_URL || 'http://localhost:3000/api/a2a',
+      baseUrl: process.env.BABYLON_API_URL?.replace('/api/a2a', '') || 'http://localhost:3000',
       address: agentIdentity.address,
       tokenId: agentIdentity.tokenId,
-      privateKey: process.env.AGENT0_PRIVATE_KEY!
+      privateKey: process.env.AGENT0_PRIVATE_KEY,
+      apiKey: process.env.BABYLON_A2A_API_KEY || ''
     })
 
   await a2aClient.connect()
   log(`✅ Connected to Babylon A2A`)
-  log(`   Session: ${a2aClient.sessionToken!.substring(0, 16)}...`)
+  log(`   Agent ID: ${a2aClient.agentId}`)
 
     // Phase 3: Initialize Memory & Decision Maker
     log('🧠 Phase 3: Initializing Memory & Decision System...')
@@ -88,7 +95,7 @@ async function main() {
         
         const portfolio = await a2aClient.getPortfolio()
         const markets = await a2aClient.getMarkets()
-        const feed = await a2aClient.getFeed(10)
+        const feed = await a2aClient.getFeed({ limit: 10 })
         const recentMemory = memory.getRecent(5)
 
         log(`   Balance: $${portfolio.balance}`)
@@ -101,10 +108,16 @@ async function main() {
         // 2. Make decision
         log('🤔 Making decision...')
         
+        // Type assertion is necessary because A2A client returns generic objects
+        // that match our DecisionContext interface structure
         const decision = await decisionMaker.decide({
-          portfolio,
-          markets,
-          feed,
+          portfolio: {
+            balance: portfolio.balance,
+            positions: portfolio.positions as unknown as Array<{ id: string; ticker: string; side: 'long' | 'short'; size: number; leverage: number; entryPrice: number; currentPrice: number; pnl: number; unrealizedPnL: number }>,
+            pnl: portfolio.pnl
+          },
+          markets: markets as DecisionContext['markets'],
+          feed: feed as DecisionContext['feed'],
           memory: recentMemory
         })
 

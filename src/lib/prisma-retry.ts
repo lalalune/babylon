@@ -165,7 +165,18 @@ export async function withRetry<T>(
         const isJsonBodyError = lastError.message?.includes('JsonBody') || 
                                 lastError.message?.includes('$queryRaw');
         
-        if (!isJsonBodyError) {
+        // Suppress logging for expected constraint violations in tests (P2002, P2003)
+        // These are often intentionally triggered in tests to verify constraints work
+        const errorCode = (lastError as Error & { code?: string }).code;
+        const isConstraintViolation = errorCode === 'P2002' || errorCode === 'P2003';
+        // Suppress logging for P2025 (record not found) errors - these are handled gracefully by callers
+        // This prevents noise in logs when positions/records are deleted between operations
+        const isRecordNotFoundError = errorCode === 'P2025';
+        const isTestEnv = process.env.NODE_ENV === 'test' || 
+                          process.env.BUN_ENV === 'test' ||
+                          typeof Bun !== 'undefined' && Bun.main.includes('test');
+        
+        if (!isJsonBodyError && !(isConstraintViolation && isTestEnv) && !isRecordNotFoundError) {
           logger.warn(
             `Non-retryable error in operation`,
             extractErrorDetails(lastError, operationName),

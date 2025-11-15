@@ -4,10 +4,12 @@
  * Simple in-memory storage for recent actions and context
  */
 
+import type { JsonValue } from '../../../src/types/common'
+
 export interface MemoryEntry {
   action: string
-  params: Record<string, unknown>
-  result: Record<string, unknown>
+  params: Record<string, JsonValue>
+  result: Record<string, JsonValue>
   timestamp: number
 }
 

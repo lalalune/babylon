@@ -37,7 +37,7 @@ describe('Autonomy Plugin Tests', () => {
       setSetting: (key: string, value: JsonValue) => {
         mockRuntime.character.settings = mockRuntime.character.settings || {};
         if (value !== null) {
-          mockRuntime.character.settings[key] = value as string | number | boolean | Record<string, any>;
+          mockRuntime.character.settings[key] = value as string | number | boolean | Record<string, unknown>;
         }
         (dynamicSettings as Record<string, JsonValue>)[key] = value; // Update dynamic settings
       },

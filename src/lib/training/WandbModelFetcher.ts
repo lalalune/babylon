@@ -6,9 +6,11 @@
 
 import { prisma } from '@/lib/prisma';
 import { getRLModelConfig } from './RLModelConfig';
+import { logger } from '@/lib/logger';
 
 export interface ModelArtifact {
   version: string;
+  modelId: string; // WANDB model identifier (entity/project/model-name format)
   modelPath: string;
   metadata: {
     avgReward?: number;
@@ -25,7 +27,7 @@ export async function getLatestRLModel(): Promise<ModelArtifact | null> {
   try {
     const model = await prisma.trainedModel.findFirst({
       where: {
-        status: 'ready'
+        status: { in: ['ready', 'deployed'] }
       },
       orderBy: {
         createdAt: 'desc'
@@ -36,9 +38,14 @@ export async function getLatestRLModel(): Promise<ModelArtifact | null> {
       return null;
     }
     
+    // storagePath contains the WANDB model identifier (entity/project/model-name:step)
+    // This is what we need for WANDB API inference
+    const wandbModelId = model.storagePath || model.modelId;
+    
     return {
       version: model.version,
-      modelPath: model.storagePath || '',
+      modelId: model.modelId, // Database model ID (babylon-agent-v1.0.0)
+      modelPath: wandbModelId, // WANDB model identifier for inference
       metadata: {
         avgReward: model.avgReward || undefined,
         benchmarkScore: model.benchmarkScore || undefined,
@@ -47,7 +54,7 @@ export async function getLatestRLModel(): Promise<ModelArtifact | null> {
       }
     };
   } catch (error) {
-    console.error('Failed to fetch latest RL model:', error);
+    logger.error('Failed to fetch latest RL model', { error }, 'WandbModelFetcher');
     return null;
   }
 }
@@ -70,6 +77,7 @@ export async function getRLModelByVersion(version: string): Promise<ModelArtifac
     
     return {
       version: model.version,
+      modelId: model.modelId,
       modelPath: model.storagePath || '',
       metadata: {
         avgReward: model.avgReward || undefined,
@@ -79,7 +87,7 @@ export async function getRLModelByVersion(version: string): Promise<ModelArtifac
       }
     };
   } catch (error) {
-    console.error(`Failed to fetch RL model version ${version}:`, error);
+    logger.error(`Failed to fetch RL model version ${version}`, { error, version }, 'WandbModelFetcher');
     return null;
   }
 }
@@ -98,16 +106,16 @@ export async function getModelForInference(): Promise<ModelArtifact | null> {
   if (config.modelVersion) {
     const model = await getRLModelByVersion(config.modelVersion);
     if (model) {
-      console.log(`Using pinned RL model version: ${config.modelVersion}`);
+      logger.info(`Using pinned RL model version: ${config.modelVersion}`, { version: config.modelVersion }, 'WandbModelFetcher');
       return model;
     }
-    console.warn(`Pinned model version ${config.modelVersion} not found, falling back to latest`);
+    logger.warn(`Pinned model version ${config.modelVersion} not found, falling back to latest`, { version: config.modelVersion }, 'WandbModelFetcher');
   }
   
   // Get latest model
   const model = await getLatestRLModel();
   if (model) {
-    console.log(`Using latest RL model version: ${model.version}`);
+    logger.info(`Using latest RL model version: ${model.version}`, { version: model.version }, 'WandbModelFetcher');
     return model;
   }
   

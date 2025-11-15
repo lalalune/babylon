@@ -10,6 +10,7 @@ import { useState, useTransition } from 'react';
 import { X, Flag, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Avatar } from '@/components/shared/Avatar';
+import { logger } from '@/lib/logger';
 
 interface ReportModalProps {
   isOpen: boolean;
@@ -77,7 +78,14 @@ export function ReportModal({
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        let error
+        try {
+          error = await response.json()
+        } catch (parseError) {
+          logger.error('Failed to parse report response', { error: parseError }, 'ReportModal')
+          toast.error('Failed to submit report');
+          return;
+        }
         toast.error(error.message || 'Failed to submit report');
         return;
       }

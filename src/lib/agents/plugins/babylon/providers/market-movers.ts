@@ -1,54 +1,61 @@
 /**
  * Market Movers Provider
- * Provides top gainers and losers in the market
+ * Provides top gainers and losers in the market via A2A protocol
  */
 
 import type { Provider, IAgentRuntime, Memory, State, ProviderResult } from '@elizaos/core'
 import { logger } from '@/lib/logger'
-import { prisma } from '@/lib/prisma'
+import type { BabylonRuntime } from '../types'
 
 /**
  * Provider: Market Movers (Gainers & Losers)
- * Gets top gaining and losing stocks/companies
+ * Gets top gaining and losing stocks/companies via A2A protocol
  */
 export const marketMoversProvider: Provider = {
   name: 'BABYLON_MARKET_MOVERS',
-  description: 'Get top market gainers and losers (stocks with biggest price changes)',
+  description: 'Get top market gainers and losers (stocks with biggest price changes) via A2A protocol',
   
-  get: async (_runtime: IAgentRuntime, _message: Memory, _state: State): Promise<ProviderResult> => {
+  get: async (runtime: IAgentRuntime, _message: Memory, _state: State): Promise<ProviderResult> => {
+    const babylonRuntime = runtime as BabylonRuntime
+    
+    // A2A is REQUIRED
+    if (!babylonRuntime.a2aClient?.isConnected()) {
+      logger.error('A2A client not connected - market movers provider requires A2A protocol', undefined, runtime.agentId)
+      return { text: 'ERROR: A2A client not connected. Cannot fetch market movers. Please ensure A2A server is running.' }
+    }
+    
     try {
-      // Get all companies with prices
-      const companies = await prisma.organization.findMany({
-        where: {
-          type: 'company',
-          currentPrice: { not: null },
-          initialPrice: { not: null },
-        },
-        select: {
-          id: true,
-          name: true,
-          currentPrice: true,
-          initialPrice: true,
-        },
-        take: 100 // Get more than needed for filtering
-      })
+      // Get organizations via A2A
+      const orgsResult = await babylonRuntime.a2aClient.getOrganizations(100)
+      const organizations = (orgsResult as { organizations?: Array<{
+        id: string
+        name: string
+        ticker?: string
+        currentPrice: number
+        initialPrice?: number
+        priceChangePercentage?: number
+      }> })?.organizations || []
       
-      if (companies.length === 0) {
+      if (organizations.length === 0) {
         return { text: 'No market data available.' }
       }
       
-      // Calculate price changes
-      const withChanges = companies.map(c => {
-        const current = parseFloat(c.currentPrice?.toString() || '0')
-        const initial = parseFloat(c.initialPrice?.toString() || '0')
-        const change = initial > 0 ? ((current - initial) / initial) * 100 : 0
-        
-        // Use first 4-5 chars of name as ticker if not available
-        const ticker = c.name.toUpperCase().replace(/[^A-Z]/g, '').substring(0, 5)
+      // Calculate price changes (use priceChangePercentage if available, otherwise calculate)
+      const withChanges = organizations
+        .filter(org => org.currentPrice && (org.initialPrice || org.priceChangePercentage !== undefined))
+        .map(org => {
+          const current = org.currentPrice
+          const change = org.priceChangePercentage !== undefined 
+            ? org.priceChangePercentage
+            : (org.initialPrice && org.initialPrice > 0 
+                ? ((current - org.initialPrice) / org.initialPrice) * 100 
+                : 0)
+          
+          const ticker = org.ticker || org.name.toUpperCase().replace(/[^A-Z]/g, '').substring(0, 5)
         
         return {
-          id: c.id,
-          name: c.name,
+            id: org.id,
+            name: org.name,
           ticker,
           price: current,
           change
@@ -105,8 +112,8 @@ ${losersText}`,
         }
       }
     } catch (error) {
-      logger.error('Failed to fetch market movers', error, 'MarketMoversProvider')
-      return { text: 'Unable to fetch market movers at this time.' }
+      logger.error('Failed to fetch market movers via A2A', error, 'MarketMoversProvider')
+      return { text: `Error fetching market movers: ${error instanceof Error ? error.message : 'Unknown error'}` }
     }
   }
 }

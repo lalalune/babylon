@@ -33,10 +33,15 @@ export class AutomationPipeline {
   private currentTrainingJob: string | null = null;
 
   constructor(config: Partial<AutomationConfig> = {}) {
+    const envMinTrajectories = parseInt(process.env.TRAINING_MIN_TRAJECTORIES ?? '', 10);
+    const envMinGroupSize = parseInt(process.env.TRAINING_MIN_GROUP_SIZE ?? '', 10);
+
     this.config = {
-      minTrajectoriesForTraining: config.minTrajectoriesForTraining || 100,
-      minGroupSize: config.minGroupSize || 4,
-      dataQualityThreshold: config.dataQualityThreshold || 0.95,
+      minTrajectoriesForTraining: config.minTrajectoriesForTraining
+        ?? (Number.isFinite(envMinTrajectories) && envMinTrajectories > 0 ? envMinTrajectories : 1000),
+      minGroupSize: config.minGroupSize
+        ?? (Number.isFinite(envMinGroupSize) && envMinGroupSize > 0 ? envMinGroupSize : 10),
+      dataQualityThreshold: config.dataQualityThreshold ?? 0.95,
       autoTriggerTraining: config.autoTriggerTraining !== false,
       trainingInterval: config.trainingInterval || 24, // Daily by default
       baseModel: config.baseModel || 'OpenPipe/Qwen3-14B-Instruct',
@@ -188,7 +193,9 @@ export class AutomationPipeline {
     logger.info('Preparing training data...', readiness.stats);
     
     const batchId = `batch-${Date.now()}`;
-    const windowId = `window-${new Date().toISOString().split('T')[0]}`;
+    // Use standardized window ID format (YYYY-MM-DDTHH:00)
+    const { getCurrentWindowId } = await import('./window-utils');
+    const windowId = getCurrentWindowId();
 
     // Export trajectories
     const exportResult = await exportGroupedForGRPO({
@@ -221,20 +228,56 @@ export class AutomationPipeline {
       }
     });
 
+    // Update batch status to 'pending' (will be updated to 'training' by Python script)
+    await prisma.trainingBatch.update({
+      where: { batchId },
+      data: { status: 'pending' }
+    });
+
     // Trigger Python training script
-    const pythonScript = path.resolve(process.cwd(), 'python/src/training/train_babylon.py');
+    const pythonScript = path.resolve(process.cwd(), 'python/src/training/babylon_trainer.py');
     const spawn = await import('child_process');
     
-    const trainingProcess = spawn.spawn('python', [
-      pythonScript,
-      '--batch-id', batchId,
-      '--model-version', nextVersion,
-      '--wandb-project', this.config.wandbProject || 'babylon-training',
-      '--data-path', `exports/grpo-groups/`,
-      '--output-path', this.config.modelStoragePath
-    ], {
-      detached: true,
-      stdio: 'ignore'
+    // Set environment variables for Python script
+    const env = {
+      ...process.env,
+      MODE: 'single',
+      BATCH_ID: batchId,
+      MODEL_VERSION: nextVersion,
+      WINDOW_ID: windowId,
+      WANDB_PROJECT: this.config.wandbProject || 'babylon-training',
+      DATABASE_URL: process.env.DATABASE_URL || '',
+      TRAIN_RL_LOCAL: 'true'
+    };
+    
+    // Use python3 if available, fallback to python
+    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+    
+    const trainingProcess = spawn.spawn(pythonCmd, [pythonScript], {
+      detached: false, // Keep attached to see output
+      stdio: ['ignore', 'pipe', 'pipe'], // Capture stdout/stderr for debugging
+      env
+    });
+    
+    // Log output for debugging
+    trainingProcess.stdout?.on('data', (data: Buffer) => {
+      logger.info('Training stdout', { output: data.toString().trim() });
+    });
+    
+    trainingProcess.stderr?.on('data', (data: Buffer) => {
+      logger.warn('Training stderr', { output: data.toString().trim() });
+    });
+    
+    trainingProcess.on('error', (error: Error) => {
+      logger.error('Training process error', { error: error.message });
+      // Update batch status to failed
+      prisma.trainingBatch.update({
+        where: { batchId },
+        data: { 
+          status: 'failed',
+          error: `Process spawn failed: ${error.message}`
+        }
+      }).catch((err) => logger.error('Failed to update batch status', { error: err }));
     });
 
     trainingProcess.unref();
@@ -320,7 +363,7 @@ export class AutomationPipeline {
     if (this.currentTrainingJob) {
       const status = await this.monitorTraining(this.currentTrainingJob);
       if (status.status === 'completed') {
-        // Deploy model
+        // Deploy model (Python script already created model record)
         await this.deployModel(this.currentTrainingJob);
         this.currentTrainingJob = null;
       } else if (status.status === 'failed') {
@@ -328,6 +371,35 @@ export class AutomationPipeline {
         this.currentTrainingJob = null;
       }
       return;
+    }
+
+    // Check for newly completed batches (Python script may have completed)
+    // Check last 24 hours to catch long-running training jobs
+    const newlyCompleted = await prisma.trainingBatch.findFirst({
+      where: {
+        status: 'completed',
+        completedAt: {
+          gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
+        }
+      },
+      orderBy: { completedAt: 'desc' }
+    });
+
+    // Check if this batch has already been deployed
+    if (newlyCompleted) {
+      const existingModel = await prisma.trainedModel.findFirst({
+        where: {
+          trainingBatch: newlyCompleted.batchId,
+          status: 'deployed'
+        }
+      });
+
+      if (existingModel) {
+        return; // Skip if already deployed
+      }
+      
+      logger.info('Found newly completed training batch', { batchId: newlyCompleted.batchId });
+      await this.deployModel(newlyCompleted.batchId);
     }
 
     // Check if we should trigger training
@@ -350,37 +422,90 @@ export class AutomationPipeline {
       }
     }
 
+    // Track market outcomes for recent windows (prerequisite for reward backpropagation)
+    try {
+      const { MarketOutcomesTracker } = await import('./MarketOutcomesTracker');
+      const outcomesTracker = new MarketOutcomesTracker();
+      const synced = await outcomesTracker.syncRecentWindows(24); // Sync last 24 hours
+      if (synced > 0) {
+        logger.info('Synced market outcomes for windows', { windowsSynced: synced });
+      }
+    } catch (error) {
+      logger.warn('Market outcomes tracking failed', { error: error instanceof Error ? error.message : String(error) });
+    }
+
+    // Update rewards for windows with known outcomes (reward backpropagation)
+    try {
+      const { rewardBackpropagationService } = await import('./RewardBackpropagationService');
+      const processed = await rewardBackpropagationService.processPendingWindows();
+      if (processed > 0) {
+        logger.info('Updated rewards for trajectories', { windowsProcessed: processed });
+      }
+    } catch (error) {
+      logger.warn('Reward backpropagation failed', { error: error instanceof Error ? error.message : String(error) });
+    }
+
+    // Score trajectories using RULER framework
+    try {
+      const { rulerScoringService } = await import('./RulerScoringService');
+      // Score trajectories from recent windows (last 24 hours)
+      
+      // Score current window and previous windows
+      for (let hoursAgo = 0; hoursAgo < 24; hoursAgo++) {
+        const windowDate = new Date(Date.now() - hoursAgo * 60 * 60 * 1000);
+        const windowId = windowDate.toISOString().slice(0, 13) + ':00';
+        
+        try {
+          const scored = await rulerScoringService.scoreWindow(windowId);
+          if (scored > 0) {
+            logger.info('Scored trajectories with RULER', { windowId, scored });
+          }
+        } catch (error) {
+          logger.warn('RULER scoring failed for window', { 
+            windowId, 
+            error: error instanceof Error ? error.message : String(error) 
+          });
+        }
+      }
+    } catch (error) {
+      logger.warn('RULER scoring failed', { error: error instanceof Error ? error.message : String(error) });
+    }
+
     // Health checks
     await this.runHealthChecks();
   }
 
   /**
    * Deploy trained model
+   * Note: Model is already created by Python script, this just marks trajectories as used
    */
   private async deployModel(batchId: string): Promise<void> {
     const batch = await prisma.trainingBatch.findUnique({
       where: { batchId }
     });
 
-    if (!batch) return;
+    if (!batch) {
+      logger.warn('Batch not found for deployment', { batchId });
+      return;
+    }
+
+    // Check if model was created by Python script
+    const model = await prisma.trainedModel.findFirst({
+      where: {
+        trainingBatch: batch.id,
+        status: 'ready'
+      }
+    });
+
+    if (!model) {
+      logger.warn('Model not found for batch', { batchId });
+      return;
+    }
 
     logger.info('Deploying model', {
       version: batch.modelVersion,
+      modelId: model.modelId,
       batchId
-    });
-
-    // Create model record
-    await prisma.trainedModel.create({
-      data: {
-        id: `model-${Date.now()}`,
-        modelId: `${this.config.modelNamePrefix}-${batch.modelVersion}`,
-        version: batch.modelVersion,
-        baseModel: batch.baseModel,
-        trainingBatch: batch.id,
-        storagePath: path.join(this.config.modelStoragePath, batch.modelVersion),
-        status: 'ready',
-        createdAt: new Date()
-      }
     });
 
     // Mark trajectories as used
@@ -395,7 +520,19 @@ export class AutomationPipeline {
       }
     });
 
-    logger.info('Model deployed', { version: batch.modelVersion });
+    // Update model status to deployed
+    await prisma.trainedModel.update({
+      where: { modelId: model.modelId },
+      data: {
+        status: 'deployed',
+        deployedAt: new Date()
+      }
+    });
+
+    logger.info('Model deployed', { 
+      version: batch.modelVersion,
+      modelId: model.modelId
+    });
   }
 
   /**

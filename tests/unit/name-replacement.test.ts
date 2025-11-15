@@ -5,18 +5,20 @@
 
 import { describe, it, expect, beforeAll } from 'bun:test';
 import { NameReplacer } from '../../scripts/name-replacer';
-import * as path from 'path';
-import * as fs from 'fs';
 import type { ActorsDataFile, ActorData, OrganizationData } from '../types/test-types';
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('Name Replacement System', () => {
   let replacer: NameReplacer;
   let actorsData: ActorsDataFile;
 
   beforeAll(() => {
-    const actorsPath = path.join(process.cwd(), 'public/data/actors.json');
-    replacer = new NameReplacer(actorsPath);
-    actorsData = JSON.parse(fs.readFileSync(actorsPath, 'utf-8')) as ActorsDataFile;
+    // Use new loader (no path needed)
+    replacer = new NameReplacer();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { loadActorsData } = require('../../src/lib/data/actors-loader');
+    actorsData = loadActorsData() as ActorsDataFile;
   });
 
   describe('Actor Name Replacement', () => {
@@ -266,10 +268,11 @@ describe('Name Replacement System', () => {
 describe('Validation: No Original Names Leaked', () => {
   beforeAll(() => {
     // Initialize replacer and actors data for validation
-    const actorsPath = path.join(process.cwd(), 'public/data/actors.json');
     // Note: _replacer and _actorsData are intentionally unused in this test suite
-    const _replacer = new NameReplacer(actorsPath);
-    const _actorsData = JSON.parse(fs.readFileSync(actorsPath, 'utf-8')) as ActorsDataFile;
+    const _replacer = new NameReplacer();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { loadActorsData } = require('../../src/lib/data/actors-loader');
+    const _actorsData = loadActorsData() as ActorsDataFile;
     // Variables are used implicitly for validation - ensure data is loaded
     expect(_replacer).toBeDefined();
     expect(_actorsData).toBeDefined();

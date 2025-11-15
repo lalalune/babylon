@@ -31,6 +31,7 @@ export {
 
 // Re-import for runtime usage
 import { BabylonError, ValidationError } from './base.errors';
+import type { JsonValue } from '@/types/common';
 
 // Domain-specific errors
 export {
@@ -94,11 +95,6 @@ export const ErrorCodes = {
   TRADING_POSITION_LIMIT: 'TRADING_POSITION_LIMIT',
   TRADING_RISK_LIMIT: 'TRADING_RISK_LIMIT',
 
-  // Pool errors
-  POOL_INACTIVE: 'POOL_INACTIVE',
-  POOL_FULL: 'POOL_FULL',
-  POOL_LOCKED: 'POOL_LOCKED',
-
   // Agent errors
   AGENT_ERROR: 'AGENT_ERROR',
   AGENT_AUTH_NOT_REGISTERED: 'AGENT_AUTH_NOT_REGISTERED',
@@ -136,7 +132,7 @@ export interface ErrorResponse {
     message: string;
     code: string;
     violations?: Array<{ field: string; message: string }>;
-    context?: Record<string, unknown>;
+    context?: Record<string, JsonValue>;
   };
 }
 
@@ -152,7 +148,7 @@ export function createErrorResponse(error: BabylonError): ErrorResponse {
         violations: error.violations
       }),
       ...(process.env.NODE_ENV === 'development' && error.context && {
-        context: error.context
+        context: error.context as Record<string, JsonValue>
       })
     }
   };

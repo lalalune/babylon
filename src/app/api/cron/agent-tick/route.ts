@@ -35,8 +35,9 @@
  * - Comprehensive logging and analytics
  * 
  * **Points System:**
- * - Free tier: 1 point per tick
- * - Pro tier: 2 points per tick
+ * - Lite tier: 1 point per tick
+ * - Standard tier: 2 points per tick
+ * - Pro tier: 3 points per tick
  * - Auto-pause when balance < required points
  * - Points refunded on errors
  * 
@@ -141,7 +142,8 @@ export async function POST(_req: NextRequest) {
   for (const agent of agents) {
     const agentStartTime = Date.now()
     
-    const pointsCost = agent.agentModelTier === 'pro' ? 2 : 1
+    // Always 1pt per tick (no tiers)
+    const pointsCost = 1
     
     await agentService.deductPoints(agent.id, pointsCost, 'Autonomous tick')
 
@@ -171,6 +173,10 @@ export async function POST(_req: NextRequest) {
       groupMessages: tickResult.actionsExecuted.groupMessages
     }
 
+    const modelUsed = process.env.WANDB_API_KEY
+      ? (process.env.WANDB_MODEL || 'OpenPipe/Qwen3-14B-Instruct')
+      : 'qwen/qwen3-32b'
+
     await agentService.createLog(agent.id, {
       type: 'tick',
       level: 'info',
@@ -178,7 +184,7 @@ export async function POST(_req: NextRequest) {
       metadata: {
         pointsCost,
         duration: Date.now() - agentStartTime,
-        modelUsed: agent.agentModelTier === 'pro' ? 'groq-70b' : 'groq-8b',
+        modelUsed,
         enabledFeatures,
         actions
       }

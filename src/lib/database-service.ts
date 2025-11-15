@@ -142,7 +142,7 @@ class DatabaseService {
       : undefined;
 
     if (data.dayNumber !== undefined && safeDayNumber === undefined) {
-      console.warn('[Post] Invalid dayNumber value:', data.dayNumber, 'for post:', data.id);
+      logger.warn('[Post] Invalid dayNumber value', { dayNumber: data.dayNumber, postId: data.id }, 'database-service');
     }
 
     const created = await prisma.post.create({
@@ -184,7 +184,7 @@ class DatabaseService {
           : undefined;
 
         if (post.dayNumber !== undefined && safeDayNumber === undefined) {
-          console.warn('[Post] Invalid dayNumber value:', post.dayNumber, 'for post:', post.id);
+          logger.warn('[Post] Invalid dayNumber value', { dayNumber: post.dayNumber, postId: post.id }, 'database-service');
         }
 
         return {
@@ -710,7 +710,7 @@ class DatabaseService {
          !Number.isFinite(event.relatedQuestion) || 
          event.relatedQuestion < 0 || 
          event.relatedQuestion > 2147483647)) {
-      console.warn('[WorldEvent] Invalid relatedQuestion value:', event.relatedQuestion, 'for event:', event.id);
+      logger.warn('[WorldEvent] Invalid relatedQuestion value', { relatedQuestion: event.relatedQuestion, eventId: event.id }, 'database-service');
     }
     
     if (event.dayNumber !== undefined && 
@@ -718,7 +718,7 @@ class DatabaseService {
          !Number.isFinite(event.dayNumber) || 
          event.dayNumber < 0 || 
          event.dayNumber > 2147483647)) {
-      console.warn('[WorldEvent] Invalid dayNumber value:', event.dayNumber, 'for event:', event.id);
+      logger.warn('[WorldEvent] Invalid dayNumber value', { dayNumber: event.dayNumber, eventId: event.id }, 'database-service');
     }
 
     const safeRelatedQuestion = typeof event.relatedQuestion === 'number' && 

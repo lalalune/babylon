@@ -12,6 +12,8 @@ import { useFontSize } from '@/contexts/FontSizeContext';
 import { getProfileUrl } from '@/lib/profile-utils';
 import type { PostInteraction } from '@/types/interactions';
 import { Repeat2 } from 'lucide-react';
+import { ModerationMenu } from '@/components/moderation/ModerationMenu';
+import { useAuth } from '@/hooks/useAuth';
 
 export interface PostCardProps {
   post: {
@@ -63,6 +65,7 @@ export const PostCard = memo(function PostCard({
   const { fontSize } = useFontSize();
   const [isDesktop, setIsDesktop] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
     const checkScreenSize = () => {
@@ -165,7 +168,8 @@ export const PostCard = memo(function PostCard({
   const displayAuthorUsername = isSimpleRepost && effectivePost.originalAuthorUsername ? effectivePost.originalAuthorUsername : effectivePost.authorUsername;
   const displayAuthorProfileImageUrl = isSimpleRepost && effectivePost.originalAuthorProfileImageUrl ? effectivePost.originalAuthorProfileImageUrl : effectivePost.authorProfileImageUrl;
   
-  const showVerifiedBadge = isNpcIdentifier(displayAuthorId);
+  const authorIsNPC = isNpcIdentifier(displayAuthorId);
+  const showVerifiedBadge = authorIsNPC;
 
   const quotedPostId = effectivePost.originalPostId ?? post.originalPostId ?? null;
 
@@ -268,7 +272,7 @@ export const PostCard = memo(function PostCard({
           />
         </Link>
 
-        {/* Header: Name/Handle block on left, Timestamp on right */}
+        {/* Header: Name/Handle block on left, Timestamp and Menu on right */}
         <div className="flex items-start justify-between gap-3 flex-1 min-w-0">
           {/* Name and Handle stacked vertically - Shows original author for simple reposts, reposter for quote posts */}
           <div className="flex flex-col min-w-0">
@@ -292,10 +296,25 @@ export const PostCard = memo(function PostCard({
               @{displayAuthorUsername || displayAuthorId}
             </Link>
           </div>
-          {/* Timestamp - Right aligned */}
-          <time className="text-muted-foreground text-base shrink-0 ml-2" title={postDate.toLocaleString()}>
-            {timeAgo}
-          </time>
+          {/* Timestamp and Moderation Menu - Right aligned */}
+          <div className="flex items-center gap-2 shrink-0">
+            <time className="text-muted-foreground text-base" title={postDate.toLocaleString()}>
+              {timeAgo}
+            </time>
+            {/* Show moderation menu only if not your own post */}
+            {user && user.id !== displayAuthorId && (
+              <div onClick={(e) => e.stopPropagation()}>
+                <ModerationMenu
+                  targetUserId={displayAuthorId}
+                  targetUsername={displayAuthorUsername || undefined}
+                  targetDisplayName={displayAuthorName}
+                  targetProfileImageUrl={displayAuthorProfileImageUrl || undefined}
+                  postId={post.id}
+                  isNPC={authorIsNPC}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

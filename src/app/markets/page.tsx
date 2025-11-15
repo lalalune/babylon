@@ -77,6 +77,9 @@ interface PredictionMarket {
   noShares?: number;
   userPosition?: PredictionUserPosition | null;
   userPositions?: PredictionUserPosition[];
+  oracleCommitTxHash?: string | null;
+  oracleRevealTxHash?: string | null;
+  oraclePublishedAt?: string | null;
 }
 
 type MarketTab = 'dashboard' | 'futures' | 'predictions';
@@ -645,6 +648,9 @@ export default function MarketsPage() {
                             >
                               <div className="font-medium text-sm mb-2 line-clamp-2">
                                 {prediction.text}
+                                {prediction.oracleCommitTxHash && (
+                                  <span className="ml-2 text-xs text-green-600" title="Committed to oracle">✓</span>
+                                )}
                               </div>
                               <div className="flex items-center justify-between gap-2 text-xs">
                                 <div className="flex items-center gap-2">
@@ -922,6 +928,16 @@ export default function MarketsPage() {
                       >
                         <div className="font-medium mb-2">
                           {prediction.text}
+                          {prediction.oracleCommitTxHash && (
+                            <span className="ml-2 text-xs text-green-600" title="Committed to oracle">
+                              ✓ Committed
+                            </span>
+                          )}
+                          {prediction.oracleRevealTxHash && (
+                            <span className="ml-2 text-xs text-purple-600" title="Revealed on-chain">
+                              ✓ Revealed
+                            </span>
+                          )}
                         </div>
                         <div className="flex flex-col gap-2">
                           <div className="flex gap-3 text-xs items-center justify-between">
@@ -1269,6 +1285,9 @@ export default function MarketsPage() {
                         >
                           <div className="font-medium text-sm mb-2 line-clamp-2">
                             {prediction.text}
+                            {prediction.oracleCommitTxHash && (
+                              <span className="ml-2 text-xs text-green-600" title="Committed to oracle">✓</span>
+                            )}
                           </div>
                           <div className="flex items-center justify-between gap-2 text-xs">
                             <div className="flex items-center gap-2">
@@ -1539,7 +1558,19 @@ export default function MarketsPage() {
                           : 'bg-muted/30 hover:bg-muted'
                       )}
                     >
-                      <div className="font-medium mb-2">{prediction.text}</div>
+                      <div className="font-medium mb-2">
+                        {prediction.text}
+                        {prediction.oracleCommitTxHash && (
+                          <span className="ml-2 text-xs text-green-600" title="Committed to oracle">
+                            ✓ Committed
+                          </span>
+                        )}
+                        {prediction.oracleRevealTxHash && (
+                          <span className="ml-2 text-xs text-purple-600" title="Revealed on-chain">
+                            ✓ Revealed
+                          </span>
+                        )}
+                      </div>
                       <div className="flex flex-col gap-2">
                         <div className="flex gap-3 text-xs items-center justify-between">
                           <div className="flex gap-3 text-muted-foreground">

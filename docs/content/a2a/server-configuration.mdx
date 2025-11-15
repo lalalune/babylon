@@ -6,7 +6,7 @@ Complete guide to configuring the A2A protocol server for different deployment m
 
 Babylon supports two ways to run the A2A protocol:
 
-### Mode 1: HTTP A2A (Recommended) ✅
+### Mode 1: HTTP A2A (Recommended)
 
 **Use this for:**
 - Vercel deployments
@@ -19,69 +19,67 @@ Babylon supports two ways to run the A2A protocol:
 **How it works:**
 - A2A protocol over HTTP POST requests
 - JSON-RPC 2.0 format
-- Stateless (no persistent WebSocket)
+- Stateless HTTP requests
 - Vercel-compatible
 
 **Configuration:**
 ```typescript
 const client = new HttpA2AClient({
-  endpoint: 'http://localhost:3000/api/a2a',  // Development
-  // endpoint: 'https://babylon.market/api/a2a',  // Production
-  agentId: 'my-agent',
-  address: '0x...',
-  tokenId: 1
+ endpoint: 'http://localhost:3000/api/a2a', // Development
+ // endpoint: 'https://babylon.market/api/a2a', // Production
+ agentId: 'my-agent',
+ address: '0x...',
+ tokenId: 1
 })
 ```
 
-### Mode 2: WebSocket A2A (Advanced) 🔧
+### Mode 2: HTTP A2A with Polling (Alternative)
 
 **Use this for:**
-- Real-time subscriptions
-- High-frequency trading agents
-- Custom server deployments
-- Advanced use cases
+- Custom polling intervals
+- Batch processing
+- Rate-limited environments
 
-**Endpoint**: `ws://localhost:8765` (if running standalone server)
+**Endpoint**: `http://localhost:3000/api/a2a` (same as Mode 1)
 
 **How it works:**
-- Persistent WebSocket connection
-- Real-time updates
-- Subscription support
-- Requires dedicated server
+- HTTP POST requests
+- Polling for updates
+- Same endpoint as Mode 1
+- No separate server needed
 
 **Configuration:**
 ```typescript
 const client = new A2AClient({
-  endpoint: 'ws://localhost:8765',
-  credentials: {
-    address: '0x...',
-    privateKey: '0x...',
-    tokenId: 1
-  }
+ endpoint: 'http://localhost:3000/api/a2a',
+ credentials: {
+ address: '0x...',
+ privateKey: '0x...',
+ tokenId: 1
+ }
 })
-```
 
-**Starting the WebSocket server:**
-```bash
-# Not required for HTTP mode
-npm run a2a:server
+// Poll for updates
+setInterval(async () => {
+ const updates = await client.sendRequest('a2a.getNotifications', {})
+ // Process updates
+}, 5000) // Poll every 5 seconds
 ```
 
 ## Which Mode to Use?
 
 ### Use HTTP A2A (Mode 1) if:
-- ✅ You're deploying to Vercel
-- ✅ You want simplicity
-- ✅ You don't need real-time subscriptions
-- ✅ You're building most autonomous agents
+- You're deploying to Vercel
+- You want simplicity
+- You don't need real-time subscriptions
+- You're building most autonomous agents
 
 **→ This is the recommended mode for 95% of users**
 
-### Use WebSocket A2A (Mode 2) if:
-- You need real-time market subscriptions
-- You're running a dedicated server
-- You need high-frequency updates
-- You're building advanced trading bots
+### Use HTTP A2A with Polling (Mode 2) if:
+- You need custom polling intervals
+- You're doing batch processing
+- You're in a rate-limited environment
 
 ## Port Reference
 
@@ -89,7 +87,7 @@ npm run a2a:server
 |---------|------|-----|-----|
 | **Next.js App** | 3000 | `http://localhost:3000` | Main application |
 | **HTTP A2A** | 3000 | `http://localhost:3000/api/a2a` | A2A over HTTP (recommended) |
-| **WebSocket A2A** | 8765 | `ws://localhost:8765` | Standalone A2A server (advanced) |
+| **HTTP A2A Polling** | 3000 | `http://localhost:3000/api/a2a` | HTTP with custom polling |
 
 ## Environment Variables
 
@@ -102,40 +100,13 @@ No special configuration needed - works out of the box with Next.js.
 NEXT_PUBLIC_API_URL="http://localhost:3000"
 ```
 
-### For WebSocket A2A (Advanced)
+### For HTTP A2A Polling (Mode 2)
 
 ```env
-# Standalone WebSocket server configuration
-A2A_PORT="8765"
-A2A_HOST="0.0.0.0"
-A2A_MAX_CONNECTIONS="1000"
+# Use same configuration as Mode 1
+NEXT_PUBLIC_API_URL="http://localhost:3000"
+# Configure polling interval in your client code
 ```
-
-## Migration Guide
-
-### From WebSocket to HTTP
-
-If you're using the standalone WebSocket server, migrating to HTTP is easy:
-
-**Before:**
-```typescript
-const client = new A2AClient({
-  endpoint: 'ws://localhost:8765'
-})
-```
-
-**After:**
-```typescript
-const client = new HttpA2AClient({
-  endpoint: 'http://localhost:3000/api/a2a'
-})
-```
-
-**Benefits:**
-- Simpler deployment
-- Vercel-compatible
-- No separate server to manage
-- Same functionality for most use cases
 
 ## Examples
 

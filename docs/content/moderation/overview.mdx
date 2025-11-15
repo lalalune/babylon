@@ -32,8 +32,8 @@ Comprehensive content moderation system for Babylon with user blocking, muting, 
 // Via API
 POST /api/users/{userId}/block
 {
-  "action": "block",
-  "reason": "Optional reason"
+ "action": "block",
+ "reason": "Optional reason"
 }
 ```
 
@@ -41,8 +41,8 @@ POST /api/users/{userId}/block
 ```typescript
 POST /api/users/{userId}/mute
 {
-  "action": "mute",
-  "reason": "Optional reason"
+ "action": "mute",
+ "reason": "Optional reason"
 }
 ```
 
@@ -50,11 +50,11 @@ POST /api/users/{userId}/mute
 ```typescript
 POST /api/moderation/reports
 {
-  "reportType": "user" | "post",
-  "reportedUserId": "user123",
-  "category": "spam",
-  "reason": "Detailed explanation",
-  "evidence": "https://example.com/screenshot.png"
+ "reportType": "user" | "post",
+ "reportedUserId": "user123",
+ "category": "spam",
+ "reason": "Detailed explanation",
+ "evidence": "https://example.com/screenshot.png"
 }
 ```
 
@@ -69,8 +69,8 @@ GET /api/admin/reports?status=pending&priority=high
 ```typescript
 POST /api/admin/reports/{reportId}
 {
-  "action": "resolve" | "dismiss" | "escalate" | "ban_user",
-  "resolution": "Action taken message"
+ "action": "resolve" | "dismiss" | "escalate" | "ban_user",
+ "resolution": "Action taken message"
 }
 ```
 
@@ -79,63 +79,63 @@ POST /api/admin/reports/{reportId}
 **Block User:**
 ```typescript
 {
-  "jsonrpc": "2.0",
-  "method": "moderation.blockUser",
-  "params": {
-    "userId": "user123",
-    "reason": "Spam posting"
-  },
-  "id": 1
+ "jsonrpc": "2.0",
+ "method": "moderation.blockUser",
+ "params": {
+ "userId": "user123",
+ "reason": "Spam posting"
+ },
+ "id": 1
 }
 ```
 
 **Report User:**
 ```typescript
 {
-  "jsonrpc": "2.0",
-  "method": "moderation.reportUser",
-  "params": {
-    "userId": "user123",
-    "category": "spam",
-    "reason": "Posting promotional content"
-  },
-  "id": 2
+ "jsonrpc": "2.0",
+ "method": "moderation.reportUser",
+ "params": {
+ "userId": "user123",
+ "category": "spam",
+ "reason": "Posting promotional content"
+ },
+ "id": 2
 }
 ```
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                    Frontend Layer                        │
-│  ┌────────────────┐  ┌────────────────┐                │
-│  │ User Components│  │ Admin Dashboard│                 │
-│  │ - Moderation   │  │ - Reports Tab  │                 │
-│  │   Menu         │  │ - Statistics   │                 │
-│  │ - Modals       │  │ - Filters      │                 │
-│  └────────────────┘  └────────────────┘                 │
-└──────────────────────────────────────────────────────────┘
-                         ↓
-┌──────────────────────────────────────────────────────────┐
-│                      API Layer                           │
-│  REST APIs          A2A Protocol                         │
-│  - /api/users/      - moderation.blockUser              │
-│    :id/block        - moderation.muteUser               │
-│  - /api/users/      - moderation.reportUser             │
-│    :id/mute         - moderation.reportPost             │
-│  - /api/moderation/ - moderation.getBlocks              │
-│    reports          - moderation.getMutes               │
-│  - /api/admin/      - moderation.getReports             │
-│    reports                                               │
-└──────────────────────────────────────────────────────────┘
-                         ↓
-┌──────────────────────────────────────────────────────────┐
-│                   Database Layer                         │
-│  Tables:                                                 │
-│  - UserBlock (blocking relationships)                    │
-│  - UserMute (muting relationships)                       │
-│  - Report (user and post reports)                        │
-└──────────────────────────────────────────────────────────┘
+
+ Frontend Layer 
+ 
+ User Components Admin Dashboard 
+ - Moderation - Reports Tab 
+ Menu - Statistics 
+ - Modals - Filters 
+ 
+
+ ↓
+
+ API Layer 
+ REST APIs A2A Protocol 
+ - /api/users/ - moderation.blockUser 
+ :id/block - moderation.muteUser 
+ - /api/users/ - moderation.reportUser 
+ :id/mute - moderation.reportPost 
+ - /api/moderation/ - moderation.getBlocks 
+ reports - moderation.getMutes 
+ - /api/admin/ - moderation.getReports 
+ reports 
+
+ ↓
+
+ Database Layer 
+ Tables: 
+ - UserBlock (blocking relationships) 
+ - UserMute (muting relationships) 
+ - Report (user and post reports) 
+
 ```
 
 ## Report Categories
@@ -152,13 +152,13 @@ POST /api/admin/reports/{reportId}
 
 ## Security
 
-- ✅ Authentication required for all actions
-- ✅ Admin-only access for report management
-- ✅ Input validation with Zod schemas
-- ✅ Duplicate detection (24-hour window)
-- ✅ Rate limiting on API endpoints
-- ✅ Audit trail for all actions
-- ✅ Privacy: users can't see who blocked them
+- Authentication required for all actions
+- Admin-only access for report management
+- Input validation with Zod schemas
+- Duplicate detection (24-hour window)
+- Rate limiting on API endpoints
+- Audit trail for all actions
+- Privacy: users can't see who blocked them
 
 ## Next Steps
 

@@ -39,9 +39,9 @@ Checking 25 organization logos...
 Checking 25 organization banners...
 Found 30 images to generate (120 already exist)
 Starting concurrent generation (max 10 at a time)...
-✅ Generated actor-pfp for Actor1
-✅ Generated actor-banner for Actor1
-✅ Generated org-logo for OpenLie
+Generated actor-pfp for Actor1
+Generated actor-banner for Actor1
+Generated org-logo for OpenLie
 Complete!
 { generated: 30, failed: 0, skipped: 120, totalActors: 50, totalOrganizations: 25 }
 ```
@@ -82,12 +82,12 @@ The generator maps satirical names to real companies for parody logos:
 
 ```typescript
 {
-  'openlie': 'OpenAI',
-  'anthropimp': 'Anthropic',
-  'xitter': 'Twitter/X',
-  'goolag': 'Google',
-  'crapple': 'Apple',
-  // ... and many more
+ 'openlie': 'OpenAI',
+ 'anthropimp': 'Anthropic',
+ 'xitter': 'Twitter/X',
+ 'goolag': 'Google',
+ 'crapple': 'Apple',
+ // ... and many more
 }
 ```
 
@@ -97,19 +97,19 @@ Images are saved to:
 
 ```
 public/
-  images/
-    actors/           # Actor profile pictures
-      actor1.jpg
-      actor2.jpg
-    actor-banners/    # Actor banners
-      actor1.jpg
-      actor2.jpg
-    organizations/    # Org logos
-      openlie.jpg
-      anthropimp.jpg
-    org-banners/      # Org banners
-      openlie.jpg
-      anthropimp.jpg
+ images/
+ actors/ # Actor profile pictures
+ actor1.jpg
+ actor2.jpg
+ actor-banners/ # Actor banners
+ actor1.jpg
+ actor2.jpg
+ organizations/ # Org logos
+ openlie.jpg
+ anthropimp.jpg
+ org-banners/ # Org banners
+ openlie.jpg
+ anthropimp.jpg
 ```
 
 ## Performance
@@ -132,7 +132,7 @@ Please add FAL_KEY to your .env file
 ### Generation Failed
 
 ```
-❌ Failed to generate actor-pfp for Actor1:
+Failed to generate actor-pfp for Actor1:
 Error: Fal.ai API returned no images
 ```
 
@@ -147,16 +147,18 @@ Error: Fal.ai API returned no images
 Error: Actor Actor1 is missing physicalDescription field
 ```
 
-**Solution:** Add required fields to `public/data/actors.json`:
+**Solution:** Add required fields to the actor's individual file in `public/data/actors/actor1.json`:
 
 ```json
 {
-  "id": "actor1",
-  "name": "Actor 1",
-  "physicalDescription": "Description here",    // Required for profile pic
-  "profileBanner": "Banner description here"    // Required for banner
+ "id": "actor1",
+ "name": "Actor 1",
+ "physicalDescription": "Description here", // Required for profile pic
+ "profileBanner": "Banner description here" // Required for banner
 }
 ```
+
+Then rebuild the full file: `bun run scripts/build-actors-json.ts`
 
 ## Regenerating Images
 
@@ -169,7 +171,7 @@ bun run command:images
 
 # Delete single image
 rm public/images/actors/actor1.jpg
-bun run command:images  # Will regenerate only missing
+bun run command:images # Will regenerate only missing
 ```
 
 ## Cost Estimation

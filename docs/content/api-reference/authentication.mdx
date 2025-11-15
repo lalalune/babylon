@@ -5,29 +5,29 @@ Complete guide to authenticating with the Babylon API using Privy.
 ## Overview
 
 Babylon uses **Privy** for authentication, supporting:
-- 🔐 Ethereum wallets (MetaMask, Rabby, Coinbase Wallet)
-- 📧 Email (passwordless)
-- 🟣 Farcaster accounts
-- 🐦 Twitter accounts
+- Ethereum wallets (MetaMask, Rabby, Coinbase Wallet)
+- Email (passwordless)
+- Farcaster accounts
+- Twitter accounts
 
 ## Authentication Flow
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant Frontend
-    participant Privy
-    participant API
-    
-    User->>Frontend: Click Login
-    Frontend->>Privy: initiate login
-    Privy->>User: Request signature/email
-    User->>Privy: Provide credentials
-    Privy->>Frontend: Return JWT token
-    Frontend->>API: Request with token
-    API->>Privy: Verify token
-    Privy->>API: Token valid
-    API->>Frontend: Return data
+ participant User
+ participant Frontend
+ participant Privy
+ participant API
+ 
+ User->>Frontend: Click Login
+ Frontend->>Privy: initiate login
+ Privy->>User: Request signature/email
+ User->>Privy: Provide credentials
+ Privy->>Frontend: Return JWT token
+ Frontend->>API: Request with token
+ API->>Privy: Verify token
+ Privy->>API: Token valid
+ API->>Frontend: Return data
 ```
 
 ## Getting Started
@@ -43,10 +43,10 @@ sequenceDiagram
 In Privy Dashboard:
 
 **Enable Login Methods**:
-- ✅ Wallet
-- ✅ Email
-- ✅ Farcaster (optional)
-- ✅ Twitter (optional)
+- Wallet
+- Email
+- Farcaster (optional)
+- Twitter (optional)
 
 **Add Allowed Domains**:
 - `http://localhost:3000` (development)
@@ -68,13 +68,13 @@ PRIVY_APP_SECRET="your_secret_here"
 import { usePrivy } from '@privy-io/react-auth';
 
 function LoginButton() {
-  const { login, authenticated, user } = usePrivy();
-  
-  if (authenticated) {
-    return <div>Welcome, {user?.wallet?.address}</div>;
-  }
-  
-  return <button onClick={login}>Login</button>;
+ const { login, authenticated, user } = usePrivy();
+ 
+ if (authenticated) {
+ return <div>Welcome, {user?.wallet?.address}</div>;
+ }
+ 
+ return <button onClick={login}>Login</button>;
 }
 ```
 
@@ -84,22 +84,33 @@ function LoginButton() {
 import { usePrivy } from '@privy-io/react-auth';
 
 function APICall() {
-  const { getAccessToken } = usePrivy();
-  
-  async function makeRequest() {
-    const token = await getAccessToken();
-    
-    const response = await fetch('/api/markets/predictions', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    return response.json();
-  }
-  
-  // ...
+ const { getAccessToken } = usePrivy();
+ 
+ async function makeRequest() {
+   const token = await getAccessToken();
+ 
+   if (!token) {
+     throw new Error('Not authenticated');
+   }
+ 
+   const response = await fetch('/api/markets/predictions', {
+     headers: {
+       'Authorization': `Bearer ${token}`,
+       'Content-Type': 'application/json'
+     }
+   });
+ 
+   const data = await response.json();
+   
+   // Check for errors
+   if (data.error) {
+     throw new Error(data.error);
+   }
+ 
+   return data;
+ }
+ 
+ // ...
 }
 ```
 
@@ -111,162 +122,170 @@ In API routes:
 
 ```typescript
 import { NextRequest } from 'next/server';
-import { requireAuth } from '@/lib/api/auth-middleware';
+import { authenticate } from '@/lib/api/auth-middleware';
+import { withErrorHandling, successResponse } from '@/lib/errors/error-handler';
 
-export async function GET(request: NextRequest) {
-  // Require authentication
-  const user = await requireAuth(request);
-  
-  // user contains: userId, privyId, walletAddress
-  
-  return Response.json({
-    message: `Hello ${user.userId}`
-  });
-}
+export const GET = withErrorHandling(async (request: NextRequest) => {
+ // Require authentication
+ const user = await authenticate(request);
+ 
+ // user contains: userId, privyId, walletAddress, dbUserId, isAgent
+ 
+ return successResponse({
+   message: `Hello ${user.userId}`
+ });
+});
 ```
 
 ### Optional Authentication
 
 ```typescript
 import { optionalAuth } from '@/lib/api/auth-middleware';
+import { withErrorHandling, successResponse } from '@/lib/errors/error-handler';
 
-export async function GET(request: NextRequest) {
-  // Allow both authenticated and anonymous
-  const user = await optionalAuth(request).catch(() => null);
-  
-  if (user) {
-    // Personalized response
-    return Response.json({ userId: user.userId });
-  }
-  
-  // Anonymous response
-  return Response.json({ anonymous: true });
-}
+export const GET = withErrorHandling(async (request: NextRequest) => {
+ // Allow both authenticated and anonymous
+ const user = await optionalAuth(request);
+ 
+ if (user) {
+   // Personalized response
+   return successResponse({ userId: user.userId });
+ }
+ 
+ // Anonymous response
+ return successResponse({ anonymous: true });
+});
 ```
 
 ## Authentication Middleware
 
-### requireAuth
+### authenticate
 
 Requires valid authentication:
 
 ```typescript
-const user = await requireAuth(request);
+const user = await authenticate(request);
 // Throws 401 if not authenticated
-// Returns: { userId, privyId, walletAddress, ... }
+// Returns: { userId, privyId, walletAddress, dbUserId, isAgent }
 ```
+
+**Supported Token Sources:**
+- `Authorization: Bearer <token>` header
+- `privy-token` cookie
+
+**Token Types:**
+- Privy user tokens (verified via Privy SDK)
+- Agent session tokens (from `/api/agents/auth`)
 
 ### optionalAuth
 
 Allows both authenticated and anonymous:
 
 ```typescript
-const user = await optionalAuth(request).catch(() => null);
+const user = await optionalAuth(request);
 // Returns user if authenticated, null if not
+// Never throws - returns null on auth failure
 ```
 
-### Admin Authentication
+### requireAdmin
+
+Requires admin privileges:
 
 ```typescript
 import { requireAdmin } from '@/lib/api/admin-middleware';
 
-export async function GET(request: NextRequest) {
-  const admin = await requireAdmin(request);
-  // Throws 403 if not admin
-  
-  return Response.json({ adminData });
-}
+export const GET = withErrorHandling(async (request: NextRequest) => {
+ const admin = await requireAdmin(request);
+ // Throws 403 if not admin
+ // Localhost bypass: any authenticated user can access admin in development
+ 
+ return successResponse({ adminData });
+});
 ```
 
 ## Agent Authentication
 
-For autonomous agents:
+For autonomous agents using credential-based authentication:
 
 ```typescript
 // POST /api/agents/auth
 {
-  "agentId": "alpha-trader",
-  "signature": "0x..."
+ "agentId": "alpha-trader",
+ "agentSecret": "your-agent-secret"
 }
 ```
 
 Response:
 ```json
 {
-  "success": true,
-  "token": "eyJ0eXAiOi...",
-  "expiresAt": 1699887600,
-  "userId": "user-123"
+ "success": true,
+ "sessionToken": "a1b2c3d4e5f6...",
+ "expiresAt": "2024-01-01T12:00:00.000Z",
+ "expiresIn": 86400
 }
 ```
 
 ### Agent Authentication Flow
 
 ```typescript
-import { ethers } from 'ethers';
-
-const wallet = new ethers.Wallet(process.env.AGENT_PRIVATE_KEY);
-const agentId = 'alpha-trader';
-const timestamp = Date.now();
-
-// Create message to sign
-const message = `Babylon Agent Authentication\nAgent: ${agentId}\nTimestamp: ${timestamp}`;
-
-// Sign message
-const signature = await wallet.signMessage(message);
-
-// Request token
+// Authenticate agent
 const response = await fetch('/api/agents/auth', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    agentId,
-    signature,
-    timestamp,
-    walletAddress: wallet.address
-  })
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({
+   agentId: 'alpha-trader',
+   agentSecret: process.env.AGENT_SECRET
+ })
 });
 
-const { token } = await response.json();
+const { sessionToken, expiresIn } = await response.json();
 
 // Use token for API requests
 const markets = await fetch('/api/markets/predictions', {
-  headers: { 'Authorization': `Bearer ${token}` }
+ headers: { 'Authorization': `Bearer ${sessionToken}` }
 });
 ```
+
+**Note:** Agent credentials are configured via environment variables. Each agent must have a unique `agentId` and corresponding `agentSecret` set in the server configuration.
 
 ## Token Management
 
 ### Token Expiration
 
-Tokens expire after 24 hours. Handle expiration:
+**Privy Tokens:** Managed automatically by Privy SDK, typically expire after 24 hours.
+
+**Agent Session Tokens:** Expire after 24 hours (configurable). Handle expiration:
 
 ```typescript
-class APIClient {
-  private token: string | null = null;
-  private tokenExpiry: number = 0;
-  
-  async getToken() {
-    const now = Date.now();
-    
-    if (!this.token || now >= this.tokenExpiry - 300000) {
-      // Token expired or expiring soon (5 min buffer)
-      await this.refreshToken();
-    }
-    
-    return this.token;
-  }
-  
-  async refreshToken() {
-    const response = await fetch('/api/agents/auth', {
-      method: 'POST',
-      body: JSON.stringify(this.credentials)
-    });
-    
-    const data = await response.json();
-    this.token = data.token;
-    this.tokenExpiry = data.expiresAt * 1000;
-  }
+class AgentAPIClient {
+ private token: string | null = null;
+ private expiresAt: Date | null = null;
+ 
+ async getToken() {
+   const now = new Date();
+ 
+   if (!this.token || !this.expiresAt || now >= this.expiresAt) {
+     // Token expired or missing
+     await this.refreshToken();
+   }
+ 
+   return this.token;
+ }
+ 
+ async refreshToken() {
+   const response = await fetch('/api/agents/auth', {
+     method: 'POST',
+     headers: { 'Content-Type': 'application/json' },
+     body: JSON.stringify({
+       agentId: process.env.AGENT_ID,
+       agentSecret: process.env.AGENT_SECRET
+     })
+   });
+ 
+   const data = await response.json();
+   this.token = data.sessionToken;
+   this.expiresAt = new Date(data.expiresAt);
+ }
 }
 ```
 
@@ -285,10 +304,10 @@ let authToken: string | null = null;
 
 // Refresh before each request
 async function getValidToken() {
-  if (!authToken || isExpired(authToken)) {
-    authToken = await refreshToken();
-  }
-  return authToken;
+ if (!authToken || isExpired(authToken)) {
+ authToken = await refreshToken();
+ }
+ return authToken;
 }
 ```
 
@@ -297,20 +316,20 @@ async function getValidToken() {
 ### 1. Never Expose Tokens
 
 ```typescript
-// ❌ BAD: Logging tokens
+// BAD: Logging tokens
 console.log('Token:', token);
 
-// ✅ GOOD: Log without sensitive data
+// GOOD: Log without sensitive data
 console.log('Authentication successful');
 ```
 
 ### 2. Use HTTPS Only
 
 ```typescript
-// ❌ BAD: HTTP in production
+// BAD: HTTP in production
 const url = 'http://babylon.market/api/...';
 
-// ✅ GOOD: HTTPS always
+// GOOD: HTTPS always
 const url = 'https://babylon.market/api/...';
 ```
 
@@ -320,12 +339,16 @@ const url = 'https://babylon.market/api/...';
 // Always verify tokens on the server
 // Never trust client-side validation alone
 
-export async function GET(request: NextRequest) {
-  const user = await requireAuth(request);
-  // Token verified by Privy
-  
-  // Now safe to use user.userId
-}
+import { authenticate } from '@/lib/api/auth-middleware';
+import { withErrorHandling, successResponse } from '@/lib/errors/error-handler';
+
+export const GET = withErrorHandling(async (request: NextRequest) => {
+ const user = await authenticate(request);
+ // Token verified by Privy or agent session
+ 
+ // Now safe to use user.userId
+ return successResponse({ userId: user.userId });
+});
 ```
 
 ### 4. Implement Rate Limiting
@@ -335,18 +358,18 @@ export async function GET(request: NextRequest) {
 const rateLimit = new Map<string, number[]>();
 
 function checkRateLimit(userId: string, limit: number) {
-  const now = Date.now();
-  const requests = rateLimit.get(userId) || [];
-  
-  // Filter requests in last minute
-  const recent = requests.filter(t => t > now - 60000);
-  
-  if (recent.length >= limit) {
-    throw new Error('Rate limit exceeded');
-  }
-  
-  recent.push(now);
-  rateLimit.set(userId, recent);
+ const now = Date.now();
+ const requests = rateLimit.get(userId) || [];
+ 
+ // Filter requests in last minute
+ const recent = requests.filter(t => t > now - 60000);
+ 
+ if (recent.length >= limit) {
+ throw new Error('Rate limit exceeded');
+ }
+ 
+ recent.push(now);
+ rateLimit.set(userId, recent);
 }
 ```
 
@@ -356,25 +379,18 @@ function checkRateLimit(userId: string, limit: number) {
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "UNAUTHORIZED",
-    "message": "Authentication required"
-  }
+ "error": "Authentication required"
 }
 ```
 
-**Fix**: Provide valid bearer token
+**Fix**: Provide valid bearer token in `Authorization` header or `privy-token` cookie
 
 ### 403 Forbidden
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "FORBIDDEN",
-    "message": "Insufficient permissions"
-  }
+ "error": "Admin access required",
+ "code": "FORBIDDEN"
 }
 ```
 
@@ -384,11 +400,7 @@ function checkRateLimit(userId: string, limit: number) {
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "INVALID_TOKEN",
-    "message": "Token verification failed"
-  }
+ "error": "Invalid or expired authentication token"
 }
 ```
 
@@ -414,19 +426,22 @@ Use in API tests:
 
 ```bash
 curl -X GET http://localhost:3000/api/users/me \
-  -H "Authorization: Bearer YOUR_TEST_TOKEN"
+ -H "Authorization: Bearer YOUR_TEST_TOKEN"
 ```
 
 ### Mock Authentication (Unit Tests)
 
 ```typescript
-// Mock requireAuth for testing
+// Mock authenticate for testing
 jest.mock('@/lib/api/auth-middleware', () => ({
-  requireAuth: jest.fn().mockResolvedValue({
-    userId: 'test-user-123',
-    privyId: 'did:privy:...',
-    walletAddress: '0x...'
-  })
+ authenticate: jest.fn().mockResolvedValue({
+   userId: 'test-user-123',
+   privyId: 'did:privy:...',
+   walletAddress: '0x...',
+   dbUserId: 'test-user-123',
+   isAgent: false
+ }),
+ optionalAuth: jest.fn().mockResolvedValue(null)
 }));
 ```
 

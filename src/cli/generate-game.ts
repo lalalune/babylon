@@ -56,7 +56,7 @@
  */
 
 import { GameGenerator, type GameHistory } from '../generator/GameGenerator';
-import type { ChatMessage } from '@/shared/types';
+import type { GroupChatMessage } from '@/shared/types';
 import { logger } from '@/lib/logger';
 import db from '@/lib/database-service';
 import { generateSnowflakeId } from '@/lib/snowflake';
@@ -417,7 +417,7 @@ async function main() {
       acc[groupId]!.push(...messages);
     });
     return acc;
-  }, {} as Record<string, ChatMessage[]>)).flat().length}`);
+  }, {} as Record<string, GroupChatMessage[]>)).flat().length}`);
 
   // Show scenarios and questions
   logger.info('SCENARIOS & QUESTIONS:', undefined, 'CLI');

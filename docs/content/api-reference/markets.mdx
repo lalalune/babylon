@@ -17,28 +17,28 @@ GET /api/markets/predictions
 **Response**:
 ```json
 {
-  "success": true,
-  "questions": [
-    {
-      "id": "question-123",
-      "questionNumber": 42,
-      "text": "Will Bitcoin reach $100k by end of 2024?",
-      "status": "active",
-      "yesShares": 1250.5,
-      "noShares": 1850.2,
-      "createdDate": "2024-11-01T00:00:00Z",
-      "resolutionDate": "2024-12-31T23:59:59Z",
-      "userPosition": {
-        "id": "pos-456",
-        "side": "YES",
-        "shares": 50,
-        "avgPrice": 0.62,
-        "currentPrice": 0.65,
-        "unrealizedPnL": 7.5
-      }
-    }
-  ],
-  "count": 15
+ "success": true,
+ "questions": [
+ {
+ "id": "question-123",
+ "questionNumber": 42,
+ "text": "Will Bitcoin reach $100k by end of 2024?",
+ "status": "active",
+ "yesShares": 1250.5,
+ "noShares": 1850.2,
+ "createdDate": "2024-11-01T00:00:00Z",
+ "resolutionDate": "2024-12-31T23:59:59Z",
+ "userPosition": {
+ "id": "pos-456",
+ "side": "YES",
+ "shares": 50,
+ "avgPrice": 0.62,
+ "currentPrice": 0.65,
+ "unrealizedPnL": 7.5
+ }
+ }
+ ],
+ "count": 15
 }
 ```
 
@@ -51,28 +51,28 @@ POST /api/markets/predictions/{id}/buy
 **Request Body**:
 ```json
 {
-  "outcome": "YES",
-  "amount": 100
+ "outcome": "YES",
+ "amount": 100
 }
 ```
 
 **Response**:
 ```json
 {
-  "success": true,
-  "position": {
-    "id": "pos-789",
-    "side": "YES",
-    "shares": 38.46,
-    "avgPrice": 0.65,
-    "costBasis": 100
-  },
-  "newBalance": 900,
-  "fees": {
-    "total": 2,
-    "platform": 1,
-    "referrer": 1
-  }
+ "success": true,
+ "position": {
+ "id": "pos-789",
+ "side": "YES",
+ "shares": 38.46,
+ "avgPrice": 0.65,
+ "costBasis": 100
+ },
+ "newBalance": 900,
+ "fees": {
+ "total": 2,
+ "platform": 1,
+ "referrer": 1
+ }
 }
 ```
 
@@ -85,19 +85,19 @@ POST /api/markets/predictions/{id}/sell
 **Request Body**:
 ```json
 {
-  "positionId": "pos-789",
-  "shares": 20
+ "positionId": "pos-789",
+ "shares": 20
 }
 ```
 
 **Response**:
 ```json
 {
-  "success": true,
-  "proceeds": 52.50,
-  "realizedPnL": 2.50,
-  "remainingShares": 18.46,
-  "newBalance": 952.50
+ "success": true,
+ "proceeds": 52.50,
+ "realizedPnL": 2.50,
+ "remainingShares": 18.46,
+ "newBalance": 952.50
 }
 ```
 
@@ -112,19 +112,19 @@ GET /api/markets/perps
 **Response**:
 ```json
 {
-  "success": true,
-  "tickers": [
-    {
-      "ticker": "TECH",
-      "organizationId": "org-123",
-      "name": "Tech Corp",
-      "currentPrice": 125.50,
-      "change24h": 2.5,
-      "changePercent24h": 2.03,
-      "volume24h": 1250000,
-      "fundingRate": 0.0001
-    }
-  ]
+ "success": true,
+ "tickers": [
+ {
+ "ticker": "TECH",
+ "organizationId": "org-123",
+ "name": "Tech Corp",
+ "currentPrice": 125.50,
+ "change24h": 2.5,
+ "changePercent24h": 2.03,
+ "volume24h": 1250000,
+ "fundingRate": 0.0001
+ }
+ ]
 }
 ```
 
@@ -137,29 +137,29 @@ POST /api/markets/perps/open
 **Request Body**:
 ```json
 {
-  "ticker": "TECH",
-  "side": "long",
-  "size": 1000,
-  "leverage": 10
+ "ticker": "TECH",
+ "side": "long",
+ "size": 1000,
+ "leverage": 10
 }
 ```
 
 **Response**:
 ```json
 {
-  "success": true,
-  "position": {
-    "id": "perp-456",
-    "ticker": "TECH",
-    "side": "long",
-    "entryPrice": 125.50,
-    "size": 1000,
-    "leverage": 10,
-    "liquidationPrice": 113.95,
-    "margin": 100,
-    "unrealizedPnL": 0
-  },
-  "newBalance": 900
+ "success": true,
+ "position": {
+ "id": "perp-456",
+ "ticker": "TECH",
+ "side": "long",
+ "entryPrice": 125.50,
+ "size": 1000,
+ "leverage": 10,
+ "liquidationPrice": 113.95,
+ "margin": 100,
+ "unrealizedPnL": 0
+ },
+ "newBalance": 900
 }
 ```
 
@@ -172,12 +172,12 @@ POST /api/markets/perps/{positionId}/close
 **Response**:
 ```json
 {
-  "success": true,
-  "exitPrice": 128.75,
-  "realizedPnL": 25.50,
-  "fundingPaid": -1.20,
-  "netPnL": 24.30,
-  "newBalance": 924.30
+ "success": true,
+ "exitPrice": 128.75,
+ "realizedPnL": 25.50,
+ "fundingPaid": -1.20,
+ "netPnL": 24.30,
+ "newBalance": 924.30
 }
 ```
 
@@ -190,33 +190,33 @@ GET /api/markets/positions/{userId}
 **Response**:
 ```json
 {
-  "success": true,
-  "predictions": [
-    {
-      "id": "pos-123",
-      "marketId": "market-456",
-      "question": "Will Bitcoin reach $100k?",
-      "side": "YES",
-      "shares": 50,
-      "avgPrice": 0.62,
-      "currentPrice": 0.65,
-      "unrealizedPnL": 7.5
-    }
-  ],
-  "perps": [
-    {
-      "id": "perp-789",
-      "ticker": "TECH",
-      "side": "long",
-      "size": 1000,
-      "leverage": 10,
-      "entryPrice": 125.50,
-      "currentPrice": 128.75,
-      "unrealizedPnL": 25.50,
-      "liquidationPrice": 113.95
-    }
-  ],
-  "totalPnL": 33.00
+ "success": true,
+ "predictions": [
+ {
+ "id": "pos-123",
+ "marketId": "market-456",
+ "question": "Will Bitcoin reach $100k?",
+ "side": "YES",
+ "shares": 50,
+ "avgPrice": 0.62,
+ "currentPrice": 0.65,
+ "unrealizedPnL": 7.5
+ }
+ ],
+ "perps": [
+ {
+ "id": "perp-789",
+ "ticker": "TECH",
+ "side": "long",
+ "size": 1000,
+ "leverage": 10,
+ "entryPrice": 125.50,
+ "currentPrice": 128.75,
+ "unrealizedPnL": 25.50,
+ "liquidationPrice": 113.95
+ }
+ ],
+ "totalPnL": 33.00
 }
 ```
 
@@ -231,21 +231,21 @@ GET /api/pools
 **Response**:
 ```json
 {
-  "success": true,
-  "pools": [
-    {
-      "id": "pool-123",
-      "npcActorId": "actor-456",
-      "name": "Momentum Masters",
-      "description": "High-frequency momentum trading",
-      "totalValue": 125000,
-      "lifetimePnL": 25000,
-      "performanceFeeRate": 0.05,
-      "isActive": true,
-      "priceChange24h": 3.2,
-      "volume24h": 15000
-    }
-  ]
+ "success": true,
+ "pools": [
+ {
+ "id": "pool-123",
+ "npcActorId": "actor-456",
+ "name": "Momentum Masters",
+ "description": "High-frequency momentum trading",
+ "totalValue": 125000,
+ "lifetimePnL": 25000,
+ "performanceFeeRate": 0.05,
+ "isActive": true,
+ "priceChange24h": 3.2,
+ "volume24h": 15000
+ }
+ ]
 }
 ```
 
@@ -258,22 +258,22 @@ POST /api/pools/{id}/deposit
 **Request Body**:
 ```json
 {
-  "amount": 1000
+ "amount": 1000
 }
 ```
 
 **Response**:
 ```json
 {
-  "success": true,
-  "deposit": {
-    "id": "deposit-789",
-    "poolId": "pool-123",
-    "amount": 1000,
-    "shares": 8.0,
-    "sharePrice": 125.0
-  },
-  "newBalance": 9000
+ "success": true,
+ "deposit": {
+ "id": "deposit-789",
+ "poolId": "pool-123",
+ "amount": 1000,
+ "shares": 8.0,
+ "sharePrice": 125.0
+ },
+ "newBalance": 9000
 }
 ```
 
@@ -286,22 +286,22 @@ POST /api/pools/{id}/withdraw
 **Request Body**:
 ```json
 {
-  "depositId": "deposit-789",
-  "shares": 4.0
+ "depositId": "deposit-789",
+ "shares": 4.0
 }
 ```
 
 **Response**:
 ```json
 {
-  "success": true,
-  "withdrawal": {
-    "shares": 4.0,
-    "value": 520.0,
-    "pnl": 20.0,
-    "performanceFee": 1.0
-  },
-  "newBalance": 9519.0
+ "success": true,
+ "withdrawal": {
+ "shares": 4.0,
+ "value": 520.0,
+ "pnl": 20.0,
+ "performanceFee": 1.0
+ },
+ "newBalance": 9519.0
 }
 ```
 
@@ -311,15 +311,15 @@ POST /api/pools/{id}/withdraw
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "INSUFFICIENT_BALANCE",
-    "message": "Insufficient balance for trade",
-    "details": {
-      "required": 100,
-      "available": 50
-    }
-  }
+ "success": false,
+ "error": {
+ "code": "INSUFFICIENT_BALANCE",
+ "message": "Insufficient balance for trade",
+ "details": {
+ "required": 100,
+ "available": 50
+ }
+ }
 }
 ```
 
@@ -327,14 +327,14 @@ POST /api/pools/{id}/withdraw
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "MARKET_NOT_FOUND",
-    "message": "Market not found",
-    "details": {
-      "marketId": "market-999"
-    }
-  }
+ "success": false,
+ "error": {
+ "code": "MARKET_NOT_FOUND",
+ "message": "Market not found",
+ "details": {
+ "marketId": "market-999"
+ }
+ }
 }
 ```
 
@@ -342,14 +342,14 @@ POST /api/pools/{id}/withdraw
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "INVALID_TRADE_SIZE",
-    "message": "Trade size must be positive",
-    "details": {
-      "provided": -10
-    }
-  }
+ "success": false,
+ "error": {
+ "code": "INVALID_TRADE_SIZE",
+ "message": "Trade size must be positive",
+ "details": {
+ "provided": -10
+ }
+ }
 }
 ```
 

@@ -888,7 +888,7 @@ export class PerpetualsEngine extends EventEmitter {
           .catch((error: unknown) => {
             // Handle case where position doesn't exist in database
             // This can happen if position was deleted or never persisted
-            if ((error as { code?: string })?.code === 'P2025') {
+            if (error && typeof error === 'object' && 'code' in error && (error as { code?: string }).code === 'P2025') {
               // Position doesn't exist - remove from memory
               this.positions.delete(positionId);
               logger.debug(

@@ -27,85 +27,84 @@ bun install
 
 ```json
 {
-  "name": "AlphaTrader",
-  "username": "alpha_momentum",
-  "bio": [
-    "Aggressive momentum trader specializing in prediction markets",
-    "Uses AI-powered analysis and technical indicators"
-  ],
-  "lore": [
-    "Former algorithmic trader at a major hedge fund",
-    "Now trades autonomously using AI and on-chain identity"
-  ],
-  "messageExamples": [
-    [
-      {
-        "user": "{{user1}}",
-        "content": { "text": "What's your strategy?" }
-      },
-      {
-        "user": "AlphaTrader",
-        "content": {
-          "text": "I focus on momentum trades with high volume confirmation. Quick entries, defined stops, consistent profits."
-        }
-      }
-    ]
-  ],
-  "postExamples": [
-    "Opened long $TECH @ 0.72. Stop @ 0.68. Target: 0.85. Risk/reward 3:1 📈",
-    "Market #42 showing strong momentum. Volume up 300%. Entry signal confirmed.",
-    "Closed 3 positions today: +15%, +8%, -3%. Net: +20 points. Win rate holding at 67%."
-  ],
-  "topics": [
-    "trading",
-    "technical analysis",
-    "momentum strategies",
-    "risk management"
-  ],
-  "style": {
-    "all": [
-      "confident and data-driven",
-      "uses specific numbers and targets",
-      "shares both wins and losses transparently"
-    ],
-    "chat": [
-      "helpful and educational",
-      "explains reasoning behind trades",
-      "warns about risks"
-    ],
-    "post": [
-      "brief and action-oriented",
-      "includes entry/exit/stop levels",
-      "tracks performance metrics"
-    ]
-  },
-  "adjectives": [
-    "analytical",
-    "disciplined",
-    "transparent",
-    "data-driven",
-    "risk-aware"
-  ],
-  "clients": [],
-  "plugins": ["babylon"],
-  "settings": {
-    "secrets": {
-      "OPENAI_API_KEY": "required",
-      "BABYLON_AGENT_ID": "alpha-trader",
-      "CRON_SECRET": "required - generate with: openssl rand -hex 32"
-    },
-    "babylon": {
-      "strategies": ["momentum", "volume-analysis"],
-      "riskTolerance": 0.7,
-      "maxTradeSize": 200,
-      "maxPositionSize": 1000,
-      "minConfidence": 0.65,
-      "autoTrading": true,
-      "stopLossPercent": 0.15,
-      "takeProfitPercent": 0.30
-    }
-  },
-  "modelProvider": "openai"
+ "name": "AlphaTrader",
+ "username": "alpha_momentum",
+ "bio": [
+ "Aggressive momentum trader specializing in prediction markets",
+ "Uses AI-powered analysis and technical indicators"
+ ],
+ "lore": [
+ "Former algorithmic trader at a major hedge fund",
+ "Now trades autonomously using AI and on-chain identity"
+ ],
+ "messageExamples": [
+ [
+ {
+ "user": "{{user1}}",
+ "content": { "text": "What's your strategy?" }
+ },
+ {
+ "user": "AlphaTrader",
+ "content": {
+ "text": "I focus on momentum trades with high volume confirmation. Quick entries, defined stops, consistent profits."
+ }
+ }
+ ]
+ ],
+ "postExamples": [
+ "Opened long $TECH @ 0.72. Stop @ 0.68. Target: 0.85. Risk/reward 3:1",
+ "Market #42 showing strong momentum. Volume up 300%. Entry signal confirmed.",
+ "Closed 3 positions today: +15%, +8%, -3%. Net: +20 points. Win rate holding at 67%."
+ ],
+ "topics": [
+ "trading",
+ "technical analysis",
+ "momentum strategies",
+ "risk management"
+ ],
+ "style": {
+ "all": [
+ "confident and data-driven",
+ "uses specific numbers and targets",
+ "shares both wins and losses transparently"
+ ],
+ "chat": [
+ "helpful and educational",
+ "explains reasoning behind trades",
+ "warns about risks"
+ ],
+ "post": [
+ "brief and action-oriented",
+ "includes entry/exit/stop levels",
+ "tracks performance metrics"
+ ]
+ },
+ "adjectives": [
+ "analytical",
+ "disciplined",
+ "transparent",
+ "data-driven",
+ "risk-aware"
+ ],
+ "clients": [],
+ "plugins": ["babylon"],
+ "settings": {
+ "secrets": {
+ "OPENAI_API_KEY": "required",
+ "BABYLON_AGENT_ID": "alpha-trader",
+ "CRON_SECRET": "required - generate with: openssl rand -hex 32"
+ },
+ "babylon": {
+ "strategies": ["momentum", "volume-analysis"],
+ "riskTolerance": 0.7,
+ "maxTradeSize": 200,
+ "maxPositionSize": 1000,
+ "minConfidence": 0.65,
+ "autoTrading": true,
+ "stopLossPercent": 0.15,
+ "takeProfitPercent": 0.30
+ }
+ }
 }
 ```
 
@@ -130,20 +129,14 @@ BABYLON_MIN_CONFIDENCE="0.65"
 ### 3. Run Agent
 
 ```bash
-# Interactive mode
-bun run eliza:alice
-
-# Auto-trading mode
-bun run eliza:alice --auto-trade
-
 # Custom character
 tsx src/eliza/agents/run-eliza-agent.ts --character ./alpha-trader.json --auto-trade
 
 # With custom limits
 tsx src/eliza/agents/run-eliza-agent.ts \
-  --character ./alpha-trader.json \
-  --auto-trade \
-  --max-trade 150
+ --character ./alpha-trader.json \
+ --auto-trade \
+ --max-trade 150
 ```
 
 ## Plugin Components
@@ -156,49 +149,49 @@ Actions are commands the agent can execute:
 
 ```typescript
 export const BUY_SHARES: Action = {
-  name: 'BUY_SHARES',
-  similes: ['buy shares', 'purchase', 'go long', 'bet yes'],
-  description: 'Buy YES or NO shares in a prediction market',
-  validate: async (runtime, message) => {
-    // Check if agent should buy
-    const hasConfidence = message.content.confidence > 0.6;
-    const hasBalance = await checkBalance(runtime);
-    return hasConfidence && hasBalance;
-  },
-  handler: async (runtime, message, state, options, callback) => {
-    const { marketId, outcome, amount } = options;
-    
-    // Execute trade
-    const result = await babylonClient.buyShares(
-      marketId,
-      outcome,
-      amount
-    );
-    
-    if (result.success) {
-      callback({
-        text: `Bought ${result.shares} shares @ ${result.avgPrice}. Position value: ${result.costBasis}`,
-        action: 'BUY_SHARES'
-      });
-    }
-    
-    return true;
-  },
-  examples: [
-    [
-      {
-        user: '{{user1}}',
-        content: { text: 'Should I buy YES shares in Market #42?' }
-      },
-      {
-        user: '{{agent}}',
-        content: {
-          text: 'Strong BUY signal. Buying 100 points worth of YES shares.',
-          action: 'BUY_SHARES'
-        }
-      }
-    ]
-  ]
+ name: 'BUY_SHARES',
+ similes: ['buy shares', 'purchase', 'go long', 'bet yes'],
+ description: 'Buy YES or NO shares in a prediction market',
+ validate: async (runtime, message) => {
+ // Check if agent should buy
+ const hasConfidence = message.content.confidence > 0.6;
+ const hasBalance = await checkBalance(runtime);
+ return hasConfidence && hasBalance;
+ },
+ handler: async (runtime, message, state, options, callback) => {
+ const { marketId, outcome, amount } = options;
+ 
+ // Execute trade
+ const result = await babylonClient.buyShares(
+ marketId,
+ outcome,
+ amount
+ );
+ 
+ if (result.success) {
+ callback({
+ text: `Bought ${result.shares} shares @ ${result.avgPrice}. Position value: ${result.costBasis}`,
+ action: 'BUY_SHARES'
+ });
+ }
+ 
+ return true;
+ },
+ examples: [
+ [
+ {
+ user: '{{user1}}',
+ content: { text: 'Should I buy YES shares in Market #42?' }
+ },
+ {
+ user: '{{agent}}',
+ content: {
+ text: 'Strong BUY signal. Buying 100 points worth of YES shares.',
+ action: 'BUY_SHARES'
+ }
+ }
+ ]
+ ]
 };
 ```
 
@@ -206,27 +199,27 @@ export const BUY_SHARES: Action = {
 
 ```typescript
 export const SELL_SHARES: Action = {
-  name: 'SELL_SHARES',
-  similes: ['sell shares', 'exit position', 'take profit', 'close'],
-  description: 'Sell shares to exit a position',
-  validate: async (runtime, message) => {
-    const hasPosition = await checkPosition(runtime, message.marketId);
-    return hasPosition;
-  },
-  handler: async (runtime, message, state, options) => {
-    const { positionId, shares } = options;
-    
-    const result = await babylonClient.sellShares(
-      positionId,
-      shares
-    );
-    
-    if (result.success) {
-      return {
-        text: `Sold ${shares} shares. P&L: ${result.realizedPnL}. New balance: ${result.newBalance}`
-      };
-    }
-  }
+ name: 'SELL_SHARES',
+ similes: ['sell shares', 'exit position', 'take profit', 'close'],
+ description: 'Sell shares to exit a position',
+ validate: async (runtime, message) => {
+ const hasPosition = await checkPosition(runtime, message.marketId);
+ return hasPosition;
+ },
+ handler: async (runtime, message, state, options) => {
+ const { positionId, shares } = options;
+ 
+ const result = await babylonClient.sellShares(
+ positionId,
+ shares
+ );
+ 
+ if (result.success) {
+ return {
+ text: `Sold ${shares} shares. P&L: ${result.realizedPnL}. New balance: ${result.newBalance}`
+ };
+ }
+ }
 };
 ```
 
@@ -238,39 +231,39 @@ Evaluators analyze situations and generate signals:
 
 ```typescript
 export const MARKET_ANALYSIS: Evaluator = {
-  name: 'MARKET_ANALYSIS',
-  description: 'Analyze markets and generate trading signals',
-  similes: ['analyze market', 'check opportunities', 'scan markets'],
-  validate: async (runtime, message) => true,
-  handler: async (runtime, message, state) => {
-    // Get active markets
-    const markets = await babylonClient.getActiveMarkets();
-    
-    // Analyze each market
-    const opportunities = [];
-    
-    for (const market of markets) {
-      const signal = await analyzeMarket(market, runtime);
-      
-      if (signal.confidence > runtime.getSetting('minConfidence')) {
-        opportunities.push({
-          market,
-          signal,
-          priority: signal.confidence
-        });
-      }
-    }
-    
-    // Sort by confidence
-    opportunities.sort((a, b) => b.priority - a.priority);
-    
-    return {
-      opportunities,
-      topPick: opportunities[0],
-      shouldTrade: opportunities.length > 0
-    };
-  },
-  examples: []
+ name: 'MARKET_ANALYSIS',
+ description: 'Analyze markets and generate trading signals',
+ similes: ['analyze market', 'check opportunities', 'scan markets'],
+ validate: async (runtime, message) => true,
+ handler: async (runtime, message, state) => {
+ // Get active markets
+ const markets = await babylonClient.getActiveMarkets();
+ 
+ // Analyze each market
+ const opportunities = [];
+ 
+ for (const market of markets) {
+ const signal = await analyzeMarket(market, runtime);
+ 
+ if (signal.confidence > runtime.getSetting('minConfidence')) {
+ opportunities.push({
+ market,
+ signal,
+ priority: signal.confidence
+ });
+ }
+ }
+ 
+ // Sort by confidence
+ opportunities.sort((a, b) => b.priority - a.priority);
+ 
+ return {
+ opportunities,
+ topPick: opportunities[0],
+ shouldTrade: opportunities.length > 0
+ };
+ },
+ examples: []
 };
 ```
 
@@ -282,20 +275,20 @@ Providers inject context into agent memory:
 
 ```typescript
 export const marketDataProvider: Provider = {
-  get: async (runtime, message, state) => {
-    const markets = await babylonClient.getActiveMarkets();
-    
-    // Format for agent context
-    const marketData = markets.map(m => ({
-      id: m.id,
-      question: m.text,
-      yesPrice: m.yesPrice,
-      noPrice: m.noPrice,
-      volume24h: m.volume24h,
-      resolutionDate: m.resolutionDate
-    }));
-    
-    return `
+ get: async (runtime, message, state) => {
+ const markets = await babylonClient.getActiveMarkets();
+ 
+ // Format for agent context
+ const marketData = markets.map(m => ({
+ id: m.id,
+ question: m.text,
+ yesPrice: m.yesPrice,
+ noPrice: m.noPrice,
+ volume24h: m.volume24h,
+ resolutionDate: m.resolutionDate
+ }));
+ 
+ return `
 === ACTIVE PREDICTION MARKETS ===
 
 ${marketData.map(m => `
@@ -308,7 +301,7 @@ Resolves: ${m.resolutionDate}
 
 Analyze these markets and identify trading opportunities.
 `;
-  }
+ }
 };
 ```
 
@@ -316,13 +309,13 @@ Analyze these markets and identify trading opportunities.
 
 ```typescript
 export const positionSummaryProvider: Provider = {
-  get: async (runtime, message, state) => {
-    const positions = await babylonClient.getPositions();
-    
-    // Calculate total P&L
-    const totalPnL = positions.reduce((sum, p) => sum + p.unrealizedPnL, 0);
-    
-    return `
+ get: async (runtime, message, state) => {
+ const positions = await babylonClient.getPositions();
+ 
+ // Calculate total P&L
+ const totalPnL = positions.reduce((sum, p) => sum + p.unrealizedPnL, 0);
+ 
+ return `
 === YOUR OPEN POSITIONS ===
 
 ${positions.map(p => `
@@ -338,7 +331,7 @@ Total Positions: ${positions.length}
 
 Review your positions and consider profit-taking or stop-losses.
 `;
-  }
+ }
 };
 ```
 
@@ -350,65 +343,65 @@ Background services that run continuously:
 
 ```typescript
 export class BabylonTradingService extends Service {
-  static serviceType = ServiceType.BABYLON_TRADING;
-  
-  private marketCheckInterval: NodeJS.Timeout | null = null;
-  private portfolioReviewInterval: NodeJS.Timeout | null = null;
-  
-  async initialize(runtime: IAgentRuntime) {
-    await super.initialize(runtime);
-    
-    // Check markets every 60 seconds
-    this.marketCheckInterval = setInterval(
-      () => this.checkMarkets(runtime),
-      60000
-    );
-    
-    // Review portfolio every 5 minutes
-    this.portfolioReviewInterval = setInterval(
-      () => this.reviewPortfolio(runtime),
-      300000
-    );
-    
-    console.log('Babylon trading service initialized');
-  }
-  
-  async cleanup() {
-    if (this.marketCheckInterval) {
-      clearInterval(this.marketCheckInterval);
-    }
-    if (this.portfolioReviewInterval) {
-      clearInterval(this.portfolioReviewInterval);
-    }
-  }
-  
-  private async checkMarkets(runtime: IAgentRuntime) {
-    const markets = await babylonClient.getActiveMarkets();
-    
-    for (const market of markets) {
-      const signal = await this.analyzeMarket(market, runtime);
-      
-      if (signal.confidence > 0.7 && signal.action === 'BUY') {
-        await this.executeTrade(market, signal, runtime);
-      }
-    }
-  }
-  
-  private async reviewPortfolio(runtime: IAgentRuntime) {
-    const positions = await babylonClient.getPositions();
-    
-    for (const position of positions) {
-      // Check stop loss
-      if (position.unrealizedPnL < -15) {
-        await this.closePosition(position, 'STOP_LOSS', runtime);
-      }
-      
-      // Check take profit
-      if (position.unrealizedPnL > 30) {
-        await this.closePosition(position, 'TAKE_PROFIT', runtime);
-      }
-    }
-  }
+ static serviceType = ServiceType.BABYLON_TRADING;
+ 
+ private marketCheckInterval: NodeJS.Timeout | null = null;
+ private portfolioReviewInterval: NodeJS.Timeout | null = null;
+ 
+ async initialize(runtime: IAgentRuntime) {
+ await super.initialize(runtime);
+ 
+ // Check markets every 60 seconds
+ this.marketCheckInterval = setInterval(
+ () => this.checkMarkets(runtime),
+ 60000
+ );
+ 
+ // Review portfolio every 5 minutes
+ this.portfolioReviewInterval = setInterval(
+ () => this.reviewPortfolio(runtime),
+ 300000
+ );
+ 
+ console.log('Babylon trading service initialized');
+ }
+ 
+ async cleanup() {
+ if (this.marketCheckInterval) {
+ clearInterval(this.marketCheckInterval);
+ }
+ if (this.portfolioReviewInterval) {
+ clearInterval(this.portfolioReviewInterval);
+ }
+ }
+ 
+ private async checkMarkets(runtime: IAgentRuntime) {
+ const markets = await babylonClient.getActiveMarkets();
+ 
+ for (const market of markets) {
+ const signal = await this.analyzeMarket(market, runtime);
+ 
+ if (signal.confidence > 0.7 && signal.action === 'BUY') {
+ await this.executeTrade(market, signal, runtime);
+ }
+ }
+ }
+ 
+ private async reviewPortfolio(runtime: IAgentRuntime) {
+ const positions = await babylonClient.getPositions();
+ 
+ for (const position of positions) {
+ // Check stop loss
+ if (position.unrealizedPnL < -15) {
+ await this.closePosition(position, 'STOP_LOSS', runtime);
+ }
+ 
+ // Check take profit
+ if (position.unrealizedPnL > 30) {
+ await this.closePosition(position, 'TAKE_PROFIT', runtime);
+ }
+ }
+ }
 }
 ```
 
@@ -418,28 +411,28 @@ export class BabylonTradingService extends Service {
 
 ```json
 {
-  "settings": {
-    "babylon": {
-      "strategies": ["momentum", "mean-reversion", "sentiment"],
-      "strategyWeights": {
-        "momentum": 0.5,
-        "mean-reversion": 0.3,
-        "sentiment": 0.2
-      },
-      "riskTolerance": 0.6,
-      "maxTradeSize": 150,
-      "maxPositionSize": 800,
-      "maxPositions": 10,
-      "minConfidence": 0.65,
-      "stopLossPercent": 0.15,
-      "takeProfitPercent": 0.25,
-      "autoTrading": true,
-      "tradingPairs": ["all"],
-      "excludeMarkets": [],
-      "onlyHighVolume": true,
-      "minLiquidity": 1000
-    }
-  }
+ "settings": {
+ "babylon": {
+ "strategies": ["momentum", "mean-reversion", "sentiment"],
+ "strategyWeights": {
+ "momentum": 0.5,
+ "mean-reversion": 0.3,
+ "sentiment": 0.2
+ },
+ "riskTolerance": 0.6,
+ "maxTradeSize": 150,
+ "maxPositionSize": 800,
+ "maxPositions": 10,
+ "minConfidence": 0.65,
+ "stopLossPercent": 0.15,
+ "takeProfitPercent": 0.25,
+ "autoTrading": true,
+ "tradingPairs": ["all"],
+ "excludeMarkets": [],
+ "onlyHighVolume": true,
+ "minLiquidity": 1000
+ }
+ }
 }
 ```
 
@@ -447,18 +440,18 @@ export class BabylonTradingService extends Service {
 
 ```json
 {
-  "settings": {
-    "babylon": {
-      "riskManagement": {
-        "maxDrawdown": 0.20,        // Max 20% account drawdown
-        "positionSizeMethod": "kelly",  // "fixed" | "kelly" | "percent"
-        "kellyFraction": 0.25,      // Use 25% of Kelly
-        "maxLeverage": 1,           // No leverage for predictions
-        "diversificationMin": 3,    // Min 3 positions
-        "correlationLimit": 0.7     // Max correlation between positions
-      }
-    }
-  }
+ "settings": {
+ "babylon": {
+ "riskManagement": {
+ "maxDrawdown": 0.20, // Max 20% account drawdown
+ "positionSizeMethod": "kelly", // "fixed" | "kelly" | "percent"
+ "kellyFraction": 0.25, // Use 25% of Kelly
+ "maxLeverage": 1, // No leverage for predictions
+ "diversificationMin": 3, // Min 3 positions
+ "correlationLimit": 0.7 // Max correlation between positions
+ }
+ }
+ }
 }
 ```
 
@@ -468,31 +461,31 @@ export class BabylonTradingService extends Service {
 
 ```typescript
 class BabylonApiClient {
-  // Markets
-  async getActiveMarkets(): Promise<Market[]>
-  async getMarketById(marketId: string): Promise<Market>
-  async getMarketHistory(marketId: string): Promise<MarketHistory>
-  
-  // Trading
-  async buyShares(
-    marketId: string,
-    outcome: 'YES' | 'NO',
-    amount: number
-  ): Promise<TradeResult>
-  
-  async sellShares(
-    positionId: string,
-    shares: number
-  ): Promise<TradeResult>
-  
-  // Portfolio
-  async getWalletBalance(): Promise<WalletBalance>
-  async getPositions(): Promise<Position[]>
-  async getTransactionHistory(): Promise<Transaction[]>
-  
-  // Analysis
-  async getMarketAnalysis(marketId: string): Promise<Analysis>
-  async getPriceHistory(marketId: string): Promise<number[]>
+ // Markets
+ async getActiveMarkets(): Promise<Market[]>
+ async getMarketById(marketId: string): Promise<Market>
+ async getMarketHistory(marketId: string): Promise<MarketHistory>
+ 
+ // Trading
+ async buyShares(
+ marketId: string,
+ outcome: 'YES' | 'NO',
+ amount: number
+ ): Promise<TradeResult>
+ 
+ async sellShares(
+ positionId: string,
+ shares: number
+ ): Promise<TradeResult>
+ 
+ // Portfolio
+ async getWalletBalance(): Promise<WalletBalance>
+ async getPositions(): Promise<Position[]>
+ async getTransactionHistory(): Promise<Transaction[]>
+ 
+ // Analysis
+ async getMarketAnalysis(marketId: string): Promise<Analysis>
+ async getPriceHistory(marketId: string): Promise<number[]>
 }
 ```
 
@@ -500,16 +493,16 @@ class BabylonApiClient {
 
 ```typescript
 interface BabylonPluginConfig {
-  apiUrl: string;
-  agentId: string;
-  agentSecret: string;
-  tradingLimits: {
-    maxTradeSize: number;
-    maxPositionSize: number;
-    minConfidence: number;
-  };
-  strategies: string[];
-  riskTolerance: number;
+ apiUrl: string;
+ agentId: string;
+ agentSecret: string;
+ tradingLimits: {
+ maxTradeSize: number;
+ maxPositionSize: number;
+ minConfidence: number;
+ };
+ strategies: string[];
+ riskTolerance: number;
 }
 ```
 
@@ -522,59 +515,59 @@ import { AgentRuntime } from '@ai16z/eliza';
 import { predictionMarketsPlugin } from '@babylonai/plugin-babylon';
 
 class MultiStrategyAgent {
-  private runtime: AgentRuntime;
-  private strategies: Map<string, Strategy>;
-  
-  constructor(character: Character) {
-    this.runtime = new AgentRuntime({
-      character,
-      plugins: [predictionMarketsPlugin]
-    });
-    
-    this.strategies = new Map([
-      ['momentum', new MomentumStrategy()],
-      ['mean-reversion', new MeanReversionStrategy()],
-      ['sentiment', new SentimentStrategy()]
-    ]);
-  }
-  
-  async analyzeMarket(market: Market) {
-    const signals = [];
-    
-    // Run all strategies
-    for (const [name, strategy] of this.strategies) {
-      const signal = await strategy.analyze(market);
-      signals.push({ name, ...signal });
-    }
-    
-    // Combine signals with weights
-    const weights = this.character.settings.babylon.strategyWeights;
-    const combinedSignal = this.combineSignals(signals, weights);
-    
-    return combinedSignal;
-  }
-  
-  private combineSignals(signals: any[], weights: any) {
-    let totalConfidence = 0;
-    let totalWeight = 0;
-    let action = 'HOLD';
-    
-    for (const signal of signals) {
-      const weight = weights[signal.name] || 0.33;
-      totalConfidence += signal.confidence * weight;
-      totalWeight += weight;
-      
-      if (signal.action === 'BUY') {
-        action = 'BUY';
-      }
-    }
-    
-    return {
-      action,
-      confidence: totalConfidence / totalWeight,
-      reasoning: signals.map(s => s.reasoning).join('; ')
-    };
-  }
+ private runtime: AgentRuntime;
+ private strategies: Map<string, Strategy>;
+ 
+ constructor(character: Character) {
+ this.runtime = new AgentRuntime({
+ character,
+ plugins: [predictionMarketsPlugin]
+ });
+ 
+ this.strategies = new Map([
+ ['momentum', new MomentumStrategy()],
+ ['mean-reversion', new MeanReversionStrategy()],
+ ['sentiment', new SentimentStrategy()]
+ ]);
+ }
+ 
+ async analyzeMarket(market: Market) {
+ const signals = [];
+ 
+ // Run all strategies
+ for (const [name, strategy] of this.strategies) {
+ const signal = await strategy.analyze(market);
+ signals.push({ name, ...signal });
+ }
+ 
+ // Combine signals with weights
+ const weights = this.character.settings.babylon.strategyWeights;
+ const combinedSignal = this.combineSignals(signals, weights);
+ 
+ return combinedSignal;
+ }
+ 
+ private combineSignals(signals: any[], weights: any) {
+ let totalConfidence = 0;
+ let totalWeight = 0;
+ let action = 'HOLD';
+ 
+ for (const signal of signals) {
+ const weight = weights[signal.name] || 0.33;
+ totalConfidence += signal.confidence * weight;
+ totalWeight += weight;
+ 
+ if (signal.action === 'BUY') {
+ action = 'BUY';
+ }
+ }
+ 
+ return {
+ action,
+ confidence: totalConfidence / totalWeight,
+ reasoning: signals.map(s => s.reasoning).join('; ')
+ };
+ }
 }
 ```
 
@@ -582,40 +575,40 @@ class MultiStrategyAgent {
 
 ```typescript
 class PortfolioManager {
-  private runtime: AgentRuntime;
-  private maxPositions = 10;
-  private targetAllocation = new Map();
-  
-  async rebalance() {
-    const positions = await this.getPositions();
-    const balance = await this.getBalance();
-    
-    // Calculate current allocation
-    const currentAllocation = this.calculateAllocation(positions);
-    
-    // Determine rebalancing trades
-    const trades = this.getRebalancingTrades(
-      currentAllocation,
-      this.targetAllocation
-    );
-    
-    // Execute trades
-    for (const trade of trades) {
-      await this.executeTrade(trade);
-    }
-  }
-  
-  private calculateAllocation(positions: Position[]) {
-    const total = positions.reduce((sum, p) => sum + p.costBasis, 0);
-    
-    const allocation = new Map();
-    for (const position of positions) {
-      const percent = position.costBasis / total;
-      allocation.set(position.marketId, percent);
-    }
-    
-    return allocation;
-  }
+ private runtime: AgentRuntime;
+ private maxPositions = 10;
+ private targetAllocation = new Map();
+ 
+ async rebalance() {
+ const positions = await this.getPositions();
+ const balance = await this.getBalance();
+ 
+ // Calculate current allocation
+ const currentAllocation = this.calculateAllocation(positions);
+ 
+ // Determine rebalancing trades
+ const trades = this.getRebalancingTrades(
+ currentAllocation,
+ this.targetAllocation
+ );
+ 
+ // Execute trades
+ for (const trade of trades) {
+ await this.executeTrade(trade);
+ }
+ }
+ 
+ private calculateAllocation(positions: Position[]) {
+ const total = positions.reduce((sum, p) => sum + p.costBasis, 0);
+ 
+ const allocation = new Map();
+ for (const position of positions) {
+ const percent = position.costBasis / total;
+ allocation.set(position.marketId, percent);
+ }
+ 
+ return allocation;
+ }
 }
 ```
 
@@ -627,36 +620,36 @@ class PortfolioManager {
 import { logger } from '@ai16z/eliza';
 
 class PerformanceTracker {
-  private trades: Trade[] = [];
-  
-  async logTrade(trade: Trade) {
-    this.trades.push(trade);
-    
-    // Calculate metrics
-    const metrics = this.calculateMetrics();
-    
-    logger.info('Trade executed:', {
-      market: trade.marketId,
-      outcome: trade.outcome,
-      amount: trade.amount,
-      confidence: trade.confidence
-    });
-    
-    logger.info('Performance metrics:', metrics);
-  }
-  
-  private calculateMetrics() {
-    const closedTrades = this.trades.filter(t => t.closed);
-    const winners = closedTrades.filter(t => t.pnl > 0);
-    
-    return {
-      totalTrades: this.trades.length,
-      closedTrades: closedTrades.length,
-      winRate: winners.length / closedTrades.length,
-      avgPnL: closedTrades.reduce((sum, t) => sum + t.pnl, 0) / closedTrades.length,
-      totalPnL: closedTrades.reduce((sum, t) => sum + t.pnl, 0)
-    };
-  }
+ private trades: Trade[] = [];
+ 
+ async logTrade(trade: Trade) {
+ this.trades.push(trade);
+ 
+ // Calculate metrics
+ const metrics = this.calculateMetrics();
+ 
+ logger.info('Trade executed:', {
+ market: trade.marketId,
+ outcome: trade.outcome,
+ amount: trade.amount,
+ confidence: trade.confidence
+ });
+ 
+ logger.info('Performance metrics:', metrics);
+ }
+ 
+ private calculateMetrics() {
+ const closedTrades = this.trades.filter(t => t.closed);
+ const winners = closedTrades.filter(t => t.pnl > 0);
+ 
+ return {
+ totalTrades: this.trades.length,
+ closedTrades: closedTrades.length,
+ winRate: winners.length / closedTrades.length,
+ avgPnL: closedTrades.reduce((sum, t) => sum + t.pnl, 0) / closedTrades.length,
+ totalPnL: closedTrades.reduce((sum, t) => sum + t.pnl, 0)
+ };
+ }
 }
 ```
 
@@ -667,15 +660,15 @@ class PerformanceTracker {
 ```typescript
 // test-character.json
 {
-  "name": "TestAgent",
-  "plugins": ["babylon"],
-  "settings": {
-    "babylon": {
-      "autoTrading": false,  // Disable for testing
-      "apiUrl": "http://localhost:3000",
-      "maxTradeSize": 10  // Small size for testing
-    }
-  }
+ "name": "TestAgent",
+ "plugins": ["babylon"],
+ "settings": {
+ "babylon": {
+ "autoTrading": false, // Disable for testing
+ "apiUrl": "http://localhost:3000",
+ "maxTradeSize": 10 // Small size for testing
+ }
+ }
 }
 ```
 
@@ -683,27 +676,27 @@ class PerformanceTracker {
 
 ```typescript
 describe('Babylon Plugin', () => {
-  let runtime: AgentRuntime;
-  
-  beforeEach(() => {
-    runtime = new AgentRuntime({
-      character: testCharacter,
-      plugins: [predictionMarketsPlugin]
-    });
-  });
-  
-  it('should analyze markets', async () => {
-    const markets = await babylonClient.getActiveMarkets();
-    expect(markets.length).toBeGreaterThan(0);
-  });
-  
-  it('should generate trade signal', async () => {
-    const market = await babylonClient.getMarketById('test-market');
-    const signal = await evaluateMarket(market, runtime);
-    
-    expect(signal).toHaveProperty('confidence');
-    expect(signal).toHaveProperty('action');
-  });
+ let runtime: AgentRuntime;
+ 
+ beforeEach(() => {
+ runtime = new AgentRuntime({
+ character: testCharacter,
+ plugins: [predictionMarketsPlugin]
+ });
+ });
+ 
+ it('should analyze markets', async () => {
+ const markets = await babylonClient.getActiveMarkets();
+ expect(markets.length).toBeGreaterThan(0);
+ });
+ 
+ it('should generate trade signal', async () => {
+ const market = await babylonClient.getMarketById('test-market');
+ const signal = await evaluateMarket(market, runtime);
+ 
+ expect(signal).toHaveProperty('confidence');
+ expect(signal).toHaveProperty('action');
+ });
 });
 ```
 
@@ -713,12 +706,12 @@ describe('Babylon Plugin', () => {
 
 ```json
 {
-  "babylon": {
-    "riskTolerance": 0.5,      // Low risk initially
-    "maxTradeSize": 50,        // Small positions
-    "minConfidence": 0.75,     // High confidence required
-    "autoTrading": false       // Manual first, then auto
-  }
+ "babylon": {
+ "riskTolerance": 0.5, // Low risk initially
+ "maxTradeSize": 50, // Small positions
+ "minConfidence": 0.75, // High confidence required
+ "autoTrading": false // Manual first, then auto
+ }
 }
 ```
 

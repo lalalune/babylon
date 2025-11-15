@@ -1,13 +1,13 @@
+import { CHAIN } from '@/constants/chains';
 import db from '@/lib/database-service';
 import { logger } from '@/lib/logger';
 import { getReadyPerpsEngine } from '@/lib/perps-service';
 import { prisma } from '@/lib/prisma';
 import { broadcastToChannel } from '@/lib/sse/event-broadcaster';
-import { createPublicClient, createWalletClient, http, type Address } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { baseSepolia } from 'viem/chains';
-import { keccak256, encodePacked } from 'viem';
 import { PRICE_STORAGE_FACET_ABI } from '@/lib/web3/abis';
+import type { JsonValue } from '@/types/common';
+import { createPublicClient, createWalletClient, encodePacked, http, keccak256 } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 
 export type PriceUpdateSource = 'user_trade' | 'npc_trade' | 'event' | 'system';
 
@@ -16,7 +16,7 @@ export interface PriceUpdateInput {
   newPrice: number;
   source: PriceUpdateSource;
   reason?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, JsonValue>;
 }
 
 export interface AppliedPriceUpdate {
@@ -27,7 +27,7 @@ export interface AppliedPriceUpdate {
   changePercent: number;
   source: PriceUpdateSource;
   reason?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, JsonValue>;
   timestamp: string;
 }
 
@@ -127,7 +127,7 @@ export class PriceUpdateService {
 
       broadcastToChannel('markets', {
         type: 'price_update',
-        updates: appliedUpdates,
+        updates: appliedUpdates as unknown as JsonValue,
       });
 
       logger.info(
@@ -146,9 +146,10 @@ export class PriceUpdateService {
   private static async writePricesToChain(
     updates: AppliedPriceUpdate[]
   ): Promise<void> {
-    const diamondAddress = process.env.NEXT_PUBLIC_DIAMOND_ADDRESS as Address;
+    const { getContractAddresses, getRpcUrl } = await import('@/lib/deployment/addresses');
+    const { diamond: diamondAddress } = getContractAddresses();
     const deployerPrivateKey = process.env.DEPLOYER_PRIVATE_KEY as `0x${string}`;
-    const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL;
+    const rpcUrl = getRpcUrl();
 
     if (!diamondAddress || !deployerPrivateKey || !rpcUrl) {
       logger.debug(
@@ -158,16 +159,23 @@ export class PriceUpdateService {
       );
       return;
     }
+    
+    logger.info('Publishing prices to blockchain', {
+      network: getContractAddresses().network,
+      diamond: diamondAddress,
+      rpcUrl,
+      count: updates.length
+    }, 'PriceUpdateService');
 
     const publicClient = createPublicClient({
-      chain: baseSepolia,
+      chain: CHAIN,
       transport: http(rpcUrl),
     });
 
     const account = privateKeyToAccount(deployerPrivateKey);
     const walletClient = createWalletClient({
       account,
-      chain: baseSepolia,
+      chain: CHAIN,
       transport: http(rpcUrl),
     });
 

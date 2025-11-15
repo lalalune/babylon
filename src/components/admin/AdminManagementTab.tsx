@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/shared/Avatar'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/shared/Skeleton'
+import { logger } from '@/lib/logger'
 
 interface AdminUser {
   id: string
@@ -48,7 +49,7 @@ export function AdminManagementTab() {
       try {
         await fetchAdmins()
       } catch (err) {
-        console.error('Failed to load admins:', err)
+        logger.error('Failed to load admins', { error: err }, 'AdminManagementTab')
         setLoading(false)
         setRefreshing(false)
       }
@@ -90,7 +91,7 @@ export function AdminManagementTab() {
       
       setAvailableUsers(nonAdminUsers)
     } catch (err) {
-      console.error('Failed to search users:', err)
+      logger.error('Failed to search users', { error: err }, 'AdminManagementTab')
       setAvailableUsers([])
     } finally {
       setLoadingUsers(false)

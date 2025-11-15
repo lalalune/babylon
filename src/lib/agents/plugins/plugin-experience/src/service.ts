@@ -44,8 +44,82 @@ export class ExperienceService extends Service {
   }
 
   private async loadExperiences(): Promise<void> {
-    // TODO: Load from knowledge service if available
-    logger.info('[ExperienceService] Initialized');
+    try {
+      // Load experiences from memory/knowledge service
+      // Filter memories by checking content.type after fetching
+      const allMemories = await this.runtime.getMemories({
+        entityId: this.runtime.agentId,
+        count: this.maxExperiences,
+        tableName: 'memories',
+      });
+      
+      // Filter for experience type memories
+      const memories = allMemories.filter(m => m.content.type === 'experience');
+
+      for (const memory of memories) {
+        try {
+          const experienceData = memory.content.data as Partial<Experience> | null;
+          if (experienceData && experienceData.id) {
+            // Memory.createdAt is a number (timestamp) from @elizaos/core
+            const memoryCreatedAt = (typeof memory.createdAt === 'number' ? memory.createdAt : Date.now());
+            
+            // Convert experienceData timestamps to numbers (they should already be numbers, but handle Date objects if present)
+            const toTimestamp = (value: number | Date | undefined, fallback: number): number => {
+              if (value === undefined) return fallback;
+              if (typeof value === 'number') return value;
+              if (value instanceof Date) return value.getTime();
+              return fallback;
+            };
+            
+            const experience: Experience = {
+              id: experienceData.id as UUID,
+              agentId: this.runtime.agentId,
+              type: experienceData.type || ExperienceType.LEARNING,
+              outcome: experienceData.outcome || OutcomeType.NEUTRAL,
+              context: experienceData.context || '',
+              action: experienceData.action || '',
+              result: experienceData.result || '',
+              learning: experienceData.learning || '',
+              domain: experienceData.domain || 'general',
+              tags: experienceData.tags || [],
+              confidence: experienceData.confidence || 0.5,
+              importance: experienceData.importance || 0.5,
+              createdAt: toTimestamp(experienceData.createdAt as number | Date | undefined, memoryCreatedAt),
+              updatedAt: toTimestamp(experienceData.updatedAt as number | Date | undefined, memoryCreatedAt),
+              accessCount: experienceData.accessCount ?? 0,
+              lastAccessedAt: toTimestamp(experienceData.lastAccessedAt as number | Date | undefined, memoryCreatedAt),
+              embedding: experienceData.embedding,
+              relatedExperiences: experienceData.relatedExperiences,
+              supersedes: experienceData.supersedes,
+              previousBelief: experienceData.previousBelief,
+              correctedBelief: experienceData.correctedBelief,
+            };
+
+            this.experiences.set(experience.id, experience);
+
+            // Update indexes
+            if (!this.experiencesByDomain.has(experience.domain)) {
+              this.experiencesByDomain.set(experience.domain, new Set());
+            }
+            this.experiencesByDomain.get(experience.domain)!.add(experience.id);
+
+            if (!this.experiencesByType.has(experience.type)) {
+              this.experiencesByType.set(experience.type, new Set());
+            }
+            this.experiencesByType.get(experience.type)!.add(experience.id);
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          logger.warn(`[ExperienceService] Failed to load experience from memory ${memory.id}`, errorMessage);
+        }
+      }
+
+      logger.info(`[ExperienceService] Loaded ${this.experiences.size} experiences from memory`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logger.warn('[ExperienceService] Failed to load experiences from memory', errorMessage);
+      logger.info('[ExperienceService] Initialized with empty experiences');
+    }
   }
 
   async recordExperience(experienceData: Partial<Experience>): Promise<Experience> {
@@ -93,6 +167,9 @@ export class ExperienceService extends Service {
     }
     this.experiencesByType.get(experience.type)!.add(experience.id);
 
+    // Save to memory/knowledge service
+    await this.saveExperienceToMemory(experience);
+
     // Check for contradictions and add relationships
     const allExperiences = Array.from(this.experiences.values());
     const contradictions = this.relationshipManager.findContradictions(experience, allExperiences);
@@ -121,6 +198,54 @@ export class ExperienceService extends Service {
     logger.info(`[ExperienceService] Recorded experience: ${experience.id} (${experience.type})`);
 
     return experience;
+  }
+
+  /**
+   * Save experience to memory/knowledge service
+   */
+  private async saveExperienceToMemory(experience: Experience): Promise<void> {
+    try {
+      const memory = {
+        id: experience.id,
+        entityId: this.runtime.agentId, // Use agentId as entityId for experiences
+        agentId: this.runtime.agentId,
+        roomId: this.runtime.agentId, // Use agentId as roomId for experiences
+        content: {
+          text: `Experience: ${experience.learning}`,
+          type: 'experience',
+          data: {
+            id: experience.id,
+            agentId: experience.agentId,
+            type: experience.type,
+            outcome: experience.outcome,
+            context: experience.context,
+            action: experience.action,
+            result: experience.result,
+            learning: experience.learning,
+            domain: experience.domain,
+            tags: experience.tags,
+            confidence: experience.confidence,
+            importance: experience.importance,
+            createdAt: experience.createdAt,
+            updatedAt: experience.updatedAt,
+            accessCount: experience.accessCount,
+            lastAccessedAt: experience.lastAccessedAt,
+            embedding: experience.embedding,
+            relatedExperiences: experience.relatedExperiences,
+            supersedes: experience.supersedes,
+            previousBelief: experience.previousBelief,
+            correctedBelief: experience.correctedBelief,
+          },
+        },
+        createdAt: experience.createdAt,
+      };
+
+      await this.runtime.createMemory(memory, 'experiences', true);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logger.warn(`[ExperienceService] Failed to save experience ${experience.id} to memory`, errorMessage);
+      // Don't throw - memory save failure shouldn't block experience recording
+    }
   }
 
   async queryExperiences(query: ExperienceQuery): Promise<Experience[]> {
@@ -518,6 +643,23 @@ export class ExperienceService extends Service {
 
   async stop(): Promise<void> {
     logger.info('[ExperienceService] Stopping...');
-    // TODO: Save experiences to database
+    
+    // Save all experiences to memory
+    const experiencesToSave = Array.from(this.experiences.values());
+    let savedCount = 0;
+    let failedCount = 0;
+
+    for (const experience of experiencesToSave) {
+      try {
+        await this.saveExperienceToMemory(experience);
+        savedCount++;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          logger.warn(`[ExperienceService] Failed to save experience ${experience.id} during stop`, errorMessage);
+          failedCount++;
+        }
+    }
+
+    logger.info(`[ExperienceService] Saved ${savedCount} experiences, ${failedCount} failed`);
   }
 }

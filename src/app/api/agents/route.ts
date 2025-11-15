@@ -27,7 +27,7 @@
  * @param {string} personality - Personality traits (optional)
  * @param {string} tradingStrategy - Trading strategy description (optional)
  * @param {number} initialDeposit - Initial points deposit (default: 0)
- * @param {string} modelTier - AI model tier: 'free' | 'pro' (default: 'free')
+ * @param {string} modelTier - AI model tier: 'lite' | 'standard' | 'pro' (default: 'lite')
  * 
  * @returns {object} Created agent with ID and configuration
  * @property {boolean} success - Operation success status
@@ -78,19 +78,19 @@ export async function POST(req: NextRequest) {
   const user = await authenticateUser(req)
   
   const body = await req.json()
-  const { name, description, profileImageUrl, system, bio, personality, tradingStrategy, initialDeposit, modelTier } = body
+  const { name, description, profileImageUrl, coverImageUrl, system, bio, personality, tradingStrategy, initialDeposit } = body
 
   const agentUser = await agentService.createAgent({
     userId: user.id,
     name,
     description,
     profileImageUrl,
+    coverImageUrl,
     system,
     bio,
     personality,
     tradingStrategy,
     initialDeposit: initialDeposit || 0,
-    modelTier: modelTier || 'free'
   })
 
   logger.info(`Agent user created via API: ${agentUser.id}`, undefined, 'AgentsAPI')

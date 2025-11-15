@@ -34,19 +34,25 @@ export function useChatMessages(chatId: string | null) {
   const loadMessages = useCallback(async (chatId: string) => {
     // Skip if already loaded
     if (hasLoadedRef.current.has(chatId)) {
-      console.log(`[useChatMessages] Skipping reload for ${chatId} - already loaded`);
+      logger.debug(`Skipping reload for ${chatId} - already loaded`, { chatId }, 'useChatMessages');
       setIsLoading(false);
       return;
     }
 
-    console.log(`[useChatMessages] Loading initial messages for chat ${chatId}`);
+    logger.debug(`Loading initial messages for chat ${chatId}`, { chatId }, 'useChatMessages');
     setIsLoading(true);
     const response = await fetch(`/api/chats/${chatId}?limit=50`);
-    console.log(`[useChatMessages] Response status: ${response.status}`);
+    logger.debug(`Response status: ${response.status}`, { chatId, status: response.status }, 'useChatMessages');
     
     if (response.ok) {
-      const data = await response.json();
-      console.log(`[useChatMessages] Response data:`, data);
+      let data;
+      try {
+        data = await response.json();
+      } catch (error) {
+        logger.error('Failed to parse response JSON', { error, chatId }, 'useChatMessages');
+        setIsLoading(false);
+        return;
+      }
       if (data.messages) {
         const formattedMessages: ChatMessage[] = data.messages.map((msg: {
           id: string;
@@ -60,7 +66,6 @@ export function useChatMessages(chatId: string | null) {
           senderId: msg.senderId,
           createdAt: typeof msg.createdAt === 'string' ? msg.createdAt : msg.createdAt.toISOString(),
         }));
-        console.log(`[useChatMessages] Loaded ${formattedMessages.length} messages, hasMore:`, data.pagination?.hasMore);
         setMessages(formattedMessages);
         setHasMore(data.pagination?.hasMore || false);
         setNextCursor(data.pagination?.nextCursor || null);
@@ -73,7 +78,7 @@ export function useChatMessages(chatId: string | null) {
       }
     } else {
       const errorData = await response.json().catch(() => null);
-      console.error(`[useChatMessages] Failed to load messages:`, errorData);
+      logger.error(`Failed to load messages`, { chatId, errorData, status: response.status }, 'useChatMessages');
     }
     setIsLoading(false);
   }, []);
@@ -81,18 +86,24 @@ export function useChatMessages(chatId: string | null) {
   // Load more older messages (pagination)
   const loadMore = useCallback(async () => {
     if (!chatId || !nextCursor || isLoadingMore || !hasMore) {
-      console.log(`[useChatMessages] Skip loadMore:`, { chatId, nextCursor, isLoadingMore, hasMore });
+      logger.debug(`Skip loadMore`, { chatId, nextCursor, isLoadingMore, hasMore }, 'useChatMessages');
       return;
     }
 
-    console.log(`[useChatMessages] Loading more messages with cursor: ${nextCursor}`);
+    logger.debug(`Loading more messages with cursor: ${nextCursor}`, { chatId, cursor: nextCursor }, 'useChatMessages');
     setIsLoadingMore(true);
     
     const response = await fetch(`/api/chats/${chatId}?cursor=${nextCursor}&limit=50`);
     
     if (response.ok) {
-      const data = await response.json();
-      console.log(`[useChatMessages] Loaded ${data.messages?.length} more messages`);
+      let data;
+      try {
+        data = await response.json();
+      } catch (error) {
+        logger.error('Failed to parse response JSON', { error, chatId, cursor: nextCursor }, 'useChatMessages');
+        setIsLoadingMore(false);
+        return;
+      }
       
       if (data.messages && data.messages.length > 0) {
         const formattedMessages: ChatMessage[] = data.messages.map((msg: {
@@ -120,7 +131,7 @@ export function useChatMessages(chatId: string | null) {
         }, 'useChatMessages');
       }
     } else {
-      console.error(`[useChatMessages] Failed to load more messages:`, response.statusText);
+      logger.error(`Failed to load more messages`, { chatId, status: response.status, statusText: response.statusText }, 'useChatMessages');
     }
     
     setIsLoadingMore(false);

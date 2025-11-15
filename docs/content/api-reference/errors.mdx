@@ -4,18 +4,37 @@ Complete guide to handling errors in the Babylon API.
 
 ## Error Response Format
 
-All errors follow a consistent format:
+All errors follow a consistent format. Simple errors return:
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "Human-readable error message",
-    "details": {
-      // Additional context (optional)
-    }
-  }
+ "error": "Human-readable error message"
+}
+```
+
+Structured errors (BabylonError instances) return:
+
+```json
+{
+ "error": "Human-readable error message",
+ "code": "ERROR_CODE",
+ "details": {
+   // Additional context (optional, development only)
+ }
+}
+```
+
+Validation errors return:
+
+```json
+{
+ "error": "Validation failed",
+ "details": [
+   {
+     "field": "amount",
+     "message": "Expected number, received string"
+   }
+ ]
 }
 ```
 
@@ -36,152 +55,132 @@ All errors follow a consistent format:
 
 ## Error Codes
 
-### Authentication Errors (1xxx)
+### Authentication Errors
 
 | Code | HTTP | Description |
 |------|------|-------------|
-| `UNAUTHORIZED` | 401 | Authentication required |
-| `INVALID_TOKEN` | 401 | Token expired or invalid |
+| `AUTH_FAILED` | 401 | Authentication required or failed |
+| `AUTH_NO_TOKEN` | 401 | Missing authentication token |
+| `AUTH_INVALID_TOKEN` | 401 | Token expired or invalid |
+| `AUTH_EXPIRED_TOKEN` | 401 | Token has expired |
+| `AUTH_INVALID_CREDENTIALS` | 401 | Invalid credentials |
 | `FORBIDDEN` | 403 | Insufficient permissions |
-| `NOT_ADMIN` | 403 | Admin access required |
-| `INVALID_SIGNATURE` | 401 | Signature verification failed |
+| `FORBIDDEN` | 403 | Admin access required |
 
 **Example**:
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "UNAUTHORIZED",
-    "message": "Authentication required"
-  }
+ "error": "Authentication required"
 }
 ```
 
-### Validation Errors (2xxx)
-
-| Code | HTTP | Description |
-|------|------|-------------|
-| `INVALID_INPUT` | 400 | Invalid request data |
-| `MISSING_FIELD` | 400 | Required field missing |
-| `INVALID_FORMAT` | 400 | Data format incorrect |
-| `OUT_OF_RANGE` | 400 | Value out of acceptable range |
-
-**Example**:
+Or with code (development only):
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "INVALID_INPUT",
-    "message": "Invalid trade amount",
-    "details": {
-      "field": "amount",
-      "value": -100,
-      "constraint": "Must be positive"
-    }
-  }
+ "error": "Invalid or expired authentication token",
+ "code": "AUTH_FAILED"
 }
 ```
 
-### Resource Errors (3xxx)
+### Validation Errors
 
 | Code | HTTP | Description |
 |------|------|-------------|
-| `USER_NOT_FOUND` | 404 | User doesn't exist |
-| `MARKET_NOT_FOUND` | 404 | Market doesn't exist |
-| `POST_NOT_FOUND` | 404 | Post doesn't exist |
-| `POSITION_NOT_FOUND` | 404 | Position doesn't exist |
-| `ALREADY_EXISTS` | 409 | Resource already exists |
-| `USERNAME_TAKEN` | 409 | Username in use |
+| `VALIDATION_ERROR` | 400 | Validation failed |
+| `BAD_REQUEST` | 400 | Invalid request data |
 
 **Example**:
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "MARKET_NOT_FOUND",
-    "message": "Market not found",
-    "details": {
-      "marketId": "market-999"
-    }
-  }
+ "error": "Validation failed",
+ "details": [
+   {
+     "field": "amount",
+     "message": "Expected number, received string"
+   },
+   {
+     "field": "outcome",
+     "message": "Invalid enum value. Expected 'YES' | 'NO'"
+   }
+ ]
 }
 ```
 
-### Trading Errors (4xxx)
+### Resource Errors
 
 | Code | HTTP | Description |
 |------|------|-------------|
-| `INSUFFICIENT_BALANCE` | 400 | Not enough funds |
-| `INVALID_TRADE_SIZE` | 400 | Trade size invalid |
-| `MARKET_RESOLVED` | 400 | Market already resolved |
-| `POSITION_NOT_FOUND` | 404 | Position doesn't exist |
-| `LIQUIDATION_PRICE_HIT` | 400 | Position liquidated |
-| `MAX_LEVERAGE_EXCEEDED` | 400 | Leverage too high |
+| `NOT_FOUND` | 404 | Resource doesn't exist |
+| `CONFLICT` | 409 | Resource conflict (e.g., duplicate) |
 
 **Example**:
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "INSUFFICIENT_BALANCE",
-    "message": "Insufficient balance for trade",
-    "details": {
-      "required": 100,
-      "available": 50,
-      "shortfall": 50
-    }
-  }
+ "error": "Market not found: market-999",
+ "code": "NOT_FOUND"
 }
 ```
 
-### Rate Limit Errors (5xxx)
+Or for conflicts:
+```json
+{
+ "error": "Duplicate entry for field(s): username",
+ "fields": ["username"]
+}
+```
+
+### Trading Errors
 
 | Code | HTTP | Description |
 |------|------|-------------|
-| `RATE_LIMIT_EXCEEDED` | 429 | Too many requests |
-| `DAILY_LIMIT_EXCEEDED` | 429 | Daily quota exceeded |
+| `INSUFFICIENT_FUNDS` | 400 | Not enough funds |
+| `TRADING_ERROR` | 400 | Trading operation failed |
+| `POSITION_ERROR` | 400 | Position operation failed |
+| `NOT_FOUND` | 404 | Position doesn't exist |
 
 **Example**:
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "RATE_LIMIT_EXCEEDED",
-    "message": "Rate limit exceeded",
-    "details": {
-      "limit": 100,
-      "window": "60s",
-      "retryAfter": 45
-    }
-  }
+ "error": "Insufficient funds. Required: 100, Available: 50",
+ "code": "INSUFFICIENT_FUNDS"
+}
+```
+
+### Rate Limit Errors
+
+| Code | HTTP | Description |
+|------|------|-------------|
+| `RATE_LIMIT` | 429 | Too many requests |
+
+**Example**:
+```json
+{
+ "error": "Rate limit exceeded",
+ "code": "RATE_LIMIT"
 }
 ```
 
 **Headers**:
 ```http
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 0
-X-RateLimit-Reset: 1699887645
 Retry-After: 45
 ```
 
-### Social Errors (6xxx)
+### Social Errors
 
 | Code | HTTP | Description |
 |------|------|-------------|
-| `CANNOT_FOLLOW_SELF` | 400 | Cannot follow yourself |
-| `ALREADY_FOLLOWING` | 409 | Already following user |
-| `NOT_FOLLOWING` | 404 | Not following user |
-| `COMMENT_TOO_SHORT` | 400 | Comment below minimum length |
-| `SPAM_DETECTED` | 400 | Content flagged as spam |
+| `BAD_REQUEST` | 400 | Invalid social operation |
+| `CONFLICT` | 409 | Already following/blocked/etc |
+| `NOT_FOUND` | 404 | Resource not found |
 
-### Server Errors (9xxx)
+### Server Errors
 
 | Code | HTTP | Description |
 |------|------|-------------|
 | `INTERNAL_ERROR` | 500 | Internal server error |
 | `DATABASE_ERROR` | 500 | Database operation failed |
 | `EXTERNAL_SERVICE_ERROR` | 503 | External service unavailable |
+| `SERVICE_UNAVAILABLE` | 503 | Service temporarily down |
 
 ---
 
@@ -190,46 +189,49 @@ Retry-After: 45
 ### TypeScript/JavaScript
 
 ```typescript
-async function buyShares(marketId: string, outcome: string, amount: number) {
-  try {
-    const response = await fetch(`/api/markets/predictions/${marketId}/buy`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ outcome, amount })
-    });
-    
-    const data = await response.json();
-    
-    if (!data.success) {
-      // Handle error
-      switch (data.error.code) {
-        case 'INSUFFICIENT_BALANCE':
-          alert(`Not enough funds. Need ${data.error.details.required}`);
-          break;
-        case 'MARKET_NOT_FOUND':
-          alert('Market not found');
-          break;
-        case 'RATE_LIMIT_EXCEEDED':
-          const retryAfter = data.error.details.retryAfter;
-          alert(`Rate limited. Try again in ${retryAfter} seconds`);
-          setTimeout(() => buyShares(marketId, outcome, amount), retryAfter * 1000);
-          break;
-        default:
-          alert(`Error: ${data.error.message}`);
-      }
-      return null;
-    }
-    
-    return data;
-  } catch (error) {
-    // Network error
-    console.error('Network error:', error);
-    alert('Network error. Please check your connection.');
-    return null;
-  }
+async function buyShares(marketId: string, side: 'yes' | 'no', amount: number) {
+ try {
+   const response = await fetch(`/api/markets/predictions/${marketId}/buy`, {
+     method: 'POST',
+     headers: {
+       'Authorization': `Bearer ${token}`,
+       'Content-Type': 'application/json'
+     },
+     body: JSON.stringify({ side, amount })
+   });
+ 
+   const data = await response.json();
+ 
+   // Check for error response
+   if (data.error) {
+     // Handle error
+     const errorCode = data.code || 'UNKNOWN_ERROR';
+     
+     switch (errorCode) {
+       case 'INSUFFICIENT_FUNDS':
+         alert(`Not enough funds: ${data.error}`);
+         break;
+       case 'NOT_FOUND':
+         alert('Market not found');
+         break;
+       case 'RATE_LIMIT':
+         const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
+         alert(`Rate limited. Try again in ${retryAfter} seconds`);
+         setTimeout(() => buyShares(marketId, side, amount), retryAfter * 1000);
+         break;
+       default:
+         alert(`Error: ${data.error}`);
+     }
+     return null;
+   }
+ 
+   return data;
+ } catch (error) {
+   // Network error
+   console.error('Network error:', error);
+   alert('Network error. Please check your connection.');
+   return null;
+ }
 }
 ```
 
@@ -239,46 +241,46 @@ async function buyShares(marketId: string, outcome: string, amount: number) {
 import { useState } from 'react';
 
 export function useAPICall<T>(
-  apiCall: () => Promise<T>
+ apiCall: () => Promise<T>
 ) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<T | null>(null);
-  
-  const execute = async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const result = await apiCall();
-      setData(result);
-      return result;
-    } catch (err: any) {
-      const errorMessage = err.error?.message || err.message || 'Unknown error';
-      setError(errorMessage);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  return { execute, loading, error, data };
+ const [loading, setLoading] = useState(false);
+ const [error, setError] = useState<string | null>(null);
+ const [data, setData] = useState<T | null>(null);
+ 
+ const execute = async () => {
+ setLoading(true);
+ setError(null);
+ 
+ try {
+ const result = await apiCall();
+ setData(result);
+ return result;
+ } catch (err: any) {
+ const errorMessage = err.error?.message || err.message || 'Unknown error';
+ setError(errorMessage);
+ throw err;
+ } finally {
+ setLoading(false);
+ }
+ };
+ 
+ return { execute, loading, error, data };
 }
 
 // Usage
 function BuySharesButton() {
-  const { execute, loading, error } = useAPICall(
-    () => buyShares('market-123', 'YES', 100)
-  );
-  
-  return (
-    <div>
-      <button onClick={execute} disabled={loading}>
-        {loading ? 'Buying...' : 'Buy Shares'}
-      </button>
-      {error && <div className="error">{error}</div>}
-    </div>
-  );
+ const { execute, loading, error } = useAPICall(
+ () => buyShares('market-123', 'YES', 100)
+ );
+ 
+ return (
+ <div>
+ <button onClick={execute} disabled={loading}>
+ {loading ? 'Buying...' : 'Buy Shares'}
+ </button>
+ {error && <div className="error">{error}</div>}
+ </div>
+ );
 }
 ```
 
@@ -288,39 +290,39 @@ function BuySharesButton() {
 import requests
 
 def buy_shares(market_id, outcome, amount, token):
-    url = f'https://babylon.market/api/markets/predictions/{market_id}/buy'
-    headers = {
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json'
-    }
-    data = {
-        'outcome': outcome,
-        'amount': amount
-    }
-    
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        result = response.json()
-        
-        if not result['success']:
-            error = result['error']
-            
-            if error['code'] == 'INSUFFICIENT_BALANCE':
-                print(f"Insufficient balance. Need {error['details']['required']}")
-            elif error['code'] == 'RATE_LIMIT_EXCEEDED':
-                retry_after = error['details']['retryAfter']
-                print(f"Rate limited. Retry in {retry_after}s")
-                time.sleep(retry_after)
-                return buy_shares(market_id, outcome, amount, token)
-            else:
-                print(f"Error: {error['message']}")
-            
-            return None
-        
-        return result
-    except requests.RequestException as e:
-        print(f"Network error: {e}")
-        return None
+ url = f'https://babylon.market/api/markets/predictions/{market_id}/buy'
+ headers = {
+ 'Authorization': f'Bearer {token}',
+ 'Content-Type': 'application/json'
+ }
+ data = {
+ 'outcome': outcome,
+ 'amount': amount
+ }
+ 
+ try:
+ response = requests.post(url, headers=headers, json=data)
+ result = response.json()
+ 
+ if not result['success']:
+ error = result['error']
+ 
+ if error['code'] == 'INSUFFICIENT_BALANCE':
+ print(f"Insufficient balance. Need {error['details']['required']}")
+ elif error['code'] == 'RATE_LIMIT_EXCEEDED':
+ retry_after = error['details']['retryAfter']
+ print(f"Rate limited. Retry in {retry_after}s")
+ time.sleep(retry_after)
+ return buy_shares(market_id, outcome, amount, token)
+ else:
+ print(f"Error: {error['message']}")
+ 
+ return None
+ 
+ return result
+ except requests.RequestException as e:
+ print(f"Network error: {e}")
+ return None
 ```
 
 ## Retry Strategies
@@ -329,33 +331,37 @@ def buy_shares(market_id, outcome, amount, token):
 
 ```typescript
 async function fetchWithRetry(
-  url: string,
-  options: RequestInit,
-  maxRetries = 3
+ url: string,
+ options: RequestInit,
+ maxRetries = 3
 ) {
-  let lastError;
-  
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      const response = await fetch(url, options);
-      const data = await response.json();
-      
-      if (!data.success && data.error.code === 'RATE_LIMIT_EXCEEDED') {
-        // Wait based on retry-after header
-        const retryAfter = data.error.details.retryAfter || Math.pow(2, i);
-        await sleep(retryAfter * 1000);
-        continue;
-      }
-      
-      return data;
-    } catch (error) {
-      lastError = error;
-      // Exponential backoff: 1s, 2s, 4s
-      await sleep(Math.pow(2, i) * 1000);
-    }
-  }
-  
-  throw lastError;
+ let lastError;
+ 
+ for (let i = 0; i < maxRetries; i++) {
+   try {
+     const response = await fetch(url, options);
+     const data = await response.json();
+ 
+     if (data.error && data.code === 'RATE_LIMIT') {
+       // Wait based on retry-after header
+       const retryAfter = parseInt(response.headers.get('Retry-After') || String(Math.pow(2, i)));
+       await sleep(retryAfter * 1000);
+       continue;
+     }
+ 
+     if (data.error) {
+       throw new Error(data.error);
+     }
+ 
+     return data;
+   } catch (error) {
+     lastError = error;
+     // Exponential backoff: 1s, 2s, 4s
+     await sleep(Math.pow(2, i) * 1000);
+   }
+ }
+ 
+ throw lastError;
 }
 ```
 
@@ -363,42 +369,42 @@ async function fetchWithRetry(
 
 ```typescript
 class CircuitBreaker {
-  private failures = 0;
-  private lastFailure = 0;
-  private state: 'CLOSED' | 'OPEN' | 'HALF_OPEN' = 'CLOSED';
-  
-  async call<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.state === 'OPEN') {
-      if (Date.now() - this.lastFailure > 60000) {
-        this.state = 'HALF_OPEN';
-      } else {
-        throw new Error('Circuit breaker is OPEN');
-      }
-    }
-    
-    try {
-      const result = await fn();
-      this.onSuccess();
-      return result;
-    } catch (error) {
-      this.onFailure();
-      throw error;
-    }
-  }
-  
-  private onSuccess() {
-    this.failures = 0;
-    this.state = 'CLOSED';
-  }
-  
-  private onFailure() {
-    this.failures++;
-    this.lastFailure = Date.now();
-    
-    if (this.failures >= 5) {
-      this.state = 'OPEN';
-    }
-  }
+ private failures = 0;
+ private lastFailure = 0;
+ private state: 'CLOSED' | 'OPEN' | 'HALF_OPEN' = 'CLOSED';
+ 
+ async call<T>(fn: () => Promise<T>): Promise<T> {
+ if (this.state === 'OPEN') {
+ if (Date.now() - this.lastFailure > 60000) {
+ this.state = 'HALF_OPEN';
+ } else {
+ throw new Error('Circuit breaker is OPEN');
+ }
+ }
+ 
+ try {
+ const result = await fn();
+ this.onSuccess();
+ return result;
+ } catch (error) {
+ this.onFailure();
+ throw error;
+ }
+ }
+ 
+ private onSuccess() {
+ this.failures = 0;
+ this.state = 'CLOSED';
+ }
+ 
+ private onFailure() {
+ this.failures++;
+ this.lastFailure = Date.now();
+ 
+ if (this.failures >= 5) {
+ this.state = 'OPEN';
+ }
+ }
 }
 ```
 
@@ -408,62 +414,58 @@ Zod validation errors include detailed field information:
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Validation failed",
-    "details": {
-      "issues": [
-        {
-          "field": "amount",
-          "message": "Expected number, received string",
-          "code": "invalid_type"
-        },
-        {
-          "field": "outcome",
-          "message": "Invalid enum value. Expected 'YES' | 'NO'",
-          "code": "invalid_enum_value"
-        }
-      ]
-    }
-  }
+ "error": "Validation failed",
+ "details": [
+   {
+     "field": "amount",
+     "message": "Expected number, received string"
+   },
+   {
+     "field": "side",
+     "message": "Invalid enum value. Expected 'yes' | 'no'"
+   }
+ ]
 }
 ```
 
 ## Best Practices
 
-### 1. Always Check Success Flag
+### 1. Always Check for Error Field
 
 ```typescript
 const data = await response.json();
 
-if (!data.success) {
-  // Handle error
-  handleError(data.error);
-  return;
+if (data.error) {
+ // Handle error
+ handleError(data);
+ return;
 }
 
 // Use data safely
-console.log(data.result);
+console.log(data);
 ```
 
 ### 2. Handle Specific Error Codes
 
 ```typescript
-function handleError(error: APIError) {
-  switch (error.code) {
-    case 'INSUFFICIENT_BALANCE':
-      showDepositModal();
-      break;
-    case 'RATE_LIMIT_EXCEEDED':
-      showRateLimitWarning(error.details.retryAfter);
-      break;
-    case 'UNAUTHORIZED':
-      redirectToLogin();
-      break;
-    default:
-      showGenericError(error.message);
-  }
+function handleError(response: { error: string; code?: string }) {
+ const code = response.code || 'UNKNOWN_ERROR';
+ 
+ switch (code) {
+   case 'INSUFFICIENT_FUNDS':
+     showDepositModal();
+     break;
+   case 'RATE_LIMIT':
+     showRateLimitWarning();
+     break;
+   case 'AUTH_FAILED':
+   case 'AUTH_NO_TOKEN':
+   case 'AUTH_INVALID_TOKEN':
+     redirectToLogin();
+     break;
+   default:
+     showGenericError(response.error);
+ }
 }
 ```
 
@@ -471,43 +473,48 @@ function handleError(error: APIError) {
 
 ```typescript
 const RETRYABLE_CODES = [
-  'INTERNAL_ERROR',
-  'DATABASE_ERROR',
-  'EXTERNAL_SERVICE_ERROR'
+ 'INTERNAL_ERROR',
+ 'DATABASE_ERROR',
+ 'EXTERNAL_SERVICE_ERROR',
+ 'SERVICE_UNAVAILABLE'
 ];
 
-if (RETRYABLE_CODES.includes(error.code)) {
-  // Retry with exponential backoff
-  await retryWithBackoff();
+if (RETRYABLE_CODES.includes(errorCode)) {
+ // Retry with exponential backoff
+ await retryWithBackoff();
 }
 ```
 
 ### 4. Log Errors for Debugging
 
 ```typescript
-if (!data.success) {
-  console.error('API Error:', {
-    code: data.error.code,
-    message: data.error.message,
-    endpoint: url,
-    method: 'POST',
-    timestamp: new Date().toISOString()
-  });
+if (data.error) {
+ console.error('API Error:', {
+   code: data.code || 'UNKNOWN',
+   message: data.error,
+   endpoint: url,
+   method: 'POST',
+   timestamp: new Date().toISOString()
+ });
 }
 ```
 
 ### 5. Show User-Friendly Messages
 
 ```typescript
-const USER_FRIENDLY_MESSAGES = {
-  INSUFFICIENT_BALANCE: 'You don\'t have enough funds for this trade.',
-  MARKET_NOT_FOUND: 'This market no longer exists.',
-  RATE_LIMIT_EXCEEDED: 'You\'re making requests too quickly. Please slow down.',
-  INVALID_INPUT: 'Please check your input and try again.'
+const USER_FRIENDLY_MESSAGES: Record<string, string> = {
+ INSUFFICIENT_FUNDS: 'You don\'t have enough funds for this trade.',
+ NOT_FOUND: 'This resource no longer exists.',
+ RATE_LIMIT: 'You\'re making requests too quickly. Please slow down.',
+ VALIDATION_ERROR: 'Please check your input and try again.',
+ AUTH_FAILED: 'Please log in to continue.'
 };
 
-function getUserMessage(errorCode: string): string {
-  return USER_FRIENDLY_MESSAGES[errorCode] || 'An error occurred. Please try again.';
+function getUserMessage(errorCode: string | undefined, defaultMessage: string): string {
+ if (errorCode && USER_FRIENDLY_MESSAGES[errorCode]) {
+   return USER_FRIENDLY_MESSAGES[errorCode];
+ }
+ return defaultMessage || 'An error occurred. Please try again.';
 }
 ```
 
@@ -517,43 +524,46 @@ function getUserMessage(errorCode: string): string {
 
 ```typescript
 class RobustAPIClient {
-  async request(endpoint: string, options: RequestInit) {
-    let attempt = 0;
-    
-    while (attempt < 3) {
-      try {
-        const response = await fetch(endpoint, options);
-        const data = await response.json();
-        
-        if (!data.success) {
-          // Handle specific errors
-          if (data.error.code === 'RATE_LIMIT_EXCEEDED') {
-            await sleep(data.error.details.retryAfter * 1000);
-            attempt++;
-            continue;
-          }
-          
-          if (this.isRetryable(data.error.code)) {
-            await sleep(Math.pow(2, attempt) * 1000);
-            attempt++;
-            continue;
-          }
-          
-          throw new APIError(data.error);
-        }
-        
-        return data;
-      } catch (error) {
-        if (attempt === 2) throw error;
-        attempt++;
-        await sleep(Math.pow(2, attempt) * 1000);
-      }
-    }
-  }
-  
-  private isRetryable(code: string): boolean {
-    return ['INTERNAL_ERROR', 'DATABASE_ERROR', 'EXTERNAL_SERVICE_ERROR'].includes(code);
-  }
+ async request(endpoint: string, options: RequestInit) {
+   let attempt = 0;
+ 
+   while (attempt < 3) {
+     try {
+       const response = await fetch(endpoint, options);
+       const data = await response.json();
+ 
+       if (data.error) {
+         const errorCode = data.code || 'UNKNOWN_ERROR';
+         
+         // Handle specific errors
+         if (errorCode === 'RATE_LIMIT') {
+           const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
+           await sleep(retryAfter * 1000);
+           attempt++;
+           continue;
+         }
+ 
+         if (this.isRetryable(errorCode)) {
+           await sleep(Math.pow(2, attempt) * 1000);
+           attempt++;
+           continue;
+         }
+ 
+         throw new Error(data.error);
+       }
+ 
+       return data;
+     } catch (error) {
+       if (attempt === 2) throw error;
+       attempt++;
+       await sleep(Math.pow(2, attempt) * 1000);
+     }
+   }
+ }
+ 
+ private isRetryable(code: string): boolean {
+   return ['INTERNAL_ERROR', 'DATABASE_ERROR', 'EXTERNAL_SERVICE_ERROR', 'SERVICE_UNAVAILABLE'].includes(code);
+ }
 }
 ```
 
@@ -565,22 +575,22 @@ class RobustAPIClient {
 const DEBUG = process.env.NODE_ENV === 'development';
 
 async function apiCall(url: string, options: RequestInit) {
-  if (DEBUG) {
-    console.log('API Request:', { url, method: options.method });
-  }
-  
-  const response = await fetch(url, options);
-  const data = await response.json();
-  
-  if (DEBUG) {
-    console.log('API Response:', {
-      success: data.success,
-      status: response.status,
-      data: data.success ? data : data.error
-    });
-  }
-  
-  return data;
+ if (DEBUG) {
+   console.log('API Request:', { url, method: options.method });
+ }
+ 
+ const response = await fetch(url, options);
+ const data = await response.json();
+ 
+ if (DEBUG) {
+   console.log('API Response:', {
+     hasError: !!data.error,
+     status: response.status,
+     data: data.error ? { error: data.error, code: data.code } : data
+   });
+ }
+ 
+ return data;
 }
 ```
 
@@ -590,28 +600,28 @@ async function apiCall(url: string, options: RequestInit) {
 import * as Sentry from '@sentry/nextjs';
 
 async function apiCall(url: string, options: RequestInit) {
-  try {
-    const response = await fetch(url, options);
-    const data = await response.json();
-    
-    if (!data.success) {
-      // Track API errors
-      Sentry.captureMessage('API Error', {
-        level: 'error',
-        extra: {
-          code: data.error.code,
-          message: data.error.message,
-          endpoint: url,
-          details: data.error.details
-        }
-      });
-    }
-    
-    return data;
-  } catch (error) {
-    Sentry.captureException(error);
-    throw error;
-  }
+ try {
+   const response = await fetch(url, options);
+   const data = await response.json();
+ 
+   if (data.error) {
+     // Track API errors
+     Sentry.captureMessage('API Error', {
+       level: 'error',
+       extra: {
+         code: data.code || 'UNKNOWN',
+         message: data.error,
+         endpoint: url,
+         details: data.details
+       }
+     });
+   }
+ 
+   return data;
+ } catch (error) {
+   Sentry.captureException(error);
+   throw error;
+ }
 }
 ```
 
@@ -622,20 +632,21 @@ async function apiCall(url: string, options: RequestInit) {
 ```typescript
 // User tries to buy shares but doesn't have enough funds
 
-const response = await buyShares('market-123', 'YES', 100);
+const response = await buyShares('market-123', 'yes', 100);
 
-if (!response.success && response.error.code === 'INSUFFICIENT_BALANCE') {
-  const shortfall = response.error.details.shortfall;
-  
-  // Show deposit modal
-  showModal({
-    title: 'Insufficient Balance',
-    message: `You need ${shortfall} more points to complete this trade.`,
-    actions: [
-      { label: 'Deposit', onClick: () => openDepositPage() },
-      { label: 'Cancel', onClick: () => closeModal() }
-    ]
-  });
+if (response && response.error && response.code === 'INSUFFICIENT_FUNDS') {
+ // Extract shortfall from error message if available
+ const errorMsg = response.error;
+ 
+ // Show deposit modal
+ showModal({
+   title: 'Insufficient Balance',
+   message: errorMsg || 'You don\'t have enough funds for this trade.',
+   actions: [
+     { label: 'Deposit', onClick: () => openDepositPage() },
+     { label: 'Cancel', onClick: () => closeModal() }
+   ]
+ });
 }
 ```
 
@@ -647,19 +658,19 @@ if (!response.success && response.error.code === 'INSUFFICIENT_BALANCE') {
 const response = await fetch('/api/markets/predictions/123/buy', options);
 const data = await response.json();
 
-if (!data.success && data.error.code === 'RATE_LIMIT_EXCEEDED') {
-  const retryAfter = data.error.details.retryAfter;
-  
-  // Show countdown and retry
-  showNotification({
-    message: `Please wait ${retryAfter} seconds before trying again`,
-    type: 'warning'
-  });
-  
-  // Auto-retry after delay
-  setTimeout(() => {
-    buyShares(marketId, outcome, amount);
-  }, retryAfter * 1000);
+if (data.error && data.code === 'RATE_LIMIT') {
+ const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
+ 
+ // Show countdown and retry
+ showNotification({
+   message: `Please wait ${retryAfter} seconds before trying again`,
+   type: 'warning'
+ });
+ 
+ // Auto-retry after delay
+ setTimeout(() => {
+   buyShares(marketId, side, amount);
+ }, retryAfter * 1000);
 }
 ```
 
@@ -669,19 +680,19 @@ if (!data.success && data.error.code === 'RATE_LIMIT_EXCEEDED') {
 // Token expired mid-session
 
 const response = await fetch('/api/users/me', {
-  headers: { 'Authorization': `Bearer ${token}` }
+ headers: { 'Authorization': `Bearer ${token}` }
 });
 
 const data = await response.json();
 
-if (!data.success && data.error.code === 'INVALID_TOKEN') {
-  // Token expired, refresh
-  const newToken = await refreshAuthToken();
-  
-  // Retry with new token
-  return fetch('/api/users/me', {
-    headers: { 'Authorization': `Bearer ${newToken}` }
-  });
+if (data.error && (data.code === 'AUTH_INVALID_TOKEN' || data.code === 'AUTH_FAILED')) {
+ // Token expired, refresh
+ const newToken = await refreshAuthToken();
+ 
+ // Retry with new token
+ return fetch('/api/users/me', {
+   headers: { 'Authorization': `Bearer ${newToken}` }
+ });
 }
 ```
 
@@ -691,25 +702,21 @@ if (!data.success && data.error.code === 'INVALID_TOKEN') {
 
 ```typescript
 describe('Error Handling', () => {
-  it('handles insufficient balance', async () => {
-    const mockFetch = jest.fn().mockResolvedValue({
-      json: () => Promise.resolve({
-        success: false,
-        error: {
-          code: 'INSUFFICIENT_BALANCE',
-          message: 'Insufficient balance',
-          details: { required: 100, available: 50 }
-        }
-      })
-    });
-    
-    global.fetch = mockFetch;
-    
-    const result = await buyShares('market-123', 'YES', 100);
-    
-    expect(result).toBeNull();
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-  });
+ it('handles insufficient balance', async () => {
+   const mockFetch = jest.fn().mockResolvedValue({
+     json: () => Promise.resolve({
+       error: 'Insufficient funds. Required: 100, Available: 50',
+       code: 'INSUFFICIENT_FUNDS'
+     })
+   });
+ 
+   global.fetch = mockFetch;
+ 
+   const result = await buyShares('market-123', 'yes', 100);
+ 
+   expect(result).toBeNull();
+   expect(mockFetch).toHaveBeenCalledTimes(1);
+ });
 });
 ```
 
@@ -722,11 +729,11 @@ describe('Error Handling', () => {
 const { withSentryConfig } = require('@sentry/nextjs');
 
 module.exports = withSentryConfig({
-  // Your Next.js config
+ // Your Next.js config
 }, {
-  silent: true,
-  org: "your-org",
-  project: "babylon"
+ silent: true,
+ org: "your-org",
+ project: "babylon"
 });
 ```
 
@@ -735,15 +742,15 @@ module.exports = withSentryConfig({
 import * as Sentry from '@sentry/nextjs';
 
 Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
-  tracesSampleRate: 1.0,
-  beforeSend(event, hint) {
-    // Filter out expected errors
-    if (event.exception?.values?.[0]?.value?.includes('RATE_LIMIT')) {
-      return null; // Don't send to Sentry
-    }
-    return event;
-  }
+ dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+ tracesSampleRate: 1.0,
+ beforeSend(event, hint) {
+ // Filter out expected errors
+ if (event.exception?.values?.[0]?.value?.includes('RATE_LIMIT')) {
+ return null; // Don't send to Sentry
+ }
+ return event;
+ }
 });
 ```
 

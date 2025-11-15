@@ -123,16 +123,10 @@ export class ServiceUnavailableError extends ApiError {
 
 /**
  * Error response interface
+ * Note: The canonical ErrorResponse is in @/lib/errors/index.ts
+ * This is a legacy version, import from index.ts instead
  */
-export interface ErrorResponse {
-  error: string
-  message: string
-  code?: string
-  statusCode: number
-  errors?: Record<string, string[]>
-  timestamp: string
-  path?: string
-}
+import type { ErrorResponse } from './index';
 
 /**
  * Create standardized error response
@@ -192,13 +186,12 @@ export function createErrorResponse(
   }
 
   const errorResponse: ErrorResponse = {
-    error: code || 'UNKNOWN_ERROR',
-    message,
-    code,
-    statusCode,
-    errors,
-    timestamp: new Date().toISOString(),
-    path: request ? new URL(request.url).pathname : undefined,
+    error: {
+      message,
+      code: code || 'UNKNOWN_ERROR',
+      violations: errors ? Object.entries(errors).map(([field, msgs]) => ({ field, message: msgs.join(', ') })) : undefined,
+      context: request ? { path: new URL(request.url).pathname } : undefined
+    }
   }
 
   // Log error
@@ -245,7 +238,12 @@ export async function validateRequestBody<T extends z.ZodType>(
   schema: T
 ): Promise<z.infer<T>> {
   try {
-    const body = await request.json()
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      throw new BadRequestError('Invalid JSON in request body', 'INVALID_JSON')
+    }
     return schema.parse(body)
   } catch (error) {
     if (error instanceof z.ZodError) {

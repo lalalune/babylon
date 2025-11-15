@@ -195,27 +195,6 @@ export const SearchUsersParamsSchema = z.object({
   limit: z.number().optional().default(20),
 });
 
-// ==================== Pools ====================
-export const GetPoolsParamsSchema = z.object({});
-
-export const GetPoolInfoParamsSchema = z.object({
-  poolId: z.string(),
-});
-
-export const DepositToPoolParamsSchema = z.object({
-  poolId: z.string(),
-  amount: z.number().positive(),
-});
-
-export const WithdrawFromPoolParamsSchema = z.object({
-  poolId: z.string(),
-  amount: z.number().positive(),
-});
-
-export const GetPoolDepositsParamsSchema = z.object({
-  userId: z.string(),
-});
-
 // ==================== Trades ====================
 export const GetTradesParamsSchema = z.object({
   limit: z.number().optional().default(50),
@@ -318,5 +297,31 @@ export const GetPostsByTagParamsSchema = z.object({
 // ==================== Organizations ====================
 export const GetOrganizationsParamsSchema = z.object({
   limit: z.number().optional().default(50),
+});
+
+// ==================== Points Transfer ====================
+export const TransferPointsParamsSchema = z.object({
+  recipientId: z.string().min(1),
+  amount: z.number().int().positive(),
+  message: z.string().max(200).optional(),
+});
+
+// ==================== Favorites ====================
+export const FavoriteProfileParamsSchema = z.object({
+  userId: z.string().min(1),
+});
+
+export const UnfavoriteProfileParamsSchema = z.object({
+  userId: z.string().min(1),
+});
+
+export const GetFavoritesParamsSchema = z.object({
+  limit: z.number().min(1).max(100).optional().default(50),
+  offset: z.number().min(0).optional().default(0),
+});
+
+export const GetFavoritePostsParamsSchema = z.object({
+  limit: z.number().min(1).max(100).optional().default(20),
+  offset: z.number().min(0).optional().default(0),
 });
 

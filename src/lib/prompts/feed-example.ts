@@ -13,7 +13,7 @@ import { ambientPosts, reactions, newsPosts } from '@/prompts';
  * Example 1: Generate ambient posts with world context
  */
 export async function generateAmbientPostsWithContext() {
-  // Generate world context from actors.json and database
+  // Generate world context from actors data and database
   const worldContext = await generateWorldContext({
     maxActors: 30, // Limit to top 30 actors to manage token usage
   });

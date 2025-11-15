@@ -52,6 +52,7 @@ import { prisma } from '@/lib/prisma';
 import { getCache, setCache } from '@/lib/cache-service';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import type { JsonValue } from '@/types/common';
 
 const QuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(50),
@@ -78,7 +79,7 @@ export const GET = withErrorHandling(async (
 
   // Check Redis cache first
   const cacheKey = `prediction-trades:${marketId}:${queryParams.limit}:${queryParams.offset}`;
-  const cached = await getCache<Record<string, unknown>>(cacheKey);
+  const cached = await getCache<Record<string, JsonValue>>(cacheKey);
   
   if (cached) {
     logger.debug('Cache hit for prediction trades', { marketId }, 'PredictionTrades');

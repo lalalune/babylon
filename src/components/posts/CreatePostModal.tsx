@@ -86,7 +86,14 @@ export function CreatePostModal({ isOpen, onClose, onPostCreated }: CreatePostMo
     })
 
     if (response.ok) {
-      const data = await response.json()
+      let data
+      try {
+        data = await response.json()
+      } catch (error) {
+        logger.error('Failed to parse create post response', { error }, 'CreatePostModal')
+        alert('Failed to parse response. Please try again.')
+        return
+      }
       setContent('')
       // Pass the created post data to the callback
       if (data.post) {

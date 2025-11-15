@@ -18,7 +18,7 @@
  * - **perp:** Perpetual futures positions with leverage and PnL
  * 
  * **Features:**
- * - Unified feed across all market types
+ * - Combined feed across all market types
  * - User-specific filtering
  * - Pagination support
  * - Rich trader profiles (users, agents, actors)
@@ -145,6 +145,19 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     },
   });
 
+  // Get recent point transfers (sent and received)
+  const pointTransfers = await prisma.pointsTransaction.findMany({
+    take: params.limit,
+    skip: params.offset,
+    orderBy: { createdAt: 'desc' },
+    where: {
+      ...userFilter,
+      reason: {
+        in: ['transfer_sent', 'transfer_received']
+      }
+    },
+  });
+
   // Fetch users for balance transactions
   const balanceUserIds = [...new Set(balanceTransactions.map(tx => tx.userId))];
   const balanceUsers = await prisma.user.findMany({
@@ -158,6 +171,29 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     },
   });
   const balanceUsersMap = new Map(balanceUsers.map(u => [u.id, u]));
+
+  // Fetch users for point transfers (both sender and recipient)
+  const transferUserIds = new Set<string>();
+  for (const transfer of pointTransfers) {
+    transferUserIds.add(transfer.userId);
+    // Parse metadata to get the other party's ID
+    if (transfer.metadata) {
+      const metadata = JSON.parse(transfer.metadata) as { senderId?: string; recipientId?: string; senderName?: string; recipientName?: string; message?: string };
+      if (metadata.senderId) transferUserIds.add(metadata.senderId);
+      if (metadata.recipientId) transferUserIds.add(metadata.recipientId);
+    }
+  }
+  const transferUsers = await prisma.user.findMany({
+    where: { id: { in: Array.from(transferUserIds) } },
+    select: {
+      id: true,
+      username: true,
+      displayName: true,
+      profileImageUrl: true,
+      isActor: true,
+    },
+  });
+  const transferUsersMap = new Map(transferUsers.map(u => [u.id, u]));
 
   // Get recent NPC trades (if not filtering by specific user, or if user is an NPC)
   let npcTrades: Awaited<ReturnType<typeof prisma.nPCTrade.findMany>> = [];
@@ -291,6 +327,25 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       description: tx.description,
       relatedId: tx.relatedId,
     })),
+    ...pointTransfers.map(tx => {
+      const metadata = tx.metadata ? JSON.parse(tx.metadata) as { senderId?: string; recipientId?: string; senderName?: string; recipientName?: string; message?: string } : {};
+      const isSent = tx.reason === 'transfer_sent';
+      const otherPartyId = isSent ? metadata.recipientId : metadata.senderId;
+      const otherPartyName = isSent ? metadata.recipientName : metadata.senderName;
+      
+      return {
+        type: 'transfer' as const,
+        id: tx.id,
+        timestamp: tx.createdAt,
+        user: transferUsersMap.get(tx.userId) || null,
+        otherParty: otherPartyId ? transferUsersMap.get(otherPartyId) || { id: otherPartyId, username: otherPartyName, displayName: otherPartyName, profileImageUrl: null, isActor: false } : null,
+        amount: tx.amount,
+        pointsBefore: tx.pointsBefore,
+        pointsAfter: tx.pointsAfter,
+        direction: isSent ? 'sent' as const : 'received' as const,
+        message: metadata.message,
+      };
+    }),
     ...npcTrades.map(trade => {
       const actor = actorsMap.get(trade.npcActorId);
       return {

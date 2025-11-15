@@ -266,7 +266,7 @@ export class FollowingMechanics {
 
     // Check for sustained low quality
     const recentQuality =
-      interactions.reduce((sum, i) => sum + i.qualityScore, 0) /
+      interactions.reduce((sum, i) => sum + (i.qualityScore ?? 0), 0) /
       interactions.length;
 
     if (recentQuality < 0.4) {
@@ -274,7 +274,13 @@ export class FollowingMechanics {
     }
 
     // Check for long gaps (no replies for 24+ hours)
-    const lastInteraction = interactions[0]!.timestamp;
+    if (interactions.length === 0) {
+      return false; // No interactions found
+    }
+    const lastInteraction = interactions[0]?.timestamp;
+    if (!lastInteraction) {
+      return false; // No valid interaction timestamp
+    }
     const hoursSinceLastReply =
       (Date.now() - lastInteraction.getTime()) / (1000 * 60 * 60);
 

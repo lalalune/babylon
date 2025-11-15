@@ -15,9 +15,13 @@ import type {
   RewardComponents 
 } from './types';
 import { v4 as uuidv4 } from 'uuid';
+import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
+import { generateSnowflakeId } from '@/lib/snowflake';
 
 export class TrajectoryLoggerService {
   private activeTrajectories: Map<string, Trajectory> = new Map();
+  private activeStepIds: Map<string, string> = new Map(); // Maps trajectoryId -> current stepId
 
   /**
    * Start a new trajectory
@@ -75,7 +79,7 @@ export class TrajectoryLoggerService {
     const step: TrajectoryStep = {
       stepId: stepId as UUID,
       stepNumber: trajectory.steps.length,
-      timestamp: envState.timestamp,
+      timestamp: envState.timestamp || Date.now(),
       environmentState: envState,
       observation: {},
       llmCalls: [],
@@ -93,6 +97,7 @@ export class TrajectoryLoggerService {
     };
 
     trajectory.steps.push(step);
+    this.activeStepIds.set(trajectoryId, stepId);
     return stepId;
   }
 
@@ -101,10 +106,16 @@ export class TrajectoryLoggerService {
    */
   logLLMCall(stepId: string, llmCall: Omit<LLMCall, 'callId' | 'timestamp'>): void {
     const trajectory = this.findTrajectoryByStepId(stepId);
-    if (!trajectory) return;
+    if (!trajectory) {
+      logger.warn('Trajectory not found for LLM call', { stepId });
+      return;
+    }
 
     const step = trajectory.steps.find(s => s.stepId === stepId);
-    if (!step) return;
+    if (!step) {
+      logger.warn('Step not found for LLM call', { stepId });
+      return;
+    }
 
     const fullLLMCall: LLMCall = {
       callId: uuidv4(),
@@ -113,6 +124,62 @@ export class TrajectoryLoggerService {
     };
 
     step.llmCalls.push(fullLLMCall);
+
+    // Also save to database for analysis
+    this.saveLLMCallToDB(trajectory.trajectoryId, stepId, fullLLMCall).catch((error) => {
+      logger.error('Failed to save LLM call to database', error, 'TrajectoryLoggerService');
+    });
+  }
+
+  /**
+   * Save LLM call to database
+   */
+  private async saveLLMCallToDB(
+    trajectoryId: string,
+    stepId: string,
+    llmCall: LLMCall
+  ): Promise<void> {
+    try {
+      await prisma.llmCallLog.create({
+        data: {
+          id: await generateSnowflakeId(),
+          trajectoryId,
+          stepId,
+          callId: llmCall.callId,
+          timestamp: new Date(llmCall.timestamp),
+          latencyMs: llmCall.latencyMs || undefined,
+          model: llmCall.model,
+          purpose: llmCall.purpose,
+          actionType: llmCall.actionType || null,
+          systemPrompt: llmCall.systemPrompt,
+          userPrompt: llmCall.userPrompt,
+          messagesJson: llmCall.messages ? JSON.stringify(llmCall.messages) : null,
+          response: llmCall.response,
+          reasoning: llmCall.reasoning || null,
+          temperature: llmCall.temperature,
+          maxTokens: llmCall.maxTokens,
+          topP: llmCall.topP || null,
+          promptTokens: llmCall.promptTokens || null,
+          completionTokens: llmCall.completionTokens || null,
+          totalTokens: llmCall.promptTokens && llmCall.completionTokens
+            ? llmCall.promptTokens + llmCall.completionTokens
+            : null,
+          metadata: JSON.stringify({
+            purpose: llmCall.purpose,
+            actionType: llmCall.actionType,
+            modelVersion: llmCall.modelVersion, // Store model version in metadata
+          }),
+        },
+      });
+    } catch (error) {
+      // Log but don't throw - trajectory logging should not break agent execution
+      logger.error('Failed to save LLM call to database', {
+        trajectoryId,
+        stepId,
+        callId: llmCall.callId,
+        error: error instanceof Error ? error.message : String(error),
+      }, 'TrajectoryLoggerService');
+    }
   }
 
   /**
@@ -120,10 +187,16 @@ export class TrajectoryLoggerService {
    */
   logProviderAccess(stepId: string, access: Omit<ProviderAccess, 'providerId' | 'timestamp'>): void {
     const trajectory = this.findTrajectoryByStepId(stepId);
-    if (!trajectory) return;
+    if (!trajectory) {
+      logger.warn('Trajectory not found for provider access', { stepId });
+      return;
+    }
 
     const step = trajectory.steps.find(s => s.stepId === stepId);
-    if (!step) return;
+    if (!step) {
+      logger.warn('Step not found for provider access', { stepId });
+      return;
+    }
 
     const fullAccess: ProviderAccess = {
       providerId: uuidv4(),
@@ -132,6 +205,43 @@ export class TrajectoryLoggerService {
     };
 
     step.providerAccesses.push(fullAccess);
+  }
+
+  /**
+   * Log LLM call using trajectory ID (convenience method)
+   */
+  logLLMCallByTrajectoryId(
+    trajectoryId: string,
+    llmCall: Omit<LLMCall, 'callId' | 'timestamp'>
+  ): void {
+    const stepId = this.activeStepIds.get(trajectoryId);
+    if (!stepId) {
+      logger.warn('No active step for trajectory', { trajectoryId });
+      return;
+    }
+    this.logLLMCall(stepId, llmCall);
+  }
+
+  /**
+   * Log provider access using trajectory ID (convenience method)
+   */
+  logProviderAccessByTrajectoryId(
+    trajectoryId: string,
+    access: Omit<ProviderAccess, 'providerId' | 'timestamp'>
+  ): void {
+    const stepId = this.activeStepIds.get(trajectoryId);
+    if (!stepId) {
+      logger.warn('No active step for trajectory', { trajectoryId });
+      return;
+    }
+    this.logProviderAccess(stepId, access);
+  }
+
+  /**
+   * Get current step ID for a trajectory
+   */
+  getCurrentStepId(trajectoryId: string): string | null {
+    return this.activeStepIds.get(trajectoryId) || null;
   }
 
   /**
@@ -144,10 +254,16 @@ export class TrajectoryLoggerService {
     rewardInfo?: { reward?: number; components?: Partial<RewardComponents> }
   ): void {
     const trajectory = this.activeTrajectories.get(trajectoryId);
-    if (!trajectory) return;
+    if (!trajectory) {
+      logger.warn('Trajectory not found for completeStep', { trajectoryId });
+      return;
+    }
 
     const step = trajectory.steps.find(s => s.stepId === stepId);
-    if (!step) return;
+    if (!step) {
+      logger.warn('Step not found for completeStep', { trajectoryId, stepId });
+      return;
+    }
 
     step.action = {
       attemptId: uuidv4(),
@@ -166,10 +282,29 @@ export class TrajectoryLoggerService {
         ...rewardInfo.components,
       };
     }
+
+    // Clear current step ID
+    this.activeStepIds.delete(trajectoryId);
   }
 
   /**
-   * End trajectory
+   * Complete step using current step ID (convenience method)
+   */
+  completeCurrentStep(
+    trajectoryId: string,
+    action: Omit<ActionAttempt, 'attemptId' | 'timestamp'>,
+    rewardInfo?: { reward?: number; components?: Partial<RewardComponents> }
+  ): void {
+    const stepId = this.activeStepIds.get(trajectoryId);
+    if (!stepId) {
+      logger.warn('No active step for trajectory', { trajectoryId });
+      return;
+    }
+    this.completeStep(trajectoryId, stepId, action, rewardInfo);
+  }
+
+  /**
+   * End trajectory and save to database
    */
   async endTrajectory(
     trajectoryId: string,
@@ -177,7 +312,10 @@ export class TrajectoryLoggerService {
     finalMetrics?: Record<string, unknown>
   ): Promise<void> {
     const trajectory = this.activeTrajectories.get(trajectoryId);
-    if (!trajectory) return;
+    if (!trajectory) {
+      logger.warn('Trajectory not found for endTrajectory', { trajectoryId });
+      return;
+    }
 
     trajectory.endTime = Date.now();
     trajectory.durationMs = trajectory.endTime - trajectory.startTime;
@@ -191,12 +329,54 @@ export class TrajectoryLoggerService {
       };
     }
 
-    // In a real implementation, this would save to database
-    // For now, keep in memory for tests
-    this.activeTrajectories.delete(trajectoryId);
-    
-    // Store completed trajectory for retrieval
+    // Save to database
+    try {
+      await prisma.trajectory.create({
+        data: {
+          id: await generateSnowflakeId(),
+          trajectoryId,
+          agentId: trajectory.agentId,
+          startTime: new Date(trajectory.startTime),
+          endTime: new Date(trajectory.endTime),
+          durationMs: trajectory.durationMs,
+          episodeId: trajectory.episodeId || null,
+          scenarioId: trajectory.scenarioId || null,
+          batchId: trajectory.batchId || null,
+          stepsJson: JSON.stringify(trajectory.steps),
+          rewardComponentsJson: JSON.stringify(trajectory.rewardComponents),
+          metricsJson: JSON.stringify(trajectory.metrics),
+          metadataJson: JSON.stringify(trajectory.metadata),
+          totalReward: trajectory.totalReward,
+          episodeLength: trajectory.metrics.episodeLength,
+          finalStatus: trajectory.metrics.finalStatus,
+          finalBalance: trajectory.metrics.finalBalance as number | undefined || null,
+          finalPnL: trajectory.metrics.finalPnL as number | undefined || null,
+          tradesExecuted: trajectory.metrics.tradesExecuted as number | undefined || null,
+          postsCreated: trajectory.metrics.postsCreated as number | undefined || null,
+          isTrainingData: (trajectory.metadata.isTrainingData as boolean | undefined) ?? true,
+          isEvaluation: (trajectory.metadata.isEvaluation as boolean | undefined) ?? false,
+          usedInTraining: false,
+        },
+      });
+
+      logger.info('Trajectory saved to database', {
+        trajectoryId,
+        agentId: trajectory.agentId,
+        steps: trajectory.steps.length,
+        totalReward: trajectory.totalReward,
+      }, 'TrajectoryLoggerService');
+    } catch (error) {
+      logger.error('Failed to save trajectory to database', {
+        trajectoryId,
+        agentId: trajectory.agentId,
+        error: error instanceof Error ? error.message : String(error),
+      }, 'TrajectoryLoggerService');
+      // Don't throw - keep trajectory in memory for retrieval
+    }
+
+    // Keep in memory for retrieval
     this.activeTrajectories.set(trajectoryId, trajectory);
+    this.activeStepIds.delete(trajectoryId);
   }
 
   /**

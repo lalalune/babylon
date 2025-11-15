@@ -4,12 +4,14 @@
  * Executes decisions via Babylon A2A protocol
  */
 
-import type { Decision } from './decision.js'
+import type { Decision } from './decision'
+
+import type { JsonValue } from '../../../src/types/common'
 
 export interface ActionResult {
   success: boolean
   message: string
-  data?: Record<string, unknown>
+  data?: Record<string, JsonValue>
   error?: string
 }
 
@@ -17,12 +19,12 @@ export interface ActionResult {
  * Minimal interface for A2A client methods used by executeAction
  */
 export interface A2AActionClient {
-  buyShares(marketId: string, outcome: 'YES' | 'NO', amount: number): Promise<Record<string, unknown>>
-  sellShares(marketId: string, shares: number): Promise<Record<string, unknown>>
-  openPosition(ticker: string, side: 'long' | 'short', size: number, leverage: number): Promise<Record<string, unknown>>
-  closePosition(positionId: string): Promise<Record<string, unknown>>
-  createPost(content: string, type?: string): Promise<Record<string, unknown>>
-  createComment(postId: string, content: string): Promise<Record<string, unknown>>
+  buyShares(marketId: string, outcome: 'YES' | 'NO', amount: number): Promise<Record<string, JsonValue>>
+  sellShares(positionId: string, shares: number): Promise<Record<string, JsonValue>>
+  openPosition(ticker: string, side: 'LONG' | 'SHORT', amount: number, leverage: number): Promise<Record<string, JsonValue>>
+  closePosition(positionId: string): Promise<Record<string, JsonValue>>
+  createPost(content: string, type?: string): Promise<Record<string, JsonValue>>
+  createComment(postId: string, content: string): Promise<Record<string, JsonValue>>
 }
 
 /**
@@ -60,18 +62,18 @@ export async function executeAction(
       }
 
       case 'SELL': {
-        const marketId = params.marketId as string;
+        const positionId = params.positionId as string;
         const shares = params.shares as number;
         
-        if (!marketId || typeof shares !== 'number') {
+        if (!positionId || typeof shares !== 'number') {
           return {
             success: false,
             message: 'Invalid parameters for sell shares',
-            error: 'marketId and shares are required'
+            error: 'positionId and shares are required'
           };
         }
         
-        const result = await client.sellShares(marketId, shares);
+        const result = await client.sellShares(positionId, shares);
         
         return {
           success: true,
@@ -94,7 +96,7 @@ export async function executeAction(
           };
         }
         
-        const side = decision.action === 'OPEN_LONG' ? 'long' : 'short';
+        const side = decision.action === 'OPEN_LONG' ? 'LONG' : 'SHORT';
         const result = await client.openPosition(ticker, side, size, leverage);
         
         return {

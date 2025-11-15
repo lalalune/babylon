@@ -17,11 +17,11 @@ As a Babylon user, you have three main moderation tools:
 ### What Happens When You Block
 
 When you block a user:
-- ✅ You won't see their posts in your feed
-- ✅ They won't see your posts
-- ✅ You'll both be automatically unfollowed
-- ✅ They can't send you messages
-- ✅ They won't be notified that you blocked them
+- You won't see their posts in your feed
+- They won't see your posts
+- You'll both be automatically unfollowed
+- They can't send you messages
+- They won't be notified that you blocked them
 
 ### How to Block
 
@@ -35,12 +35,12 @@ When you block a user:
 **Via API:**
 ```typescript
 const response = await fetch(`/api/users/${userId}/block`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    action: 'block',
-    reason: 'Spam posting' // optional
-  })
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({
+ action: 'block',
+ reason: 'Spam posting' // optional
+ })
 });
 ```
 
@@ -63,10 +63,10 @@ From there you can:
 ### What Happens When You Mute
 
 When you mute a user:
-- ✅ Their posts are hidden from your feed
-- ✅ Your follower relationship is preserved
-- ✅ They can still see your posts (if they follow you)
-- ✅ They won't be notified
+- Their posts are hidden from your feed
+- Your follower relationship is preserved
+- They can still see your posts (if they follow you)
+- They won't be notified
 
 **Muting is softer than blocking** - use it when you want to reduce noise without completely cutting ties.
 
@@ -82,12 +82,12 @@ When you mute a user:
 **Via API:**
 ```typescript
 const response = await fetch(`/api/users/${userId}/mute`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    action: 'mute',
-    reason: 'Too many posts' // optional
-  })
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({
+ action: 'mute',
+ reason: 'Too many posts' // optional
+ })
 });
 ```
 
@@ -126,15 +126,15 @@ Report content when you encounter:
 **Via API:**
 ```typescript
 const response = await fetch('/api/moderation/reports', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    reportType: 'user', // or 'post'
-    reportedUserId: 'user_123',
-    category: 'spam',
-    reason: 'This user is posting promotional content repeatedly',
-    evidence: 'https://example.com/screenshot.png' // optional
-  })
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({
+ reportType: 'user', // or 'post'
+ reportedUserId: 'user_123',
+ category: 'spam',
+ reason: 'This user is posting promotional content repeatedly',
+ evidence: 'https://example.com/screenshot.png' // optional
+ })
 });
 ```
 
@@ -166,21 +166,21 @@ const response = await fetch('/api/moderation/reports', {
 ## Best Practices
 
 ### Blocking
-- ✅ Block users who spam or harass you
-- ✅ Block users whose content you never want to see
-- ❌ Don't block users just because you disagree with them
+- Block users who spam or harass you
+- Block users whose content you never want to see
+- Don't block users just because you disagree with them
 
 ### Muting
-- ✅ Mute users who post too frequently
-- ✅ Mute users whose content you find boring but not harmful
-- ✅ Use mute instead of block for minor annoyances
+- Mute users who post too frequently
+- Mute users whose content you find boring but not harmful
+- Use mute instead of block for minor annoyances
 
 ### Reporting
-- ✅ Provide detailed, specific reasons
-- ✅ Include evidence URLs when possible
-- ✅ Select the most accurate category
-- ❌ Don't file duplicate reports
-- ❌ Don't report content just because you disagree
+- Provide detailed, specific reasons
+- Include evidence URLs when possible
+- Select the most accurate category
+- Don't file duplicate reports
+- Don't report content just because you disagree
 
 ---
 
@@ -195,22 +195,22 @@ const response = await fetch('/api/moderation/reports', {
 
 ## FAQ
 
-**Q: Will they know I blocked them?**  
+**Q: Will they know I blocked them?** 
 A: No, blocking is private. They won't receive a notification.
 
-**Q: What's the difference between block and mute?**  
+**Q: What's the difference between block and mute?** 
 A: Block completely hides both users from each other and unfollows. Mute just hides their content from your feed.
 
-**Q: Can I see who blocked me?**  
+**Q: Can I see who blocked me?** 
 A: No, for privacy reasons you cannot see who blocked you.
 
-**Q: How long does it take for a report to be reviewed?**  
+**Q: How long does it take for a report to be reviewed?** 
 A: High-priority reports are typically reviewed within 24 hours. Normal priority within 72 hours.
 
-**Q: Can I undo a block or mute?**  
+**Q: Can I undo a block or mute?** 
 A: Yes! Go to Settings → Moderation and click "Unblock" or "Unmute".
 
-**Q: Can I see my submitted reports?**  
+**Q: Can I see my submitted reports?** 
 A: Yes, visit Settings → Moderation or call the API endpoint.
 
 ---

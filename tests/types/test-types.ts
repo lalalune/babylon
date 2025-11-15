@@ -10,43 +10,12 @@ import type { Trajectory, TrainingBatch, TrainedModel } from '@prisma/client';
 // Actors Data Types
 // ============================================================================
 
-export interface ActorData {
-  id: string;
-  name: string;
-  realName: string;
-  username: string;
-  description: string;
-  profileDescription: string;
-  domain: string[];
-  personality: string;
-  tier: string;
-  hasPool: boolean;
-  affiliations?: string[];
-  postStyle: string;
-  postExample: string[];
-  physicalDescription: string;
-  profileBanner: string;
-  originalFirstName: string;
-  originalLastName: string;
-  originalHandle: string;
-}
+// Note: ActorData, Organization, and ActorsDatabase are now exported from @/shared/types
+// Import them from there instead of redefining:
+// import type { ActorData, Organization, ActorsDatabase } from '@/shared/types';
 
-export interface OrganizationData {
-  id: string;
-  name: string;
-  type: string;
-  description: string;
-  postStyle: string;
-  postExample: string[];
-  initialPrice: number;
-  originalName: string;
-  originalHandle: string;
-}
-
-export interface ActorsDataFile {
-  actors: ActorData[];
-  organizations: OrganizationData[];
-}
+// Legacy alias for backward compatibility in tests
+export type { ActorData, Organization as OrganizationData, ActorsDatabase as ActorsDataFile } from '@/shared/types';
 
 // ============================================================================
 // Prisma Mock Types
@@ -131,12 +100,8 @@ export interface MetaMask {
 // API Response Types
 // ============================================================================
 
-export interface ApiResponse<T = Record<string, never>> {
-  success?: boolean;
-  data?: T;
-  error?: string;
-  [key: string]: unknown;
-}
+// Note: ApiResponse is now exported from src/types/common.ts
+// Import it from there: import type { ApiResponse } from '@/types/common';
 
 export interface PerpetualsData {
   positions: Array<{

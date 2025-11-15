@@ -21,6 +21,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRegisterAgentTx } from '@/hooks/useRegisterAgentTx';
 
 import { type User as StoreUser, useAuthStore } from '@/stores/authStore';
+import type { JsonValue } from '@/types/common';
 
 import { clearReferralCode, getReferralCode } from './ReferralCaptureProvider';
 
@@ -393,11 +394,11 @@ export function OnboardingProvider({
             `Failed to complete on-chain onboarding (status ${response.status})`;
           throw new Error(message);
         }
-        return data as { onchain: Record<string, unknown>; user: StoreUser | null };
+        return data as { onchain: Record<string, JsonValue>; user: StoreUser | null };
       };
 
       const applyResponse = (data: {
-        onchain: Record<string, unknown>;
+        onchain: Record<string, JsonValue>;
         user: StoreUser | null;
       }) => {
         if (data.user) {

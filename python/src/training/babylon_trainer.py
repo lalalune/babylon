@@ -321,15 +321,40 @@ class BabylonTrainer:
         
         return trajectories
     
-    async def train_window(self, window_id: str) -> Dict:
+    async def train_window(
+        self, 
+        window_id: str, 
+        batch_id: Optional[str] = None,
+        model_version: Optional[str] = None
+    ) -> Dict:
         """
         Train on one window - complete pipeline
+        
+        Args:
+            window_id: Window ID (YYYY-MM-DDTHH:00 format)
+            batch_id: Training batch ID from TypeScript (optional)
+            model_version: Model version string (optional)
         
         Returns model info for inference
         """
         logger.info("=" * 70)
         logger.info(f"🚀 TRAINING WINDOW: {window_id}")
+        if batch_id:
+            logger.info(f"Batch ID: {batch_id}")
+        if model_version:
+            logger.info(f"Model Version: {model_version}")
         logger.info("=" * 70)
+        
+        # Update batch status to 'training' if batch_id provided
+        if batch_id and self.pool:
+            try:
+                await self.pool.execute(
+                    "UPDATE training_batches SET status = $1, \"startedAt\" = NOW() WHERE \"batchId\" = $2",
+                    'training', batch_id
+                )
+                logger.info(f"✓ Updated batch {batch_id} status to 'training'")
+            except Exception as e:
+                logger.warning(f"Failed to update batch status: {e}")
         
         # Initialize model if needed
         if not self.model:
@@ -341,10 +366,20 @@ class BabylonTrainer:
         data = await self.collect_window_data(window_id)
         
         if data['count'] < self.min_agents:
-            raise ValueError(
+            error_msg = (
                 f"Window {window_id}: Only {data['count']} agents, need {self.min_agents}\n"
                 f"Try lowering MIN_AGENTS_PER_WINDOW or wait for more data"
             )
+            # Update batch status to failed
+            if batch_id and self.pool:
+                try:
+                    await self.pool.execute(
+                        "UPDATE training_batches SET status = $1, error = $2 WHERE \"batchId\" = $3",
+                        'failed', error_msg, batch_id
+                    )
+                except Exception:
+                    pass
+            raise ValueError(error_msg)
         
         logger.info(f"✓ Collected {data['count']} agents")
         
@@ -360,7 +395,16 @@ class BabylonTrainer:
         art_trajs = self.create_art_trajectories(data, scores)
         
         if not art_trajs:
-            raise ValueError("No valid trajectories created")
+            error_msg = "No valid trajectories created"
+            if batch_id and self.pool:
+                try:
+                    await self.pool.execute(
+                        "UPDATE training_batches SET status = $1, error = $2 WHERE \"batchId\" = $3",
+                        'failed', error_msg, batch_id
+                    )
+                except Exception:
+                    pass
+            raise ValueError(error_msg)
         
         logger.info(f"✓ Created {len(art_trajs)} trajectories")
         
@@ -374,32 +418,99 @@ class BabylonTrainer:
             metadata={'window_id': window_id}
         )
         
-        await self.model.train(
-            groups=[group],
-            config=art.TrainConfig(learning_rate=1e-5)
-        )
+        try:
+            await self.model.train(
+                groups=[group],
+                config=art.TrainConfig(learning_rate=1e-5)
+            )
+        except Exception as e:
+            error_msg = f"Training failed: {str(e)}"
+            logger.error(error_msg)
+            if batch_id and self.pool:
+                try:
+                    await self.pool.execute(
+                        "UPDATE training_batches SET status = $1, error = $2 WHERE \"batchId\" = $3",
+                        'failed', error_msg, batch_id
+                    )
+                except Exception:
+                    pass
+            raise
         
         logger.info("✓ Training complete!")
         
-        # Get inference info
+        # Get inference info - this is the WANDB model identifier
         step = await self.model.get_step()
         inference_name = f"{self.model.get_inference_name()}:step{step}"
+        
+        # Extract WANDB model ID (entity/project/model-name format)
+        # The inference_name from ART is already in the correct format for WANDB API
+        wandb_model_id = inference_name  # This is the format WANDB expects
         
         logger.info("\n" + "=" * 70)
         logger.info("✅ SUCCESS")
         logger.info("=" * 70)
-        logger.info(f"Model: {inference_name}")
+        logger.info(f"Model: {wandb_model_id}")
         logger.info(f"Step: {step}")
         logger.info(f"Agents trained: {data['count']}")
         logger.info(f"Trajectories: {len(art_trajs)}")
         logger.info("=" * 70)
         
+        # Save model to database
+        if batch_id and model_version and self.pool:
+            try:
+                # Calculate average reward from scores
+                avg_reward = sum(s['score'] for s in scores) / len(scores) if scores else 0.0
+                
+                # Create model record
+                model_id = f"babylon-agent-{model_version}"
+                await self.pool.execute("""
+                    INSERT INTO trained_models (
+                        id, "modelId", version, "baseModel", "trainingBatch", 
+                        "storagePath", status, "avgReward", "createdAt"
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+                    ON CONFLICT ("modelId") DO UPDATE SET
+                        version = EXCLUDED.version,
+                        status = EXCLUDED.status,
+                        "avgReward" = EXCLUDED."avgReward",
+                        "updatedAt" = NOW()
+                """,
+                    f"model-{int(datetime.now().timestamp() * 1000)}",
+                    model_id,
+                    model_version,
+                    self.base_model,
+                    batch_id,
+                    wandb_model_id,  # Store WANDB model ID as storagePath
+                    'ready',
+                    avg_reward
+                )
+                
+                # Update batch status to completed
+                await self.pool.execute(
+                    "UPDATE training_batches SET status = $1, \"completedAt\" = NOW() WHERE \"batchId\" = $2",
+                    'completed', batch_id
+                )
+                
+                logger.info(f"✓ Saved model to database: {model_id} (WANDB: {wandb_model_id})")
+            except Exception as e:
+                logger.error(f"Failed to save model to database: {e}")
+                # Don't fail the whole training if DB save fails
+        
+        # Ensure model_id is set even if batch_id/model_version weren't provided
+        result_model_id = None
+        if batch_id and model_version:
+            result_model_id = model_id
+        elif batch_id:
+            # Fallback: use batch_id as model identifier
+            result_model_id = f"babylon-agent-batch-{batch_id}"
+        
         return {
             'window_id': window_id,
-            'model_name': inference_name,
+            'model_name': wandb_model_id,  # Return WANDB model ID
+            'model_id': result_model_id,
             'step': step,
             'num_agents': data['count'],
-            'num_trajectories': len(art_trajs)
+            'num_trajectories': len(art_trajs),
+            'batch_id': batch_id
         }
     
     async def test_inference(self) -> str:
@@ -504,6 +615,8 @@ async def main():
         elif mode == "single":
             # Train on one window
             window_id = os.getenv("WINDOW_ID")
+            batch_id = os.getenv("BATCH_ID")  # From TypeScript
+            model_version = os.getenv("MODEL_VERSION")  # From TypeScript
             
             if not window_id:
                 # Find a ready window
@@ -520,9 +633,13 @@ async def main():
                 return
             
             print(f"Training on: {window_id}\n")
+            if batch_id:
+                print(f"Batch ID: {batch_id}")
+            if model_version:
+                print(f"Model Version: {model_version}\n")
             
             # Train!
-            result = await trainer.train_window(window_id)
+            result = await trainer.train_window(window_id, batch_id=batch_id, model_version=model_version)
             
             # Test inference
             print()
@@ -530,6 +647,8 @@ async def main():
             
             print(f"\n✅ All done!")
             print(f"Model: {result['model_name']}")
+            if result.get('model_id'):
+                print(f"Model ID: {result['model_id']}")
             print(f"Ready for use!")
         
         else:

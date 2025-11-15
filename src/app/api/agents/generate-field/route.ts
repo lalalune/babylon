@@ -5,10 +5,11 @@
  * @access Public
  * 
  * @description
- * AI-powered content generation for agent configuration fields using Claude
- * (Anthropic). Generates contextually appropriate content for agent profiles,
- * personalities, system prompts, trading strategies, and other configuration
- * fields. Used during agent creation and editing workflows.
+ * AI-powered content generation for agent configuration fields using Groq
+ * (qwen/qwen3-32b) or Claude (claude-sonnet-4-5) as fallback. Generates
+ * contextually appropriate content for agent profiles, personalities, system
+ * prompts, trading strategies, and other configuration fields. Used during
+ * agent creation and editing workflows.
  * 
  * **Supported Fields:**
  * - `name` - Creative agent names
@@ -40,7 +41,7 @@
  * 
  * @throws {400} Bad Request - Missing field name
  * @throws {500} Internal Server Error - AI generation failed
- * @throws {503} Service Unavailable - ANTHROPIC_API_KEY not configured
+ * @throws {503} Service Unavailable - No LLM API key configured (GROQ_API_KEY or ANTHROPIC_API_KEY required)
  * 
  * @example
  * ```typescript
@@ -75,46 +76,104 @@
  * ```
  * 
  * @see {@link /src/app/agents/create/page.tsx} Agent creation UI
+ * @see {@link https://console.groq.com/docs/models} Groq API
  * @see {@link https://www.anthropic.com/api} Anthropic API
  */
 
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { createGroq } from '@ai-sdk/groq'
+import { generateText } from 'ai'
 import { logger } from '@/lib/logger'
+import { authenticateUser } from '@/lib/server-auth'
+import { checkRateLimitAndDuplicates, RATE_LIMIT_CONFIGS } from '@/lib/rate-limiting'
 
 export async function POST(req: NextRequest) {
-  const { fieldName, currentValue, context } = await req.json()
+  try {
+    const user = await authenticateUser(req)
+    
+    // Apply rate limiting - 10 field generations per minute
+    const rateLimitError = checkRateLimitAndDuplicates(
+      user.userId,
+      null, // No duplicate detection for field generation
+      RATE_LIMIT_CONFIGS.GENERATE_AGENT_FIELD
+    )
+    
+    if (rateLimitError) {
+      logger.warn('Agent field generation rate limit exceeded', { userId: user.userId }, 'GenerateField')
+      return rateLimitError
+    }
+    
+    const { fieldName, currentValue, context } = await req.json()
 
-  const anthropicApiKey = process.env.ANTHROPIC_API_KEY!
-  const anthropic = new Anthropic({ apiKey: anthropicApiKey })
+    const prompt = buildPromptForField(fieldName, currentValue, context)
+    const systemPrompt = `You are a helpful assistant that generates agent configurations. Be concise, professional, and authentic.`
 
-  const prompt = buildPromptForField(fieldName, currentValue, context)
-  const systemPrompt = `You are a helpful assistant that generates agent configurations. Be concise, professional, and authentic.`
+    let generatedValue: string
 
-  const message = await anthropic.messages.create({
-    model: 'claude-3-5-sonnet',
-    max_tokens: 300,
-    temperature: 0.8,
-    system: systemPrompt,
-    messages: [
-      {
-        role: 'user',
-        content: prompt
-      }
-    ]
-  })
+    // Use Groq qwen/qwen3-32b if available, otherwise fall back to Claude
+    if (process.env.GROQ_API_KEY) {
+      const groq = createGroq({
+        apiKey: process.env.GROQ_API_KEY,
+        baseURL: 'https://api.groq.com/openai/v1'
+      })
 
-  const firstContent = message.content[0]!
-  logger.error('Unexpected Anthropic response format', { content: message.content }, 'generate-field')
+      const result = await generateText({
+        model: groq.languageModel('qwen/qwen3-32b'),
+        prompt,
+        system: systemPrompt,
+        temperature: 0.8,
+        maxOutputTokens: 300
+      })
 
-  const generatedValue = (firstContent as { text: string }).text.trim()
-  const cleanedValue = generatedValue.replace(/^["']|["']$/g, '')
+      generatedValue = result.text.trim()
+      logger.info('Generated agent field with Groq', { fieldName, provider: 'groq' }, 'GenerateField')
+    } else if (process.env.ANTHROPIC_API_KEY) {
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-  return NextResponse.json({
-    success: true,
-    value: cleanedValue
-  })
+      const message = await anthropic.messages.create({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 300,
+        temperature: 0.8,
+        system: systemPrompt,
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ]
+      })
+
+      const firstContent = message.content[0]!
+      generatedValue = (firstContent as { text: string }).text.trim()
+      logger.info('Generated agent field with Claude', { fieldName, provider: 'claude' }, 'GenerateField')
+    } else {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'No LLM API key configured. Set GROQ_API_KEY or ANTHROPIC_API_KEY.'
+        },
+        { status: 503 }
+      )
+    }
+
+    const cleanedValue = generatedValue.replace(/^["']|["']$/g, '')
+
+    return NextResponse.json({
+      success: true,
+      value: cleanedValue
+    })
+  } catch (error) {
+    logger.error('Error generating agent field', { error }, 'generate-field')
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to generate field'
+      },
+      { status: 500 }
+    )
+  }
 }
 
 function buildPromptForField(

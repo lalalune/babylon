@@ -11,6 +11,7 @@ import { prisma } from '@/lib/prisma';
 import { AdminReportActionSchema } from '@/lib/validation/schemas/moderation';
 import { logger } from '@/lib/logger';
 import { NotFoundError } from '@/lib/errors';
+import { evaluateReport, storeEvaluationResult } from '@/lib/moderation/report-evaluation';
 
 /**
  * GET /api/admin/reports/[reportId]
@@ -90,8 +91,21 @@ export const GET = withErrorHandling(async (
     },
   });
 
+  // Parse evaluation if it exists
+  let evaluation = null;
+  if (report.resolution) {
+    try {
+      evaluation = JSON.parse(report.resolution);
+    } catch {
+      // Not JSON, treat as plain text resolution
+    }
+  }
+
   return successResponse({
-    report,
+    report: {
+      ...report,
+      evaluation,
+    },
     relatedReports,
   });
 });
@@ -109,6 +123,24 @@ export const POST = withErrorHandling(async (
 
   const body = await request.json();
   const { action, resolution } = AdminReportActionSchema.parse(body);
+  
+  // Handle evaluate action (doesn't require resolution)
+  if (action === 'evaluate') {
+    const evaluation = await evaluateReport(reportId);
+    await storeEvaluationResult(reportId, evaluation);
+    
+    logger.info('Report evaluated', {
+      reportId,
+      outcome: evaluation.outcome,
+      confidence: evaluation.confidence,
+    }, 'POST /api/admin/reports/[reportId]');
+    
+    return successResponse({
+      success: true,
+      message: 'Report evaluated successfully',
+      evaluation,
+    });
+  }
 
   logger.info(`Admin taking action on report`, { 
     adminUserId: adminUser.userId,

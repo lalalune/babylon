@@ -8,7 +8,7 @@
 import type { Provider, IAgentRuntime, Memory, State, ProviderResult } from '@elizaos/core'
 import { logger } from '@/lib/logger'
 import type { BabylonRuntime } from '../types'
-import type { A2AChatsResponse, A2AUnreadCountResponse, A2ANotificationsResponse } from '@/types/a2a-responses'
+// import type { A2AChatsResponse, A2AUnreadCountResponse, A2ANotificationsResponse } from '@/types/a2a-responses' // Commented out - not needed
 
 /**
  * Provider: Unread Messages
@@ -23,29 +23,48 @@ export const messagesProvider: Provider = {
     
     // A2A is REQUIRED
     if (!babylonRuntime.a2aClient?.isConnected()) {
-      logger.error('A2A client not connected - messages provider requires A2A protocol', { 
-        agentId: runtime.agentId 
-      })
+      logger.error('A2A client not connected - messages provider requires A2A protocol', undefined, runtime.agentId)
       return { text: 'ERROR: A2A client not connected. Cannot fetch messages. Please ensure A2A server is running.' }
     }
     
-    // Fetch messages via A2A protocol
-    const [chats, unreadCount] = await Promise.all([
-      babylonRuntime.a2aClient.sendRequest('a2a.getChats', { filter: 'all' }),
-      babylonRuntime.a2aClient.sendRequest('a2a.getUnreadCount', {})
-    ])
-    
-    const chatsData = chats as A2AChatsResponse
-    const unreadData = unreadCount as A2AUnreadCountResponse
-    
-    return { text: `Your Messages:
-
-Unread Count: ${unreadData.unreadCount || 0}
-
-Recent Chats (${chatsData.chats?.length || 0}):
-${chatsData.chats?.slice(0, 10).map((c) => `- ${c.name || (c.isGroup ? 'Group Chat' : 'Direct Message')} (${c.participants} participants)
-  Last: ${c.lastMessage?.content?.substring(0, 50) || 'No messages'}...
-  ${c.updatedAt || ''}`).join('\n') || 'No chats'}` }
+    try {
+      const [chatsResult, unreadResult] = await Promise.all([
+        babylonRuntime.a2aClient.getChats(),
+        babylonRuntime.a2aClient.getUnreadCount()
+      ]) as [
+        { chats?: Array<{
+          id: string
+          name: string | null
+          isGroup: boolean
+          participants: Array<unknown>
+        }> },
+        { unreadCount?: number }
+      ]
+      
+      const chats = (chatsResult as { chats?: Array<{
+        id: string
+        name: string | null
+        isGroup: boolean
+        participants: Array<unknown>
+      }> })?.chats || []
+      
+      const unreadCount = (unreadResult as { unreadCount?: number })?.unreadCount || 0
+      
+      const chatsText = chats.length > 0
+        ? `Chats:\n${chats.map(c => 
+            `- ${c.name || 'Unnamed'} (${c.isGroup ? 'Group' : 'DM'}) | ID: ${c.id} | Participants: ${c.participants.length}`
+          ).join('\n')}`
+        : 'No chats available.'
+      
+      return { 
+        text: `${chatsText}\n\nUnread messages: ${unreadCount}` 
+      }
+    } catch (error) {
+      logger.error('Error fetching messages via A2A', { error, agentId: runtime.agentId }, 'MessagesProvider')
+      return { 
+        text: `Error fetching messages: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      }
+    }
   }
 }
 
@@ -62,25 +81,35 @@ export const notificationsProvider: Provider = {
     
     // A2A is REQUIRED
     if (!babylonRuntime.a2aClient?.isConnected()) {
-      logger.error('A2A client not connected - notifications provider requires A2A protocol', { 
-        agentId: runtime.agentId 
-      })
+      logger.error('A2A client not connected - notifications provider requires A2A protocol', undefined, runtime.agentId)
       return { text: 'ERROR: A2A client not connected. Cannot fetch notifications. Please ensure A2A server is running.' }
     }
     
-    // Fetch notifications via A2A protocol
-    const notifications = await babylonRuntime.a2aClient.sendRequest('a2a.getNotifications', {
-      limit: 10
-    })
-    
-    const notifData = notifications as A2ANotificationsResponse
-    
-    return { text: `Your Notifications:
-
-Unread: ${notifData.unreadCount || 0}
-
-Recent Notifications (${notifData.notifications?.length || 0}):
-${notifData.notifications?.map((n) => `${n.read ? '✓' : '•'} ${n.type}: ${n.message}
-  ${n.createdAt}`).join('\n') || 'No notifications'}` }
+    try {
+      const notificationsResult = await babylonRuntime.a2aClient.getNotifications(20)
+      const notifications = (notificationsResult as { notifications?: Array<{
+        id: string
+        type: string
+        message: string
+        read: boolean
+        createdAt: string | Date
+      }> })?.notifications || []
+      const unreadCount = (notificationsResult as { unreadCount?: number })?.unreadCount || 0
+      
+      if (notifications.length === 0) {
+        return { text: 'No notifications available.' }
+      }
+      
+      const notificationsText = `Notifications (${unreadCount} unread):\n${notifications.map((n, idx) => 
+        `${idx + 1}. [${n.read ? 'READ' : 'UNREAD'}] ${n.type}: ${n.message} (ID: ${n.id})`
+      ).join('\n\n')}`
+      
+      return { text: notificationsText }
+    } catch (error) {
+      logger.error('Error fetching notifications via A2A', { error, agentId: runtime.agentId }, 'NotificationsProvider')
+      return { 
+        text: `Error fetching notifications: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      }
+    }
   }
 }

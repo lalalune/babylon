@@ -4,18 +4,19 @@
  * Database Seed Script
  * 
  * Seeds the database with:
- * - All actors from actors.json
- * - All organizations from actors.json
+ * - All actors from split JSON structure (public/data/actors/*.json)
+ * - All organizations from split JSON structure (public/data/organizations/*.json)
  * - Initial game state
  * 
  * Run: bun run prisma:seed
  */
 
 import { PrismaClient, Prisma } from '@prisma/client';
-import { readFileSync, existsSync } from 'fs';
+import { existsSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../src/lib/logger';
 import { generateSnowflakeId } from '../src/lib/snowflake';
+import { loadActorsData } from '../src/lib/data/actors-loader';
 
 const prisma = new PrismaClient();
 
@@ -26,18 +27,8 @@ import { CapitalAllocationService } from '../src/lib/services/capital-allocation
 async function main() {
   logger.info('SEEDING DATABASE', undefined, 'Script');
 
-  // Load actors.json - try both locations
-  let actorsPath = join(process.cwd(), 'public', 'data', 'actors.json');
-  if (!existsSync(actorsPath)) {
-    actorsPath = join(process.cwd(), 'data', 'actors.json');
-  }
-
-  if (!existsSync(actorsPath)) {
-    logger.error('actors.json not found in public/data/ or data/', undefined, 'Script');
-    throw new Error('actors.json not found');
-  }
-
-  const actorsData: SeedActorsDatabase = JSON.parse(readFileSync(actorsPath, 'utf-8'));
+  // Load actors data from new split structure
+  const actorsData: SeedActorsDatabase = loadActorsData();
 
   logger.info('Loaded:', {
     actors: actorsData.actors.length,
@@ -262,11 +253,11 @@ async function main() {
   
   logger.info(`Initialized ${poolsCreated} pools with $${totalCapitalAllocated.toLocaleString()} total capital`, undefined, 'Script');
 
-  // Seed relationships from actors.json
+  // Seed relationships from actors data
   logger.info('Seeding actor relationships...', undefined, 'Script');
   
   if (actorsData.relationships && actorsData.relationships.length > 0) {
-    logger.info(`Found ${actorsData.relationships.length} relationships in actors.json`, { count: actorsData.relationships.length }, 'Script');
+    logger.info(`Found ${actorsData.relationships.length} relationships in actors data`, { count: actorsData.relationships.length }, 'Script');
     
     try {
       await FollowInitializer.importRelationships(actorsData.relationships);
@@ -278,9 +269,9 @@ async function main() {
       logger.error('Failed to seed relationships', { error }, 'Script');
     }
   } else {
-    logger.warn('No relationships in actors.json', undefined, 'Script');
+    logger.warn('No relationships in actors data', undefined, 'Script');
     logger.warn('Generate: npx tsx scripts/init-actor-relationships.ts', undefined, 'Script');
-    logger.warn('This updates actors.json with relationship data', undefined, 'Script');
+    logger.warn('This updates the actors data structure with relationship data', undefined, 'Script');
   }
   
   // Initialize NPC-to-NPC follows if they don't exist

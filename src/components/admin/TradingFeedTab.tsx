@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
-import { Activity, RefreshCw } from 'lucide-react'
+import { Activity, RefreshCw, Plus, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/shared/Avatar'
 import { Skeleton } from '@/components/shared/Skeleton'
@@ -77,12 +77,58 @@ export function TradingFeedTab() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | TradeType>('all')
   const [isRefreshing, startRefresh] = useTransition();
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchTrades()
     const interval = setInterval(() => fetchTrades(), 10000) // Refresh every 10s
     return () => clearInterval(interval)
   }, [filter])
+
+  // Show/hide form fields based on trade type
+  useEffect(() => {
+    const tradeTypeSelect = document.querySelector<HTMLSelectElement>('select[name="tradeType"]')
+    const balanceFields = document.getElementById('balanceFields')
+    const npcFields = document.getElementById('npcFields')
+
+    const handleTradeTypeChange = () => {
+      if (!tradeTypeSelect || !balanceFields || !npcFields) return
+      
+      if (tradeTypeSelect.value === 'balance') {
+        balanceFields.classList.remove('hidden')
+        npcFields.classList.add('hidden')
+        // Make balance fields required
+        balanceFields.querySelectorAll('input[required], select[required]').forEach(el => {
+          el.setAttribute('required', '')
+        })
+        // Remove required from NPC fields
+        npcFields.querySelectorAll('input[required]').forEach(el => {
+          el.removeAttribute('required')
+        })
+      } else {
+        balanceFields.classList.add('hidden')
+        npcFields.classList.remove('hidden')
+        // Remove required from balance fields
+        balanceFields.querySelectorAll('input[required], select[required]').forEach(el => {
+          el.removeAttribute('required')
+        })
+        // Make NPC fields required
+        npcFields.querySelectorAll('input[required]').forEach(el => {
+          el.setAttribute('required', '')
+        })
+      }
+    }
+
+    tradeTypeSelect?.addEventListener('change', handleTradeTypeChange)
+    // Set initial state
+    handleTradeTypeChange()
+
+    return () => {
+      tradeTypeSelect?.removeEventListener('change', handleTradeTypeChange)
+    }
+  }, [showCreateForm])
 
   const fetchTrades = (showRefreshing = false) => {
     if (showRefreshing) {
@@ -108,6 +154,58 @@ export function TradingFeedTab() {
     }
     setTrades(validation.data || [])
     setLoading(false)
+  }
+
+  const handleCreateTrade = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setCreating(true)
+    setCreateError(null)
+
+    const formData = new FormData(e.currentTarget)
+    const tradeType = formData.get('tradeType') as string
+    const payload: Record<string, unknown> = { type: tradeType }
+
+    try {
+      if (tradeType === 'balance') {
+        payload.userId = formData.get('userId') as string
+        payload.transactionType = formData.get('transactionType') as string
+        payload.amount = parseFloat(formData.get('amount') as string)
+        payload.description = formData.get('description') as string || undefined
+        payload.relatedId = formData.get('relatedId') as string || undefined
+        payload.updateBalance = formData.get('updateBalance') === 'true'
+      } else if (tradeType === 'npc') {
+        payload.npcActorId = formData.get('npcActorId') as string
+        payload.marketType = formData.get('marketType') as string
+        payload.ticker = formData.get('ticker') as string || undefined
+        payload.marketId = formData.get('marketId') as string || undefined
+        payload.action = formData.get('action') as string
+        payload.side = formData.get('side') as string || undefined
+        payload.amount = parseFloat(formData.get('amount') as string)
+        payload.price = parseFloat(formData.get('price') as string)
+        payload.sentiment = formData.get('sentiment') ? parseFloat(formData.get('sentiment') as string) : undefined
+        payload.reason = formData.get('reason') as string || undefined
+      }
+
+      const response = await fetch('/api/admin/trades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to create trade')
+      }
+
+      // Refresh trades and close form
+      await fetchAndSetTrades()
+      setShowCreateForm(false)
+      e.currentTarget.reset()
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : 'Failed to create trade')
+    } finally {
+      setCreating(false)
+    }
   }
 
   const formatCurrency = (value: string | number) => {
@@ -316,15 +414,253 @@ export function TradingFeedTab() {
           ))}
         </div>
         
-        <button
-          onClick={() => fetchTrades(true)}
-          disabled={isRefreshing}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded bg-muted hover:bg-muted/80 transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />
-          Refresh
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowCreateForm(!showCreateForm)}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Create Trade
+          </button>
+          <button
+            onClick={() => fetchTrades(true)}
+            disabled={isRefreshing}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded bg-muted hover:bg-muted/80 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {/* Create Trade Form */}
+      {showCreateForm && (
+        <div className="bg-card border border-border rounded-lg p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Create Trade</h3>
+            <button
+              onClick={() => {
+                setShowCreateForm(false)
+                setCreateError(null)
+              }}
+              className="p-1 hover:bg-muted rounded"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <form onSubmit={handleCreateTrade} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Trade Type</label>
+              <select
+                name="tradeType"
+                required
+                className="w-full px-3 py-2 bg-muted border border-border rounded-lg"
+              >
+                <option value="balance">Balance Transaction</option>
+                <option value="npc">NPC Trade</option>
+              </select>
+            </div>
+
+            {/* Balance Transaction Fields */}
+            <div id="balanceFields" className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">User ID</label>
+                <input
+                  type="text"
+                  name="userId"
+                  required
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg"
+                  placeholder="User ID"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Transaction Type</label>
+                <select
+                  name="transactionType"
+                  required
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg"
+                >
+                  <option value="pred_buy">Prediction Buy</option>
+                  <option value="pred_sell">Prediction Sell</option>
+                  <option value="perp_open">Perp Open</option>
+                  <option value="perp_close">Perp Close</option>
+                  <option value="perp_liquidation">Perp Liquidation</option>
+                  <option value="deposit">Deposit</option>
+                  <option value="withdrawal">Withdrawal</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Amount</label>
+                <input
+                  type="number"
+                  name="amount"
+                  required
+                  step="0.01"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg"
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Description (optional)</label>
+                <input
+                  type="text"
+                  name="description"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg"
+                  placeholder="Trade description"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Related ID (optional)</label>
+                <input
+                  type="text"
+                  name="relatedId"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg"
+                  placeholder="Related entity ID"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="updateBalance"
+                  value="true"
+                  defaultChecked
+                  className="w-4 h-4"
+                />
+                <label className="text-sm">Update user balance</label>
+              </div>
+            </div>
+
+            {/* NPC Trade Fields */}
+            <div id="npcFields" className="space-y-3 hidden">
+              <div>
+                <label className="block text-sm font-medium mb-1">NPC Actor ID</label>
+                <input
+                  type="text"
+                  name="npcActorId"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg"
+                  placeholder="Actor ID"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Market Type</label>
+                <select
+                  name="marketType"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg"
+                >
+                  <option value="prediction">Prediction</option>
+                  <option value="perp">Perpetual</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Ticker (for perp)</label>
+                <input
+                  type="text"
+                  name="ticker"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg"
+                  placeholder="Ticker symbol"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Market ID (for prediction)</label>
+                <input
+                  type="text"
+                  name="marketId"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg"
+                  placeholder="Market ID"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Action</label>
+                <input
+                  type="text"
+                  name="action"
+                  required
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg"
+                  placeholder="e.g., BUY, SELL"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Side (optional)</label>
+                <input
+                  type="text"
+                  name="side"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg"
+                  placeholder="e.g., long, short, YES, NO"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Amount</label>
+                <input
+                  type="number"
+                  name="amount"
+                  required
+                  step="0.01"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg"
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Price</label>
+                <input
+                  type="number"
+                  name="price"
+                  required
+                  step="0.01"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg"
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Sentiment (optional)</label>
+                <input
+                  type="number"
+                  name="sentiment"
+                  step="0.01"
+                  min="-1"
+                  max="1"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg"
+                  placeholder="-1 to 1"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Reason (optional)</label>
+                <textarea
+                  name="reason"
+                  rows={3}
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg"
+                  placeholder="Trade reasoning"
+                />
+              </div>
+            </div>
+
+            {createError && (
+              <div className="text-sm text-red-500 bg-red-500/10 p-2 rounded">
+                {createError}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={creating}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+              >
+                {creating ? 'Creating...' : 'Create Trade'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateForm(false)
+                  setCreateError(null)
+                }}
+                className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Trades List */}
       {trades.length === 0 ? (

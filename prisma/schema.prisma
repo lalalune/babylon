@@ -251,30 +251,92 @@ model BalanceTransaction {
 model Chat {
   id              String            @id
   name            String?
+  description     String?
   isGroup         Boolean           @default(false)
+  
+  // Creator tracking (for user-created groups and NPC-managed groups)
+  createdBy       String?           // User who created (for user groups)
+  npcAdminId      String?           // NPC admin (for NPC groups)
+  
+  // Game context
   gameId          String?
   dayNumber       Int?
+  relatedQuestion Int?
+  
+  // Timestamps
   createdAt       DateTime          @default(now())
   updatedAt       DateTime
+  
+  // Legacy field (deprecated - use createdBy/npcAdminId instead)
   groupId         String?
+  
   ChatParticipant ChatParticipant[]
+  ChatAdmin       ChatAdmin[]
   Message         Message[]
 
   @@index([gameId, dayNumber])
   @@index([groupId])
   @@index([isGroup])
+  @@index([createdBy])
+  @@index([npcAdminId])
+  @@index([relatedQuestion])
 }
 
 model ChatParticipant {
-  id       String   @id
-  chatId   String
-  userId   String
-  joinedAt DateTime @default(now())
-  Chat     Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  id              String    @id
+  chatId          String
+  userId          String
+  joinedAt        DateTime  @default(now())
+  
+  // Fields from GroupChatMembership (for NPC-managed groups)
+  invitedBy       String?
+  isActive        Boolean   @default(true)
+  lastMessageAt   DateTime?
+  messageCount    Int       @default(0)
+  qualityScore    Float     @default(1.0)
+  kickedAt        DateTime?
+  kickReason      String?
+  
+  // Fields from UserGroupMember (for user-created groups)
+  addedBy         String?
+  
+  Chat            Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
   @@unique([chatId, userId])
   @@index([chatId])
   @@index([userId])
+  @@index([chatId, isActive])
+  @@index([lastMessageAt])
+  @@index([userId, isActive])
+}
+
+model ChatAdmin {
+  id        String   @id
+  chatId    String
+  userId    String
+  grantedAt DateTime @default(now())
+  grantedBy String
+  Chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@unique([chatId, userId])
+  @@index([chatId])
+  @@index([userId])
+}
+
+model ChatInvite {
+  id            String    @id
+  chatId        String
+  invitedUserId String
+  invitedBy     String
+  status        String    @default("pending")
+  message       String?
+  invitedAt     DateTime  @default(now())
+  respondedAt   DateTime?
+
+  @@unique([chatId, invitedUserId])
+  @@index([chatId])
+  @@index([invitedUserId, status])
+  @@index([status])
 }
 
 model Comment {
@@ -435,22 +497,22 @@ model GroupChatMembership {
 }
 
 model Market {
-  id                      String     @id
+  id                      String                   @id
   question                String
   description             String?
   gameId                  String?
   dayNumber               Int?
-  yesShares               Decimal    @default(0) @db.Decimal(18, 6)
-  noShares                Decimal    @default(0) @db.Decimal(18, 6)
-  liquidity               Decimal    @db.Decimal(18, 6)
-  resolved                Boolean    @default(false)
+  yesShares               Decimal                  @default(0) @db.Decimal(18, 6)
+  noShares                Decimal                  @default(0) @db.Decimal(18, 6)
+  liquidity               Decimal                  @db.Decimal(18, 6)
+  resolved                Boolean                  @default(false)
   resolution              Boolean?
   endDate                 DateTime
-  createdAt               DateTime   @default(now())
+  createdAt               DateTime                 @default(now())
   updatedAt               DateTime
   onChainMarketId         String?
   onChainResolutionTxHash String?
-  onChainResolved         Boolean    @default(false)
+  onChainResolved         Boolean                  @default(false)
   oracleAddress           String?
   Position                Position[]
   PredictionPriceHistory  PredictionPriceHistory[]
@@ -462,17 +524,17 @@ model Market {
 }
 
 model PredictionPriceHistory {
-  id           String   @id
-  marketId     String
-  yesPrice     Float
-  noPrice      Float
-  yesShares    Decimal  @db.Decimal(24, 8)
-  noShares     Decimal  @db.Decimal(24, 8)
-  liquidity    Decimal  @db.Decimal(24, 8)
-  eventType    String
-  source       String
-  createdAt    DateTime @default(now())
-  Market       Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  id        String   @id
+  marketId  String
+  yesPrice  Float
+  noPrice   Float
+  yesShares Decimal  @db.Decimal(24, 8)
+  noShares  Decimal  @db.Decimal(24, 8)
+  liquidity Decimal  @db.Decimal(24, 8)
+  eventType String
+  source    String
+  createdAt DateTime @default(now())
+  Market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
 
   @@index([marketId, createdAt(sort: Desc)])
 }
@@ -1080,6 +1142,16 @@ model User {
   farcasterVerifiedAt                                               DateTime?
   isAdmin                                                           Boolean                  @default(false)
   isBanned                                                          Boolean                  @default(false)
+  isScammer                                                         Boolean                  @default(false)
+  isCSAM                                                            Boolean                  @default(false)
+  appealCount                                                       Int                      @default(0)
+  appealStaked                                                      Boolean                  @default(false)
+  appealStakeAmount                                                 Decimal?                 @db.Decimal(18, 2)
+  appealStakeTxHash                                                 String?
+  appealStatus                                                      String? // 'pending', 'strict_review', 'lenient_review', 'human_review', 'approved', 'denied', 'false_positive'
+  appealSubmittedAt                                                 DateTime?
+  appealReviewedAt                                                  DateTime?
+  falsePositiveHistory                                              Json? // Array of { date, reason, reviewedBy }
   privyId                                                           String?                  @unique
   registrationBlockNumber                                           BigInt?
   registrationGasUsed                                               BigInt?
@@ -1130,6 +1202,7 @@ model User {
   autonomousGroupChats                                              Boolean                  @default(false)
   autonomousPosting                                                 Boolean                  @default(false)
   autonomousTrading                                                 Boolean                  @default(false)
+  a2aEnabled                                                        Boolean                  @default(false)
   isAgent                                                           Boolean                  @default(false)
   managedBy                                                         String?
   agentGoals                                                        Json?
@@ -1180,6 +1253,9 @@ model User {
   Report_Report_reporterIdToUser                                    Report[]                 @relation("Report_reporterIdToUser")
   Report_Report_reportedUserIdToUser                                Report[]                 @relation("Report_reportedUserIdToUser")
   Report_Report_resolvedByToUser                                    Report[]                 @relation("Report_resolvedByToUser")
+  ModerationEscrow_ModerationEscrow_recipientIdToUser               ModerationEscrow[]
+  ModerationEscrow_ModerationEscrow_adminIdToUser                   ModerationEscrow[]       @relation("ModerationEscrowAdmin")
+  ModerationEscrow_ModerationEscrow_refundedByToUser                ModerationEscrow[]       @relation("ModerationEscrowRefundedBy")
 
   @@index([agentCount(sort: Desc)])
   @@index([autonomousTrading])
@@ -1190,6 +1266,8 @@ model User {
   @@index([isAgent])
   @@index([isAgent, managedBy])
   @@index([isBanned, isActor])
+  @@index([isScammer])
+  @@index([isCSAM])
   @@index([managedBy])
   @@index([profileComplete, createdAt(sort: Desc)])
   @@index([referralCode])
@@ -1669,4 +1747,34 @@ model OrganizationMapping {
 
   @@index([category, isActive])
   @@index([priority(sort: Desc)])
+}
+
+/// Moderation escrow payments - Admin can send money to users via X402, with refund capability
+model ModerationEscrow {
+  id                String   @id
+  recipientId       String   // User receiving the payment
+  adminId           String   // Admin who initiated the payment
+  amountUSD         Decimal  @db.Decimal(18, 2) // Amount in USD
+  amountWei         String   // Amount in wei for blockchain transaction
+  status            String   @default("pending") // pending, paid, refunded, expired
+  reason            String?  // Reason for payment (compensation, refund, etc.)
+  paymentRequestId  String?  @unique // X402 payment request ID
+  paymentTxHash     String?  @unique // Blockchain transaction hash
+  refundTxHash      String?  @unique // Refund transaction hash (if refunded)
+  refundedBy        String?  // Admin who refunded
+  refundedAt        DateTime?
+  metadata          Json?    // Additional metadata
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  expiresAt         DateTime // Payment request expiration
+  User              User     @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  Admin             User     @relation("ModerationEscrowAdmin", fields: [adminId], references: [id], onDelete: Cascade)
+  RefundedByUser    User?    @relation("ModerationEscrowRefundedBy", fields: [refundedBy], references: [id], onDelete: SetNull)
+
+  @@index([recipientId, createdAt(sort: Desc)])
+  @@index([adminId])
+  @@index([status])
+  @@index([paymentRequestId])
+  @@index([paymentTxHash])
+  @@index([createdAt(sort: Desc)])
 }

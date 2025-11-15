@@ -1,127 +1,48 @@
 /**
  * Trending Topics Provider
- * Provides current trending tags and topics
+ * Provides current trending tags and topics via A2A protocol
  */
 
 import type { Provider, IAgentRuntime, Memory, State, ProviderResult } from '@elizaos/core'
 import { logger } from '@/lib/logger'
-import { prisma } from '@/lib/prisma'
+import type { BabylonRuntime } from '../types'
 
 /**
  * Provider: Trending Topics
- * Gets current trending tags and topics with post counts
+ * Gets current trending tags and topics via A2A protocol
  */
 export const trendingTopicsProvider: Provider = {
   name: 'BABYLON_TRENDING_TOPICS',
-  description: 'Get currently trending topics and tags on Babylon',
+  description: 'Get currently trending topics and tags on Babylon via A2A protocol',
   
-  get: async (_runtime: IAgentRuntime, _message: Memory, _state: State): Promise<ProviderResult> => {
+  get: async (runtime: IAgentRuntime, _message: Memory, _state: State): Promise<ProviderResult> => {
+    const babylonRuntime = runtime as BabylonRuntime
+    
+    // A2A is REQUIRED
+    if (!babylonRuntime.a2aClient?.isConnected()) {
+      logger.error('A2A client not connected - trending topics provider requires A2A protocol', undefined, runtime.agentId)
+      return { text: 'ERROR: A2A client not connected. Cannot fetch trending topics. Please ensure A2A server is running.' }
+    }
+    
     try {
-      // Get trending tags from the last calculation
-      const trending = await prisma.trendingTag.findMany({
-        where: {
-          // Get latest trending calculation
-          calculatedAt: {
-            gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
-          }
-        },
-        include: {
-          Tag: {
-            select: {
-              id: true,
-              name: true,
-              displayName: true,
-              category: true
-            }
-          }
-        },
-        orderBy: {
-          rank: 'asc'
-        },
-        take: 10
-      })
+      // Get trending tags via A2A
+      const trendingResult = await babylonRuntime.a2aClient.getTrendingTags(20)
+      const tags = (trendingResult as { tags?: Array<{
+        id: string
+        name: string
+        displayName?: string
+        category?: string
+        postCount?: number
+        score?: number
+      }> })?.tags || []
       
-      if (trending.length === 0) {
-        // Fallback: Get most used tags in last 24h
-        const recentTags = await prisma.post.findMany({
-          where: {
-            createdAt: {
-              gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
-            }
-          },
-          select: {
-            PostTag: {
-              include: {
-                Tag: {
-                  select: {
-                    id: true,
-                    name: true,
-                    displayName: true,
-                    category: true
-                  }
-                }
-              }
-            }
-          },
-          take: 100
-        })
-        
-        // Count tag usage
-        interface TagInfo {
-          id: string;
-          name: string;
-          displayName: string | null;
-          category: string | null;
-        }
-        const tagCounts = new Map<string, { tag: TagInfo; count: number }>()
-        
-        for (const post of recentTags) {
-          for (const postTag of post.PostTag) {
-            const tagId = postTag.Tag.id
-            const existing = tagCounts.get(tagId)
-            if (existing) {
-              existing.count++
-            } else {
-              tagCounts.set(tagId, { tag: postTag.Tag, count: 1 })
-            }
-          }
-        }
-        
-        const topTags = Array.from(tagCounts.values())
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 10)
-        
-        if (topTags.length === 0) {
+      if (tags.length === 0) {
           return { text: 'No trending topics available.' }
         }
         
-        const topicsText = topTags
-          .map((t, i) => `${i + 1}. #${t.tag.name} (${t.tag.displayName || t.tag.name})
-   Category: ${t.tag.category || 'General'}
-   ${t.count} posts`)
-          .join('\n\n')
-        
-        return { 
-          text: `🔥 Trending Topics:
-
-${topicsText}`,
-          data: {
-            topics: topTags.map(t => ({
-              id: t.tag.id,
-              name: t.tag.name,
-              displayName: t.tag.displayName,
-              category: t.tag.category,
-              postCount: t.count,
-              score: t.count
-            }))
-          }
-        }
-      }
-      
-      const topicsText = trending
-        .map((t, i) => `${i + 1}. #${t.Tag.name} (${t.Tag.displayName || t.Tag.name})
-   Category: ${t.Tag.category || 'General'}
-   ${t.postCount} posts | Score: ${t.score.toFixed(1)}${t.relatedContext ? `\n   ${t.relatedContext}` : ''}`)
+      const topicsText = tags
+        .map((t, i) => `${i + 1}. #${t.name}${t.displayName ? ` (${t.displayName})` : ''}
+   ${t.category ? `Category: ${t.category}` : ''}${t.postCount !== undefined ? ` | ${t.postCount} posts` : ''}${t.score !== undefined ? ` | Score: ${t.score.toFixed(1)}` : ''}`)
         .join('\n\n')
       
       return { 
@@ -129,21 +50,19 @@ ${topicsText}`,
 
 ${topicsText}`,
         data: {
-          topics: trending.map(t => ({
-            id: t.Tag.id,
-            name: t.Tag.name,
-            displayName: t.Tag.displayName,
-            category: t.Tag.category,
+          topics: tags.map(t => ({
+            id: t.id,
+            name: t.name,
+            displayName: t.displayName,
+            category: t.category,
             postCount: t.postCount,
-            rank: t.rank,
-            score: t.score,
-            relatedContext: t.relatedContext
+            score: t.score
           }))
         }
       }
     } catch (error) {
-      logger.error('Failed to fetch trending topics', error, 'TrendingTopicsProvider')
-      return { text: 'Unable to fetch trending topics at this time.' }
+      logger.error('Failed to fetch trending topics via A2A', error, 'TrendingTopicsProvider')
+      return { text: `Error fetching trending topics: ${error instanceof Error ? error.message : 'Unknown error'}` }
     }
   }
 }

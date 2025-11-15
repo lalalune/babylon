@@ -5,18 +5,10 @@
  * markets, predictions, and recent trades.
  */
 
-import actorsData from '../../../public/data/actors.json';
+import { loadActorsData } from '@/lib/data/actors-loader';
 import { prisma } from '@/lib/prisma';
 import { shuffleArray } from '@/lib/utils/randomization';
-
-export interface Actor {
-  id: string;
-  name: string;
-  realName: string;
-  username: string;
-  description: string;
-  domain: string[];
-}
+import type { ActorData } from '@/shared/types';
 
 export interface WorldContextOptions {
   includeActors?: boolean;
@@ -32,7 +24,8 @@ export interface WorldContextOptions {
  * Now shuffles actors to add variety to prompts
  */
 export function generateWorldActors(maxActors?: number): string {
-  const actors = actorsData.actors as Actor[];
+  const actorsData = loadActorsData();
+  const actors = actorsData.actors as ActorData[];
   
   // Shuffle actors to add randomness/entropy to prompts
   const shuffledActors = shuffleArray(actors);
@@ -244,7 +237,8 @@ export async function generateWorldContext(options: WorldContextOptions = {}): P
  * Get a list of parody actor names (for validation purposes only)
  */
 export function getParodyActorNames(): string[] {
-  const actors = actorsData.actors as Actor[];
+  const actorsData = loadActorsData();
+  const actors = actorsData.actors as ActorData[];
   return actors.map(actor => actor.name);
 }
 
@@ -252,7 +246,8 @@ export function getParodyActorNames(): string[] {
  * Get a list of forbidden real names (for validation - these should NEVER appear in output)
  */
 export function getForbiddenRealNames(): string[] {
-  const actors = actorsData.actors as Actor[];
+  const actorsData = loadActorsData();
+  const actors = actorsData.actors as ActorData[];
   return actors.map(actor => actor.realName);
 }
 

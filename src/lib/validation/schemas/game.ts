@@ -148,7 +148,12 @@ export const UpcomingEventsQuerySchema = z.object({
  */
 export const TrendingPostsQuerySchema = z.object({
   limit: z.coerce.number().positive().max(50).default(10),
-  timeframe: z.enum(['1h', '6h', '24h', '7d']).default('24h'),
+  timeframe: z.string().transform((val): '1h' | '6h' | '24h' | '7d' => {
+    const validTimeframes: readonly ['1h', '6h', '24h', '7d'] = ['1h', '6h', '24h', '7d'];
+    return (validTimeframes as readonly string[]).includes(val)
+      ? (val as '1h' | '6h' | '24h' | '7d')
+      : '24h'; // Default to 24h for invalid values
+  }).default('24h'),
   minInteractions: z.coerce.number().nonnegative().default(5)
 });
 

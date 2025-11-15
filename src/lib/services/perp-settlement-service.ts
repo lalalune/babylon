@@ -300,16 +300,31 @@ export class PerpSettlementService {
    * Mark position as unsettled in database
    */
   private static async markPositionUnsettled(positionId: string): Promise<void> {
-    // Type assertion needed due to TypeScript language server cache issues
-    // The fields exist in Prisma types but TS can't infer them through the proxy
-    await prismaBase.perpPosition.update({
-      where: { id: positionId },
-      data: {
-        settledToChain: false,
-        settlementTxHash: null,
-        settledAt: null,
-      } as Prisma.PerpPositionUncheckedUpdateInput,
-    });
+    try {
+      // Type assertion needed due to TypeScript language server cache issues
+      // The fields exist in Prisma types but TS can't infer them through the proxy
+      await prismaBase.perpPosition.update({
+        where: { id: positionId },
+        data: {
+          settledToChain: false,
+          settlementTxHash: null,
+          settledAt: null,
+        } as Prisma.PerpPositionUncheckedUpdateInput,
+      });
+    } catch (error: unknown) {
+      // Handle case where position doesn't exist
+      if ((error as { code?: string })?.code === 'P2025') {
+        logger.debug(
+          'Position not found during unsettle (may have been deleted)',
+          { positionId },
+          'PerpSettlementService'
+        );
+        // Position doesn't exist - remove from tracking
+        this.unsettledPositions.delete(positionId);
+        return;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -319,21 +334,36 @@ export class PerpSettlementService {
     positionId: string,
     transactionHash?: string
   ): Promise<void> {
-    // Type assertion needed due to TypeScript language server cache issues
-    // The fields exist in Prisma types but TS can't infer them through the proxy
-    await prismaBase.perpPosition.update({
-      where: { id: positionId },
-      data: {
-        settledToChain: true,
-        settlementTxHash: transactionHash || null,
-        settledAt: new Date(),
-      } as Prisma.PerpPositionUncheckedUpdateInput,
-    });
+    try {
+      // Type assertion needed due to TypeScript language server cache issues
+      // The fields exist in Prisma types but TS can't infer them through the proxy
+      await prismaBase.perpPosition.update({
+        where: { id: positionId },
+        data: {
+          settledToChain: true,
+          settlementTxHash: transactionHash || null,
+          settledAt: new Date(),
+        } as Prisma.PerpPositionUncheckedUpdateInput,
+      });
 
-    logger.info('Position marked as settled', {
-      positionId,
-      transactionHash,
-    }, 'PerpSettlementService');
+      logger.info('Position marked as settled', {
+        positionId,
+        transactionHash,
+      }, 'PerpSettlementService');
+    } catch (error: unknown) {
+      // Handle case where position doesn't exist
+      if ((error as { code?: string })?.code === 'P2025') {
+        logger.debug(
+          'Position not found during settle (may have been deleted)',
+          { positionId, transactionHash },
+          'PerpSettlementService'
+        );
+        // Position doesn't exist - remove from tracking
+        this.unsettledPositions.delete(positionId);
+        return;
+      }
+      throw error;
+    }
   }
 
   /**

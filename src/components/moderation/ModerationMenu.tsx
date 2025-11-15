@@ -18,6 +18,7 @@ interface ModerationMenuProps {
   targetDisplayName?: string;
   targetProfileImageUrl?: string;
   postId?: string; // Optional: if reporting a specific post
+  isNPC?: boolean; // True if target is an NPC/actor (can block/mute but not report)
   onActionComplete?: () => void;
 }
 
@@ -27,6 +28,7 @@ export function ModerationMenu({
   targetDisplayName,
   targetProfileImageUrl,
   postId,
+  isNPC = false,
   onActionComplete,
 }: ModerationMenuProps) {
   const [showMenu, setShowMenu] = useState(false);
@@ -86,18 +88,23 @@ export function ModerationMenu({
                 <span>Block {displayName}</span>
               </button>
 
-              <div className="border-t border-border my-1" />
+              {/* Only show report option for real users, not NPCs */}
+              {!isNPC && (
+                <>
+                  <div className="border-t border-border my-1" />
 
-              <button
-                onClick={() => {
-                  setShowMenu(false);
-                  setShowReportModal(true);
-                }}
-                className="w-full px-4 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center gap-3 text-red-600"
-              >
-                <Flag className="w-4 h-4" />
-                <span>Report {postId ? 'post' : 'user'}</span>
-              </button>
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      setShowReportModal(true);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center gap-3 text-red-600"
+                  >
+                    <Flag className="w-4 h-4" />
+                    <span>Report {postId ? 'post' : 'user'}</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </>
@@ -109,6 +116,7 @@ export function ModerationMenu({
         onClose={() => setShowBlockModal(false)}
         targetUserId={targetUserId}
         targetDisplayName={displayName}
+        isNPC={isNPC}
         onSuccess={handleAction}
       />
 
@@ -117,19 +125,23 @@ export function ModerationMenu({
         onClose={() => setShowMuteModal(false)}
         targetUserId={targetUserId}
         targetDisplayName={displayName}
+        isNPC={isNPC}
         onSuccess={handleAction}
       />
 
-      <ReportModal
-        isOpen={showReportModal}
-        onClose={() => setShowReportModal(false)}
-        targetUserId={targetUserId}
-        targetUsername={targetUsername}
-        targetDisplayName={displayName}
-        targetProfileImageUrl={targetProfileImageUrl}
-        postId={postId}
-        onSuccess={handleAction}
-      />
+      {/* Only show report modal for real users, not NPCs */}
+      {!isNPC && (
+        <ReportModal
+          isOpen={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          targetUserId={targetUserId}
+          targetUsername={targetUsername}
+          targetDisplayName={displayName}
+          targetProfileImageUrl={targetProfileImageUrl}
+          postId={postId}
+          onSuccess={handleAction}
+        />
+      )}
     </div>
   );
 }

@@ -35,7 +35,9 @@ bun test src/engine/__tests__/
 | **GameWorld** | Narrative world generation with events and NPCs | 673 | N/A |
 | **GameSimulator** | Autonomous prediction market simulation | 590 | 21 ✅ |
 | **MarketDecisionEngine** | NPC trading decisions with token-aware batching | 536 | 14 ✅ |
-| **ArticleGenerator** | Long-form news articles with organizational bias | 305 | N/A |
+| **TrendingTopicsEngine** | Dynamic trend detection with LLM-generated descriptions | 450 | 14 ✅ |
+| **ArticleGenerator** | Long-form news articles with organizational bias | 580 | N/A |
+| **NewsArticlePacingEngine** | Controls news article volume to prevent feed flooding | 300 | 29 ✅ |
 | **QuestionManager** | Prediction market question lifecycle management | 278 | 6 ✅ |
 | **EmotionSystem** | Mood/luck/relationship context for NPCs | 157 | N/A |
 
@@ -49,7 +51,7 @@ const feed = new FeedGenerator(llmClient);
 feed.setActorStates(moodMap);
 feed.setRelationships(relationships);
 
-const posts = await feed.generateDayFeed(day, events, actors, outcome);
+const posts = await feed.generateDayFeed(day, events, actors);
 ```
 
 ### PerpetualsEngine - Leveraged Trading
@@ -98,15 +100,48 @@ const result = await sim.runCompleteGame();
 console.log(`${result.winners.length} winners`);
 ```
 
+### TrendingTopicsEngine - Dynamic Trends
+```typescript
+import { TrendingTopicsEngine } from './TrendingTopicsEngine';
+
+const trends = new TrendingTopicsEngine(llmClient);
+
+// Update every 10 ticks
+if (tick % 10 === 0) {
+  await trends.updateTrends(recentPosts, tick);
+}
+
+// Get trend context for agents
+const context = trends.getTrendContext();
+```
+
+### NewsArticlePacingEngine - Article Control
+```typescript
+import { NewsArticlePacingEngine } from './NewsArticlePacingEngine';
+
+const pacer = new NewsArticlePacingEngine();
+
+// Select orgs for breaking news
+const orgs = pacer.selectOrgsForStage(newsOrgs, questionId, 'breaking');
+
+// Generate articles
+for (const org of orgs) {
+  const article = await articleGen.generateArticle(question, org);
+  pacer.recordArticle(questionId, org.id, 'breaking', article.id, tick);
+}
+```
+
 ## 📊 Test Coverage
 
 | Component | Tests | Status |
 |-----------|-------|--------|
-| QuestionManager | 6 | ✅ 100% |
-| MarketDecisionEngine | 14 | ✅ 100% |
+| NewsArticlePacingEngine | 29 | ✅ 100% |
 | GameSimulator | 21 | ✅ 100% |
+| TrendingTopicsEngine | 14 | ✅ 100% |
+| MarketDecisionEngine | 14 | ✅ 100% |
 | PerpetualsEngine | 12 | ✅ 100% |
-| **Total** | **57** | **✅ 100%** |
+| QuestionManager | 6 | ✅ 100% |
+| **Total** | **96** | **✅ 100%** |
 
 ## 🔍 Code Quality
 

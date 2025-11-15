@@ -28,7 +28,7 @@ import { PredictionPricing } from '@/lib/prediction-pricing';
 import { calculateTrendingIfNeeded, calculateTrendingTags } from './services/trending-calculation-service';
 import { WalletService } from './services/wallet-service';
 import { generateSnowflakeId } from './snowflake';
-import type { ExecutionResult } from '@/types/market-decisions';
+import type { TradingExecutionResult } from '@/types/market-decisions';
 import { getOracleService } from './oracle';
 import { worldFactsService } from './services/world-facts-service';
 import { rssFeedService } from './services/rss-feed-service';
@@ -348,17 +348,29 @@ export async function executeGameTick(): Promise<GameTickResult> {
       logger.info('Trending tags recalculated', {}, 'GameTick');
     }
 
-    // Sync reputation if needed (checks 3-hour interval internally)
-    const { periodicReputationSyncIfNeeded } = await import('./reputation/agent0-reputation-sync');
-    const syncResult = await periodicReputationSyncIfNeeded();
-    result.reputationSynced = syncResult.synced;
-    if (syncResult.synced && syncResult.total !== undefined) {
-      result.reputationSyncStats = {
-        total: syncResult.total,
-        successful: syncResult.successful || 0,
-        failed: syncResult.failed || 0,
-      };
-      logger.info('Reputation sync completed', result.reputationSyncStats, 'GameTick');
+    // Sync reputation to ERC-8004 if needed (checks sync interval internally)
+    // This runs during game ticks for local development, and also via Vercel cron
+    const { batchSyncReputationsToERC8004 } = await import('./reputation/erc8004-reputation-sync');
+    try {
+      // Process a small batch during game tick (don't block the tick)
+      const syncResult = await batchSyncReputationsToERC8004({
+        limit: 10, // Small batch during game tick
+        offset: 0,
+        forceRecalculate: false,
+        prioritizeNew: true, // Prioritize new accounts
+      });
+      result.reputationSynced = syncResult.synced > 0;
+      if (syncResult.synced > 0) {
+        result.reputationSyncStats = {
+          total: syncResult.total,
+          successful: syncResult.synced,
+          failed: syncResult.failed,
+        };
+        logger.info('Reputation sync completed during game tick', result.reputationSyncStats, 'GameTick');
+      }
+    } catch (error) {
+      logger.warn('Reputation sync failed during game tick (non-blocking)', { error }, 'GameTick');
+      // Don't fail the game tick if reputation sync fails
     }
 
     // Update world facts if needed (checks 24-hour interval internally)
@@ -1039,7 +1051,7 @@ async function generateArticles(
     id: string;
     eventType: string;
     description: string;
-    actors: unknown;
+    actors: string[] | null;
     relatedQuestion: number | null;
     visibility: string;
     dayNumber: number | null;
@@ -1314,7 +1326,7 @@ async function generateEvents(
  */
 async function updateMarketPricesFromTrades(
   _timestamp: Date,
-  executionResult: ExecutionResult
+  executionResult: TradingExecutionResult
 ): Promise<number> {
   if (!executionResult.executedTrades.length) {
     return 0;
@@ -1363,6 +1375,7 @@ async function updateMarketPricesFromTrades(
   }
 
   let updates = 0;
+  const priceUpdatesForChain: Array<{ organizationId: string; newPrice: number }> = [];
 
   // Update prices based on total capital deployed
   // Market cap = initialPrice × syntheticSupply + totalDeployed
@@ -1406,7 +1419,31 @@ async function updateMarketPricesFromTrades(
       'GameTick'
     );
 
+    // Add to on-chain publish queue
+    priceUpdatesForChain.push({
+      organizationId: company.id,
+      newPrice,
+    });
+
     updates++;
+  }
+
+  // Publish all price updates to blockchain in batch
+  if (priceUpdatesForChain.length > 0) {
+    const { PriceUpdateService } = await import('@/lib/services/price-update-service');
+    await PriceUpdateService.applyUpdates(
+      priceUpdatesForChain.map(u => ({
+        ...u,
+        source: 'npc_trade',
+        reason: 'NPC trading price impact',
+      }))
+    ).catch((error) => {
+      logger.error(
+        'Failed to publish prices to blockchain',
+        { error, count: priceUpdatesForChain.length },
+        'GameTick'
+      );
+    });
   }
 
   return updates;
@@ -1491,7 +1528,7 @@ Return your response as XML in this exact format:
     });
     const nextQuestionNumber = (lastQuestion?.questionNumber || 0) + 1;
 
-    const scenarioId = 1; // TODO: replace with dynamic scenario selection when schema supports it
+    const scenarioId = 1; // Note: Will be replaced with dynamic scenario selection when schema supports it
 
     const now = new Date();
     const question = await prisma.question.create({
@@ -1585,8 +1622,9 @@ export async function resolveQuestionPayouts(questionNumber: number): Promise<vo
       const avgPrice = Number(position.avgPrice ?? 0);
       const costBasis = avgPrice * shares;
       const didWin = position.side === winningSide;
-      const payoutMultiplier = 1 + avgPrice;
-      const payout = didWin ? shares * payoutMultiplier : 0;
+      // In prediction markets, each winning share pays exactly 1 unit
+      // The market "odds" are reflected in purchase price, not payout
+      const payout = didWin ? shares : 0;
       const pnl = payout - costBasis;
 
       if (didWin && payout > 0) {
@@ -1689,7 +1727,7 @@ export async function resolveQuestionPayouts(questionNumber: number): Promise<vo
         outcome: winningSide,
       });
     } else {
-      logger.warn(
+      logger.debug(
         'Skipping reputation update due to missing configuration',
         { marketId: market.id },
         'GameTick'

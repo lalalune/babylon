@@ -6,11 +6,12 @@
  */
 
 import type { LoadTestConfig } from './load-test-simulator';
+import type { JsonRpcParams } from '@/types/a2a';
 
 /**
  * Generate A2A request body for a given method
  */
-export function generateA2ARequest(method: string, params?: Record<string, unknown>) {
+export function generateA2ARequest(method: string, params?: JsonRpcParams) {
   return {
     jsonrpc: '2.0',
     method,
@@ -33,66 +34,33 @@ export function getA2AHeaders(agentId: string = 'test-agent-1') {
 
 /**
  * All implemented A2A methods with their parameters
+ * NOTE: A2A protocol currently implements 10 core methods
  */
 export const A2A_METHODS = {
-  // Discovery & Info
+  // Agent Discovery (2)
   DISCOVER: { method: 'a2a.discover', params: {} },
   GET_INFO: { method: 'a2a.getInfo', params: { agentId: 'babylon-agent' } },
   
-  // Market Operations
+  // Market Operations (3)
   GET_MARKET_DATA: { method: 'a2a.getMarketData', params: { marketId: '1' } },
-  GET_MARKET_PRICES: { method: 'a2a.getMarketPrices', params: { marketIds: ['1', '2'] } },
+  GET_MARKET_PRICES: { method: 'a2a.getMarketPrices', params: { marketIds: ['1', '2'] as string[] } },
   SUBSCRIBE_MARKET: { method: 'a2a.subscribeMarket', params: { marketId: '1' } },
-  GET_PREDICTIONS: { method: 'a2a.getPredictions', params: {} },
-  GET_PERPETUALS: { method: 'a2a.getPerpetuals', params: {} },
-  GET_POSITIONS: { method: 'a2a.getPositions', params: {} },
-  GET_TRADE_HISTORY: { method: 'a2a.getTradeHistory', params: {} },
   
-  // User & Profile
+  // Portfolio (3)
   GET_BALANCE: { method: 'a2a.getBalance', params: {} },
-  GET_USER_WALLET: { method: 'a2a.getUserWallet', params: {} },
-  GET_USER_PROFILE: { method: 'a2a.getUserProfile', params: {} },
-  UPDATE_PROFILE: { method: 'a2a.updateProfile', params: { bio: 'Test bio' } },
-  SEARCH_USERS: { method: 'a2a.searchUsers', params: { query: 'test' } },
-  GET_USER_STATS: { method: 'a2a.getUserStats', params: {} },
+  GET_POSITIONS: { method: 'a2a.getPositions', params: {} },
+  GET_USER_WALLET: { method: 'a2a.getUserWallet', params: { userId: 'user-1' } },
   
-  // Social Features
-  GET_FEED: { method: 'a2a.getFeed', params: {} },
-  CREATE_POST: { method: 'a2a.createPost', params: { content: 'Test post' } },
-  GET_FOLLOWERS: { method: 'a2a.getFollowers', params: {} },
-  GET_FOLLOWING: { method: 'a2a.getFollowing', params: {} },
-  
-  // Payments (x402)
-  PAYMENT_REQUEST: { method: 'a2a.paymentRequest', params: { amount: 100, description: 'Test payment' } },
-  PAYMENT_RECEIPT: { method: 'a2a.paymentReceipt', params: { transactionId: 'test-tx-1' } },
-  
-  // Chats & Messaging
-  GET_CHATS: { method: 'a2a.getChats', params: {} },
-  GET_UNREAD_COUNT: { method: 'a2a.getUnreadCount', params: {} },
-  
-  // Notifications
-  GET_NOTIFICATIONS: { method: 'a2a.getNotifications', params: {} },
-  GET_GROUP_INVITES: { method: 'a2a.getGroupInvites', params: {} },
-  
-  // Pools
-  GET_POOLS: { method: 'a2a.getPools', params: {} },
-  GET_POOL_DEPOSITS: { method: 'a2a.getPoolDeposits', params: {} },
-  
-  // System & Stats
-  GET_SYSTEM_STATS: { method: 'a2a.getSystemStats', params: {} },
-  GET_LEADERBOARD: { method: 'a2a.getLeaderboard', params: {} },
-  
-  // Referrals
-  GET_REFERRAL_CODE: { method: 'a2a.getReferralCode', params: {} },
-  GET_REFERRALS: { method: 'a2a.getReferrals', params: {} },
-  GET_REFERRAL_STATS: { method: 'a2a.getReferralStats', params: {} },
+  // Payments (2)
+  PAYMENT_REQUEST: { method: 'a2a.paymentRequest', params: { to: '0x...', amount: '1000000', service: 'test' } },
+  PAYMENT_RECEIPT: { method: 'a2a.paymentReceipt', params: { requestId: 'req-1', txHash: '0x...' } },
 } as const;
 
 /**
  * Generate endpoint configuration for load testing
  */
 function generateA2AEndpoint(
-  methodConfig: { method: string; params: Record<string, unknown> },
+  methodConfig: { method: string; params: JsonRpcParams },
   weight: number,
   agentId: string = 'test-agent-1'
 ) {
@@ -114,18 +82,15 @@ export const A2A_LIGHT_SCENARIO: LoadTestConfig = {
   rampUpSeconds: 10,
   thinkTimeMs: 1000,
   endpoints: [
-    generateA2AEndpoint(A2A_METHODS.GET_BALANCE, 0.20),
-    generateA2AEndpoint(A2A_METHODS.GET_POSITIONS, 0.20),
-    generateA2AEndpoint(A2A_METHODS.GET_USER_PROFILE, 0.15),
-    generateA2AEndpoint(A2A_METHODS.GET_PREDICTIONS, 0.15),
-    generateA2AEndpoint(A2A_METHODS.GET_FEED, 0.15),
-    generateA2AEndpoint(A2A_METHODS.GET_LEADERBOARD, 0.10),
-    generateA2AEndpoint(A2A_METHODS.GET_SYSTEM_STATS, 0.05),
+    generateA2AEndpoint(A2A_METHODS.GET_BALANCE, 0.30),
+    generateA2AEndpoint(A2A_METHODS.GET_POSITIONS, 0.25),
+    generateA2AEndpoint(A2A_METHODS.GET_MARKET_DATA, 0.25),
+    generateA2AEndpoint(A2A_METHODS.GET_USER_WALLET, 0.20),
   ]
 };
 
 /**
- * Normal A2A load test: 100 agents, mixed read/write operations
+ * Normal A2A load test: 100 agents, mixed operations
  */
 export const A2A_NORMAL_SCENARIO: LoadTestConfig = {
   concurrentUsers: 100,
@@ -133,19 +98,13 @@ export const A2A_NORMAL_SCENARIO: LoadTestConfig = {
   rampUpSeconds: 20,
   thinkTimeMs: 500,
   endpoints: [
-    // High-frequency reads
-    generateA2AEndpoint(A2A_METHODS.GET_BALANCE, 0.15),
-    generateA2AEndpoint(A2A_METHODS.GET_POSITIONS, 0.15),
-    generateA2AEndpoint(A2A_METHODS.GET_USER_PROFILE, 0.10),
-    generateA2AEndpoint(A2A_METHODS.GET_PREDICTIONS, 0.10),
-    generateA2AEndpoint(A2A_METHODS.GET_FEED, 0.10),
-    generateA2AEndpoint(A2A_METHODS.GET_MARKET_DATA, 0.10),
-    generateA2AEndpoint(A2A_METHODS.GET_LEADERBOARD, 0.08),
-    generateA2AEndpoint(A2A_METHODS.GET_TRADE_HISTORY, 0.07),
-    generateA2AEndpoint(A2A_METHODS.GET_CHATS, 0.05),
-    generateA2AEndpoint(A2A_METHODS.GET_NOTIFICATIONS, 0.05),
-    // Some writes
-    generateA2AEndpoint(A2A_METHODS.CREATE_POST, 0.05),
+    generateA2AEndpoint(A2A_METHODS.GET_BALANCE, 0.20),
+    generateA2AEndpoint(A2A_METHODS.GET_POSITIONS, 0.20),
+    generateA2AEndpoint(A2A_METHODS.GET_MARKET_DATA, 0.15),
+    generateA2AEndpoint(A2A_METHODS.SUBSCRIBE_MARKET, 0.10),
+    generateA2AEndpoint(A2A_METHODS.GET_USER_WALLET, 0.10),
+    generateA2AEndpoint(A2A_METHODS.DISCOVER, 0.05),
+    generateA2AEndpoint(A2A_METHODS.GET_INFO, 0.05),
   ]
 };
 
@@ -159,34 +118,18 @@ export const A2A_HEAVY_SCENARIO: LoadTestConfig = {
   thinkTimeMs: 200,
   maxRps: 500,
   endpoints: [
-    // Discovery & Info
-    generateA2AEndpoint(A2A_METHODS.DISCOVER, 0.05),
-    generateA2AEndpoint(A2A_METHODS.GET_INFO, 0.05),
+    // Agent Discovery
+    generateA2AEndpoint(A2A_METHODS.DISCOVER, 0.10),
+    generateA2AEndpoint(A2A_METHODS.GET_INFO, 0.10),
     
-    // Market Operations (30%)
-    generateA2AEndpoint(A2A_METHODS.GET_MARKET_DATA, 0.08),
-    generateA2AEndpoint(A2A_METHODS.GET_MARKET_PRICES, 0.07),
-    generateA2AEndpoint(A2A_METHODS.GET_PREDICTIONS, 0.08),
-    generateA2AEndpoint(A2A_METHODS.GET_POSITIONS, 0.07),
+    // Market Operations
+    generateA2AEndpoint(A2A_METHODS.GET_MARKET_DATA, 0.15),
+    generateA2AEndpoint(A2A_METHODS.SUBSCRIBE_MARKET, 0.10),
     
-    // User & Profile (25%)
-    generateA2AEndpoint(A2A_METHODS.GET_BALANCE, 0.10),
-    generateA2AEndpoint(A2A_METHODS.GET_USER_WALLET, 0.05),
-    generateA2AEndpoint(A2A_METHODS.GET_USER_PROFILE, 0.05),
-    generateA2AEndpoint(A2A_METHODS.GET_USER_STATS, 0.05),
-    
-    // Social Features (20%)
-    generateA2AEndpoint(A2A_METHODS.GET_FEED, 0.10),
-    generateA2AEndpoint(A2A_METHODS.GET_FOLLOWERS, 0.05),
-    generateA2AEndpoint(A2A_METHODS.GET_FOLLOWING, 0.05),
-    
-    // Chats & Notifications (10%)
-    generateA2AEndpoint(A2A_METHODS.GET_CHATS, 0.05),
-    generateA2AEndpoint(A2A_METHODS.GET_NOTIFICATIONS, 0.05),
-    
-    // System Stats (10%)
-    generateA2AEndpoint(A2A_METHODS.GET_SYSTEM_STATS, 0.05),
-    generateA2AEndpoint(A2A_METHODS.GET_LEADERBOARD, 0.05),
+    // Portfolio
+    generateA2AEndpoint(A2A_METHODS.GET_BALANCE, 0.15),
+    generateA2AEndpoint(A2A_METHODS.GET_POSITIONS, 0.15),
+    generateA2AEndpoint(A2A_METHODS.GET_USER_WALLET, 0.10),
   ]
 };
 

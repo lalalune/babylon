@@ -13,6 +13,7 @@
     "benchmark": "bun run src/benchmark-runner.ts"
   },
   "dependencies": {
+    "@a2a-js/sdk": "^0.3.5",
     "agent0-sdk": "^0.2.4",
     "@ai-sdk/groq": "^2.0.29",
     "@ai-sdk/anthropic": "^1.0.10",

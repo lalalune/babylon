@@ -28,19 +28,19 @@ export async function register() {
     await import('./sentry.server.config')
   }
   
-  // Temporarily disabled to prevent blocking dev server
-  // Re-enable when agent0-sdk is properly installed
+  // Register Babylon on Agent0 registry (ERC-8004) on startup
+  // Only if Agent0 is enabled and we're in Node.js runtime
   if (
-    !sentryDisabled &&
-    false &&
-    process.env.NEXT_RUNTIME === 'nodejs'
+    process.env.AGENT0_ENABLED === 'true' &&
+    process.env.NEXT_RUNTIME === 'nodejs' &&
+    process.env.NODE_ENV === 'production'  // Only in production to avoid blocking dev
   ) {
     const { registerBabylonGame } = await import('./src/lib/babylon-registry-init')
     await registerBabylonGame().catch((error: Error) => {
-      // Don't fail startup if registration fails
-      console.error('Failed to register Babylon game on startup:', error)
+      // Don't fail startup if registration fails - log and continue
+      console.error('Failed to register Babylon game on Agent0 registry:', error)
       // Capture error in Sentry if available
-      if (process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN) {
+      if (!sentryDisabled && (process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN)) {
         Sentry.captureException(error)
       }
     })

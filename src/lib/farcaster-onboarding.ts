@@ -91,11 +91,20 @@ export async function openFarcasterOnboardingPopup(
       })
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to verify Farcaster authentication')
+        let error
+        try {
+          error = await response.json()
+        } catch {
+          throw new Error('Failed to verify Farcaster authentication')
+        }
+        throw new Error((error as { error?: string }).error || 'Failed to verify Farcaster authentication')
       }
 
+      try {
       await response.json()
+      } catch {
+        // Response is ok but empty or invalid JSON - this is acceptable
+      }
       
       resolve({
         fid: data.fid,

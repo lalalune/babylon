@@ -11,6 +11,7 @@
 import { logger } from '@/lib/logger';
 import { isRedisAvailable, safePoll, safePublish } from '@/lib/redis';
 import { EventEmitter } from 'events';
+import type { JsonValue } from '@/types/common';
 
 const textEncoder = new TextEncoder();
 
@@ -30,7 +31,7 @@ export interface SSEClient {
 export interface BroadcastMessage {
   channel: Channel;
   type: string;
-  data: Record<string, unknown>;
+  data: Record<string, JsonValue>;
   timestamp: number;
 }
 
@@ -269,8 +270,12 @@ class ServerlessBroadcaster extends EventEmitter {
         const messages = await safePoll(`sse:${channel}`, 10);
         
         for (const msgStr of messages) {
+          try {
           const message = JSON.parse(msgStr) as BroadcastMessage;
           this.localBroadcast(message);
+          } catch (error) {
+            logger.error('Failed to parse SSE message from Redis', { error, message: msgStr }, 'EventBroadcaster');
+          }
         }
       }, 100);
       
@@ -290,8 +295,12 @@ class ServerlessBroadcaster extends EventEmitter {
       for (const chatChannel of chatChannels) {
         const messages = await safePoll(`sse:${chatChannel}`, 5);
         for (const msgStr of messages) {
+          try {
           const message = JSON.parse(msgStr) as BroadcastMessage;
           this.localBroadcast(message);
+          } catch (error) {
+            logger.error('Failed to parse SSE message from Redis', { error, message: msgStr }, 'EventBroadcaster');
+          }
         }
       }
     }, 200);
@@ -432,7 +441,7 @@ export function getEventBroadcaster(): InMemoryBroadcaster | ServerlessBroadcast
  */
 export function broadcastToChannel(
   channel: Channel,
-  data: Record<string, unknown>
+  data: Record<string, JsonValue>
 ): void {
   const broadcaster = getEventBroadcaster();
   const message: BroadcastMessage = {

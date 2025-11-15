@@ -14,6 +14,7 @@ import { ensureUserForAuth, getCanonicalUserId } from '@/lib/users/ensure-user';
 import type { NextRequest } from 'next/server';
 import { generateSnowflakeId } from '@/lib/snowflake';
 import { checkRateLimitAndDuplicates, RATE_LIMIT_CONFIGS, DUPLICATE_DETECTION_CONFIGS } from '@/lib/rate-limiting';
+import { hasBlocked } from '@/lib/moderation/filters';
 
 /**
  * Build threaded comment structure recursively
@@ -326,6 +327,18 @@ export const POST = withErrorHandling(async (
         authorId: true,
       },
     });
+
+    // Check if either user has blocked the other
+    if (postRecord) {
+      const [isBlocked, hasBlockedMe] = await Promise.all([
+        hasBlocked(postRecord.authorId, canonicalUserId),
+        hasBlocked(canonicalUserId, postRecord.authorId),
+      ]);
+
+      if (isBlocked || hasBlockedMe) {
+        throw new BusinessLogicError('Cannot comment on this post', 'BLOCKED_USER');
+      }
+    }
 
     // Create comment
     const now = new Date();

@@ -292,7 +292,7 @@ export class BabylonLLMClient {
         // Use qwen3-32b as workhorse model for most operations
         return 'qwen/qwen3-32b';
       case 'claude':
-        return 'claude-3-5-sonnet';
+        return 'claude-sonnet-4-5';
       case 'openai':
         return 'gpt-4o-mini';
       default:

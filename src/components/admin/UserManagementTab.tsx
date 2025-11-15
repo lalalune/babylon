@@ -1,11 +1,14 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
-import { Search, Users, Shield, RefreshCw, Ban, CheckCircle } from 'lucide-react'
+import { Search, Users, Shield, RefreshCw, Ban, CheckCircle, DollarSign, VolumeX } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/shared/Avatar'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/shared/Skeleton'
+import { AdminSendMoneyModal } from '@/components/admin/AdminSendMoneyModal'
+import { BlockUserModal } from '@/components/moderation/BlockUserModal'
+import { MuteUserModal } from '@/components/moderation/MuteUserModal'
 import { z } from 'zod'
 
 const UserSchema = z.object({
@@ -68,7 +71,12 @@ export function UserManagementTab() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [showBanModal, setShowBanModal] = useState(false)
+  const [showSendMoneyModal, setShowSendMoneyModal] = useState(false)
+  const [showMuteModal, setShowMuteModal] = useState(false)
+  const [showBlockModal, setShowBlockModal] = useState(false)
   const [banReason, setBanReason] = useState('')
+  const [isScammer, setIsScammer] = useState(false)
+  const [isCSAM, setIsCSAM] = useState(false)
   const [isBanning, startBanning] = useTransition();
 
   useEffect(() => {
@@ -116,6 +124,8 @@ export function UserManagementTab() {
         body: JSON.stringify({
           action,
           reason: action === 'ban' ? banReason : undefined,
+          isScammer: action === 'ban' ? isScammer : false,
+          isCSAM: action === 'ban' ? isCSAM : false,
         }),
       });
 
@@ -127,6 +137,8 @@ export function UserManagementTab() {
       toast.success(action === 'ban' ? 'User banned successfully' : 'User unbanned successfully');
       setShowBanModal(false);
       setBanReason('');
+      setIsScammer(false);
+      setIsCSAM(false);
       setSelectedUser(null);
       fetchUsers(true);
     });
@@ -290,6 +302,39 @@ export function UserManagementTab() {
           {/* Actions */}
           {!user.isActor && (
             <div className="flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  setSelectedUser(user)
+                  setShowSendMoneyModal(true)
+                }}
+                className="px-3 py-1.5 text-sm font-medium rounded bg-green-500/20 text-green-500 hover:bg-green-500/30 transition-colors flex items-center gap-1"
+                title="Send money via escrow"
+              >
+                <DollarSign className="w-4 h-4" />
+                Cash
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedUser(user)
+                  setShowMuteModal(true)
+                }}
+                className="px-3 py-1.5 text-sm font-medium rounded bg-blue-500/20 text-blue-500 hover:bg-blue-500/30 transition-colors flex items-center gap-1"
+                title="Mute user"
+              >
+                <VolumeX className="w-4 h-4" />
+                Mute
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedUser(user)
+                  setShowBlockModal(true)
+                }}
+                className="px-3 py-1.5 text-sm font-medium rounded bg-orange-500/20 text-orange-500 hover:bg-orange-500/30 transition-colors flex items-center gap-1"
+                title="Block user"
+              >
+                <Ban className="w-4 h-4" />
+                Block
+              </button>
               {user.isBanned ? (
                 <button
                   onClick={() => handleBanUser(user, 'unban')}
@@ -415,6 +460,56 @@ export function UserManagementTab() {
         </div>
       )}
 
+      {/* Send Money Modal */}
+      {showSendMoneyModal && selectedUser && (
+        <AdminSendMoneyModal
+          isOpen={showSendMoneyModal}
+          onClose={() => {
+            setShowSendMoneyModal(false)
+            setSelectedUser(null)
+          }}
+          recipientId={selectedUser.id}
+          recipientName={selectedUser.displayName || selectedUser.username || 'User'}
+          recipientUsername={selectedUser.username}
+          recipientWalletAddress={selectedUser.walletAddress}
+          onSuccess={() => {
+            fetchUsers(true)
+          }}
+        />
+      )}
+
+      {/* Block Modal */}
+      {showBlockModal && selectedUser && (
+        <BlockUserModal
+          isOpen={showBlockModal}
+          onClose={() => {
+            setShowBlockModal(false)
+            setSelectedUser(null)
+          }}
+          targetUserId={selectedUser.id}
+          targetDisplayName={selectedUser.displayName || selectedUser.username || 'User'}
+          onSuccess={() => {
+            fetchUsers(true)
+          }}
+        />
+      )}
+
+      {/* Mute Modal */}
+      {showMuteModal && selectedUser && (
+        <MuteUserModal
+          isOpen={showMuteModal}
+          onClose={() => {
+            setShowMuteModal(false)
+            setSelectedUser(null)
+          }}
+          targetUserId={selectedUser.id}
+          targetDisplayName={selectedUser.displayName || selectedUser.username || 'User'}
+          onSuccess={() => {
+            fetchUsers(true)
+          }}
+        />
+      )}
+
       {/* Ban Modal */}
       {showBanModal && selectedUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -437,11 +532,47 @@ export function UserManagementTab() {
               />
             </div>
 
+            <div className="mb-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="isScammer"
+                  checked={isScammer}
+                  onChange={(e) => setIsScammer(e.target.checked)}
+                  className="mt-1 w-4 h-4 rounded border-border text-red-500 focus:ring-red-500"
+                />
+                <label htmlFor="isScammer" className="text-sm font-medium cursor-pointer">
+                  Mark as Scammer
+                  <p className="text-xs text-muted-foreground mt-1">
+                    This user is engaging in fraudulent or deceptive behavior
+                  </p>
+                </label>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="isCSAM"
+                  checked={isCSAM}
+                  onChange={(e) => setIsCSAM(e.target.checked)}
+                  className="mt-1 w-4 h-4 rounded border-border text-red-500 focus:ring-red-500"
+                />
+                <label htmlFor="isCSAM" className="text-sm font-medium cursor-pointer">
+                  Mark as CSAM (Child Sexual Abuse Material)
+                  <p className="text-xs text-muted-foreground mt-1">
+                    This user is sharing or promoting child sexual abuse material
+                  </p>
+                </label>
+              </div>
+            </div>
+
             <div className="flex gap-3">
               <button
                 onClick={() => {
                   setShowBanModal(false)
                   setBanReason('')
+                  setIsScammer(false)
+                  setIsCSAM(false)
                   setSelectedUser(null)
                 }}
                 disabled={isBanning}

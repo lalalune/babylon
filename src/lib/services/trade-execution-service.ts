@@ -17,9 +17,9 @@ import { PredictionPricing } from '@/lib/prediction-pricing';
 
 import type {
   ExecutedTrade,
-  ExecutionResult,
   TradingDecision,
 } from '@/types/market-decisions';
+import type { TradingExecutionResult } from '@/types/market-decisions';
 
 import {
   type AggregatedImpact,
@@ -34,10 +34,10 @@ export class TradeExecutionService {
    */
   async executeDecisionBatch(
     decisions: TradingDecision[]
-  ): Promise<ExecutionResult> {
+  ): Promise<TradingExecutionResult> {
     const startTime = Date.now();
 
-    const result: ExecutionResult = {
+    const result: TradingExecutionResult = {
       totalDecisions: decisions.length,
       successfulTrades: 0,
       failedTrades: 0,
@@ -73,9 +73,14 @@ export class TradeExecutionService {
           error: errorMessage,
         });
 
-        // Use warn level for expected failures (non-existent organizations)
+        // Use warn level for expected failures (non-existent organizations, insufficient balance)
         // Use error level for unexpected system failures
-        const isExpectedFailure = errorMessage.includes('Organization not found');
+        const isExpectedFailure = 
+          errorMessage.includes('Organization not found') ||
+          errorMessage.includes('Insufficient pool balance') ||
+          errorMessage.includes('Market not found') ||
+          errorMessage.includes('Market already resolved') ||
+          errorMessage.includes('Market expired');
         const logLevel = isExpectedFailure ? 'warn' : 'error';
         
         logger[logLevel](
@@ -124,9 +129,76 @@ export class TradeExecutionService {
       throw new Error(`Actor not found: ${decision.npcId}`);
     }
 
-    const pool = actor.Pool[0];
+    const pool = actor.Pool[0]
     if (!pool) {
-      throw new Error(`No active pool found for ${decision.npcName}`);
+      throw new Error(`No active pool found for ${decision.npcName}`)
+    }
+
+    // Pre-check pool balance before attempting trade
+    const availableBalance = parseFloat(pool.availableBalance.toString());
+    
+    // For prediction markets, estimate total cost (amount + fee)
+    if (decision.action === 'buy_yes' || decision.action === 'buy_no') {
+      if (decision.marketId) {
+        const market = await prisma.market.findUnique({
+          where: { id: decision.marketId.toString() },
+        });
+        
+        if (market) {
+          const side = decision.action === 'buy_yes' ? 'yes' : 'no';
+          const calculation = PredictionPricing.calculateBuyWithFees(
+            Number(market.yesShares),
+            Number(market.noShares),
+            side,
+            decision.amount
+          );
+          const totalWithFee = calculation.totalWithFee ?? decision.amount;
+          
+          if (availableBalance < totalWithFee) {
+            logger.warn(
+              `Insufficient pool balance for ${decision.npcName}: ${availableBalance} < ${totalWithFee} (requested: ${decision.amount})`,
+              {
+                npcId: decision.npcId,
+                npcName: decision.npcName,
+                availableBalance,
+                requestedAmount: decision.amount,
+                totalWithFee,
+                marketId: decision.marketId,
+              },
+              'TradeExecutionService'
+            );
+            throw new Error(
+              `Insufficient pool balance: ${availableBalance} < ${totalWithFee} (amount: ${decision.amount}, fee: ${calculation.fee})`
+            );
+          }
+        }
+      }
+    }
+    
+    // For perp positions, estimate total cost (margin + fee)
+    if (decision.action === 'open_long' || decision.action === 'open_short') {
+      const leverage = 5; // Standard leverage
+      const positionSize = decision.amount * leverage;
+      const feeCalc = FeeService.calculateFee(positionSize);
+      const totalCost = decision.amount + feeCalc.feeAmount;
+      
+      if (availableBalance < totalCost) {
+        logger.warn(
+          `Insufficient pool balance for ${decision.npcName}: ${availableBalance} < ${totalCost} (requested margin: ${decision.amount})`,
+          {
+            npcId: decision.npcId,
+            npcName: decision.npcName,
+            availableBalance,
+            requestedMargin: decision.amount,
+            totalCost,
+            ticker: decision.ticker,
+          },
+          'TradeExecutionService'
+        );
+        throw new Error(
+          `Insufficient pool balance: ${availableBalance} < ${totalCost} (margin: ${decision.amount}, fee: ${feeCalc.feeAmount})`
+        );
+      }
     }
 
     // Handle close position

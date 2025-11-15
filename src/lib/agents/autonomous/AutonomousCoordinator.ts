@@ -164,8 +164,8 @@ export class AutonomousCoordinator {
           result.actionsExecuted.trades++
         }
       } else {
-        const tradesExecuted = await autonomousTradingService.executeTrades(agentUserId, runtime)
-        result.actionsExecuted.trades += tradesExecuted
+        const tradeResult = await autonomousTradingService.executeTrades(agentUserId, runtime)
+        result.actionsExecuted.trades += tradeResult.tradesExecuted
       }
     }
 

@@ -13,7 +13,7 @@ import { privyConfig } from '@/lib/privy-config';
 import { FontSizeProvider } from '@/contexts/FontSizeContext';
 import { WidgetRefreshProvider } from '@/contexts/WidgetRefreshContext';
 
-import { FarcasterFrameProvider } from './FarcasterFrameProvider';
+import { FarcasterMiniAppProvider } from './FarcasterMiniAppProvider';
 import { GamePlaybackManager } from './GamePlaybackManager';
 import { OnboardingProvider } from './OnboardingProvider';
 import { PostHogErrorBoundary } from '@/components/analytics/PostHogErrorBoundary';
@@ -162,7 +162,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                     config={privyConfig.config as PrivyClientConfig}
                   >
                     <SmartWalletsProvider>
-                      <FarcasterFrameProvider>
+                      <FarcasterMiniAppProvider>
                         {/* PostHog user identification */}
                         <PostHogIdentifier />
                         {/* Capture referral code from URL if present */}
@@ -179,7 +179,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                             )}
                           </WidgetRefreshProvider>
                         </OnboardingProvider>
-                      </FarcasterFrameProvider>
+                      </FarcasterMiniAppProvider>
                     </SmartWalletsProvider>
                   </PrivyProviderWrapper>
                 </QueryClientProvider>

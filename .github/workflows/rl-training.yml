@@ -1,0 +1,302 @@
+name: Babylon RL Training
+
+# Trigger options:
+# 1. On schedule (daily training at 2 AM UTC)
+# 2. Via repository_dispatch (from debug endpoint)
+# 3. Manual workflow_dispatch (testing from GitHub UI)
+on:
+  schedule:
+    # Daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  
+  repository_dispatch:
+    types: [trigger-training]
+  
+  workflow_dispatch:
+    inputs:
+      batch_id:
+        description: 'Training batch ID (optional, auto-generated if not provided)'
+        required: false
+        type: string
+      window_id:
+        description: 'Window ID to train (optional, auto-detected if not provided)'
+        required: false
+        type: string
+      force:
+        description: 'Force training even if not ready (for testing)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  PYTHON_VERSION: '3.11'
+  WANDB_PROJECT: 'babylon-rl'
+
+# Prevent concurrent training runs
+concurrency:
+  group: training-pipeline
+  cancel-in-progress: false  # Wait for current run to finish
+
+jobs:
+  train:
+    name: Train RL Model
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 hours max
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: 'python/requirements.txt'
+      
+      - name: Install dependencies
+        working-directory: python
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+      
+      - name: Verify installation
+        run: |
+          python --version
+          pip list | grep -E "(art|wandb|asyncpg)"
+      
+      - name: Check training readiness
+        id: readiness
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          python -c "
+          import asyncio
+          import asyncpg
+          import json
+          import os
+          import sys
+          from datetime import datetime
+          
+          async def check():
+              try:
+                  # Connect to database with timeout
+                  pool = await asyncpg.create_pool(
+                      os.getenv('DATABASE_URL'),
+                      min_size=1,
+                      max_size=2,
+                      timeout=30
+                  )
+                  
+                  # Count scored trajectories ready for training
+                  count = await pool.fetchval('''
+                      SELECT COUNT(*) FROM trajectories 
+                      WHERE \"isTrainingData\" = true 
+                      AND \"usedInTraining\" = false
+                      AND \"aiJudgeReward\" IS NOT NULL
+                      AND \"stepsJson\" IS NOT NULL
+                      AND \"stepsJson\"::text != 'null'
+                      AND \"stepsJson\"::text != '[]'
+                  ''')
+                  
+                  print(f'✅ Database connected')
+                  print(f'📊 Trajectories ready for training: {count}')
+                  
+                  # Check if we have enough (lowered for testing)
+                  min_required = 100
+                  ready = count >= min_required
+                  
+                  if ready:
+                      print(f'✅ READY: {count} >= {min_required}')
+                  else:
+                      print(f'⏳ NOT READY: {count} < {min_required} (need {min_required - count} more)')
+                  
+                  # Set outputs for next steps
+                  print(f'::set-output name=ready::{str(ready).lower()}')
+                  print(f'::set-output name=count::{count}')
+                  
+                  await pool.close()
+                  
+              except Exception as e:
+                  print(f'❌ Error checking readiness: {e}', file=sys.stderr)
+                  print(f'::set-output name=ready::false')
+                  print(f'::set-output name=count::0')
+                  sys.exit(1)
+          
+          asyncio.run(check())
+          "
+      
+      - name: Get batch info
+        id: batch
+        env:
+          # From workflow_dispatch inputs:
+          BATCH_ID_INPUT: ${{ inputs.batch_id || '' }}
+          WINDOW_ID_INPUT: ${{ inputs.window_id || '' }}
+          FORCE_INPUT: ${{ inputs.force || 'false' }}
+          # From repository_dispatch payload:
+          BATCH_ID_PAYLOAD: ${{ github.event.client_payload.batch_id || '' }}
+          WINDOW_ID_PAYLOAD: ${{ github.event.client_payload.window_id || '' }}
+          FORCE_PAYLOAD: ${{ github.event.client_payload.force || 'false' }}
+        run: |
+          # Determine batch_id (prefer dispatch payload over input)
+          if [ -n "$BATCH_ID_PAYLOAD" ]; then
+            echo "batch_id=$BATCH_ID_PAYLOAD" >> $GITHUB_OUTPUT
+          elif [ -n "$BATCH_ID_INPUT" ]; then
+            echo "batch_id=$BATCH_ID_INPUT" >> $GITHUB_OUTPUT
+          else
+            echo "batch_id=batch-$(date +%s)" >> $GITHUB_OUTPUT
+          fi
+          
+          # Determine window_id
+          if [ -n "$WINDOW_ID_PAYLOAD" ]; then
+            echo "window_id=$WINDOW_ID_PAYLOAD" >> $GITHUB_OUTPUT
+          elif [ -n "$WINDOW_ID_INPUT" ]; then
+            echo "window_id=$WINDOW_ID_INPUT" >> $GITHUB_OUTPUT
+          else
+            # Format: YYYY-MM-DDTHH:00
+            WINDOW=$(date -u +"%Y-%m-%dT%H:00")
+            echo "window_id=$WINDOW" >> $GITHUB_OUTPUT
+          fi
+          
+          # Determine force flag
+          if [ "$FORCE_PAYLOAD" = "true" ] || [ "$FORCE_INPUT" = "true" ]; then
+            echo "force=true" >> $GITHUB_OUTPUT
+          else
+            echo "force=false" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "source=github_cron" >> $GITHUB_OUTPUT
+      
+      - name: Skip if not ready (unless forced)
+        if: steps.readiness.outputs.ready != 'true' && steps.batch.outputs.force != 'true'
+        run: |
+          echo "⏭️  Not ready for training and force=false"
+          echo "Trajectories: ${{ steps.readiness.outputs.count }}"
+          echo "Required: 100"
+          exit 0
+      
+      - name: Update batch status to training
+        if: steps.readiness.outputs.ready == 'true' || steps.batch.outputs.force == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BATCH_ID: ${{ steps.batch.outputs.batch_id }}
+        run: |
+          python -c "
+          import asyncio
+          import asyncpg
+          import os
+          from datetime import datetime
+          
+          async def update():
+              pool = await asyncpg.create_pool(os.getenv('DATABASE_URL'))
+              batch_id = os.getenv('BATCH_ID')
+              
+              # Update or create batch record
+              await pool.execute('''
+                  INSERT INTO training_batches (
+                      \"batchId\", id, status, \"startedAt\", \"createdAt\"
+                  ) VALUES (
+                      \$1, \$1, 'training', NOW(), NOW()
+                  )
+                  ON CONFLICT (\"batchId\") 
+                  DO UPDATE SET status = 'training', \"startedAt\" = NOW()
+              ''', batch_id)
+              
+              print(f'✅ Batch {batch_id} status: training')
+              await pool.close()
+          
+          asyncio.run(update())
+          "
+      
+      - name: Run RL Training
+        if: steps.readiness.outputs.ready == 'true' || steps.batch.outputs.force == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+          WANDB_PROJECT: ${{ env.WANDB_PROJECT }}
+          BATCH_ID: ${{ steps.batch.outputs.batch_id }}
+          WINDOW_ID: ${{ steps.batch.outputs.window_id }}
+          MODE: single
+        working-directory: python
+        run: |
+          echo "🚀 Starting training for window: $WINDOW_ID"
+          echo "Batch ID: $BATCH_ID"
+          echo "Trajectories available: ${{ steps.readiness.outputs.count }}"
+          
+          # Run trainer
+          python src/training/babylon_trainer.py
+      
+      - name: Update batch status to completed
+        if: success() && (steps.readiness.outputs.ready == 'true' || steps.batch.outputs.force == 'true')
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BATCH_ID: ${{ steps.batch.outputs.batch_id }}
+        run: |
+          python -c "
+          import asyncio
+          import asyncpg
+          import os
+          
+          async def update():
+              pool = await asyncpg.create_pool(os.getenv('DATABASE_URL'))
+              batch_id = os.getenv('BATCH_ID')
+              
+              await pool.execute('''
+                  UPDATE training_batches 
+                  SET status = 'completed', \"completedAt\" = NOW()
+                  WHERE \"batchId\" = \$1
+              ''', batch_id)
+              
+              print(f'✅ Batch {batch_id} completed')
+              await pool.close()
+          
+          asyncio.run(update())
+          "
+      
+      - name: Update batch status to failed
+        if: failure() && (steps.readiness.outputs.ready == 'true' || steps.batch.outputs.force == 'true')
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BATCH_ID: ${{ steps.batch.outputs.batch_id }}
+        run: |
+          python -c "
+          import asyncio
+          import asyncpg
+          import os
+          
+          async def update():
+              pool = await asyncpg.create_pool(os.getenv('DATABASE_URL'))
+              batch_id = os.getenv('BATCH_ID')
+              
+              await pool.execute('''
+                  UPDATE training_batches 
+                  SET status = 'failed', error = 'GitHub Actions workflow failed'
+                  WHERE \"batchId\" = \$1
+              ''', batch_id)
+              
+              print(f'❌ Batch {batch_id} failed')
+              await pool.close()
+          
+          asyncio.run(update())
+          "
+      
+      - name: Upload training logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-logs-${{ steps.batch.outputs.batch_id }}
+          path: |
+            python/logs/
+            python/*.log
+          retention-days: 7
+      
+      - name: Report status
+        if: always()
+        run: |
+          echo "Training Status: ${{ job.status }}"
+          echo "Batch ID: ${{ steps.batch.outputs.batch_id }}"
+          echo "Window ID: ${{ steps.batch.outputs.window_id }}"
+          echo "Ready: ${{ steps.readiness.outputs.ready }}"
+          echo "Trajectories: ${{ steps.readiness.outputs.count }}"
+

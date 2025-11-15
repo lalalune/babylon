@@ -13,6 +13,15 @@ const nextConfig = {
   // Skip prerendering for feed page (client-side only)
   skipTrailingSlashRedirect: true,
   skipProxyUrlNormalize: false,
+  // Farcaster Mini App manifest serving
+  async rewrites() {
+    return [
+      {
+        source: '/.well-known/farcaster.json',
+        destination: '/farcaster.json',
+      },
+    ]
+  },
   // Externalize packages with native Node.js dependencies for server-side
   serverExternalPackages: [
     'ipfs-http-client',

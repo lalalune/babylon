@@ -4,6 +4,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { PerpPosition } from '@/shared/perps-types';
 
+function toNumber(value: unknown, fallback = 0): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
 export interface UserPredictionPosition {
   id: string;
   marketId: string;
@@ -113,7 +124,15 @@ export function useUserPositions(
       { signal: controller.signal }
     );
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (error) {
+      console.error('Failed to parse positions response', error);
+      setError(new Error('Failed to parse response'));
+      setLoading(false);
+      return;
+    }
 
     if (controller.signal.aborted) return;
 
@@ -127,34 +146,38 @@ export function useUserPositions(
           ticker: pos.ticker,
           organizationId: pos.organizationId,
           side: pos.side,
-        entryPrice: Number(pos.entryPrice),
-        currentPrice: Number(pos.currentPrice),
-        size: Number(pos.size),
-        leverage: Number(pos.leverage),
-        liquidationPrice: Number(pos.liquidationPrice),
-        unrealizedPnL: Number(pos.unrealizedPnL),
-        unrealizedPnLPercent: Number(pos.unrealizedPnLPercent),
-        fundingPaid: Number(pos.fundingPaid),
+        entryPrice: toNumber(pos.entryPrice),
+        currentPrice: toNumber(pos.currentPrice),
+        size: toNumber(pos.size),
+        leverage: toNumber(pos.leverage),
+        liquidationPrice: toNumber(pos.liquidationPrice),
+        unrealizedPnL: toNumber(pos.unrealizedPnL),
+        unrealizedPnLPercent: toNumber(pos.unrealizedPnLPercent),
+        fundingPaid: toNumber(pos.fundingPaid),
         openedAt: pos.openedAt,
           lastUpdated: pos.lastUpdated ?? pos.openedAt,
         })
       ) as PerpPosition[];
 
       const normalizedPredictions = (predictions.positions ?? []).map(
-        (pos: ApiPredictionPositionPayload) => ({
-          id: pos.id,
-          marketId: pos.marketId,
-          question: pos.question,
-          side: pos.side,
-          shares: Number(pos.shares),
-          avgPrice: Number(pos.avgPrice),
-          currentPrice: Number(pos.currentPrice),
-          currentValue: Number(pos.currentValue ?? 0),
-          costBasis: Number(pos.costBasis ?? Number(pos.shares) * Number(pos.avgPrice)),
-          unrealizedPnL: Number(pos.unrealizedPnL ?? 0),
-          resolved: Boolean(pos.resolved),
-          resolution: pos.resolution ?? null,
-        })
+        (pos: ApiPredictionPositionPayload) => {
+          const shares = toNumber(pos.shares);
+          const avgPrice = toNumber(pos.avgPrice);
+          return {
+            id: pos.id,
+            marketId: pos.marketId,
+            question: pos.question,
+            side: pos.side,
+            shares,
+            avgPrice,
+            currentPrice: toNumber(pos.currentPrice),
+            currentValue: toNumber(pos.currentValue ?? 0),
+            costBasis: toNumber(pos.costBasis ?? shares * avgPrice),
+            unrealizedPnL: toNumber(pos.unrealizedPnL ?? 0),
+            resolved: Boolean(pos.resolved),
+            resolution: pos.resolution ?? null,
+          };
+        }
       ) as UserPredictionPosition[];
 
     setState({

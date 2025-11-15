@@ -17,30 +17,30 @@ Complete API documentation for the moderation system.
 **Response:**
 ```json
 {
-  "success": true,
-  "message": "User blocked successfully",
-  "block": {
-    "id": "block_123",
-    "blockerId": "user_456",
-    "blockedId": "user_789",
-    "reason": "Spam posting",
-    "createdAt": "2025-11-13T10:00:00Z"
-  }
+ "success": true,
+ "message": "User blocked successfully",
+ "block": {
+ "id": "block_123",
+ "blockerId": "user_456",
+ "blockedId": "user_789",
+ "reason": "Spam posting",
+ "createdAt": "2025-11-13T10:00:00Z"
+ }
 }
 ```
 
-**Check Block Status:**  
+**Check Block Status:** 
 `GET /api/users/{userId}/block`
 
 Returns:
 ```json
 {
-  "isBlocked": true,
-  "block": {
-    "id": "block_123",
-    "createdAt": "2025-11-13T10:00:00Z",
-    "reason": "Spam posting"
-  }
+ "isBlocked": true,
+ "block": {
+ "id": "block_123",
+ "createdAt": "2025-11-13T10:00:00Z",
+ "reason": "Spam posting"
+ }
 }
 ```
 
@@ -59,15 +59,15 @@ Returns:
 **Response:**
 ```json
 {
-  "success": true,
-  "message": "User muted successfully",
-  "mute": {
-    "id": "mute_123",
-    "muterId": "user_456",
-    "mutedId": "user_789",
-    "reason": "Too many posts",
-    "createdAt": "2025-11-13T10:00:00Z"
-  }
+ "success": true,
+ "message": "User muted successfully",
+ "mute": {
+ "id": "mute_123",
+ "muterId": "user_456",
+ "mutedId": "user_789",
+ "reason": "Too many posts",
+ "createdAt": "2025-11-13T10:00:00Z"
+ }
 }
 ```
 
@@ -84,34 +84,34 @@ Returns:
 - `reportedUserId` (string, conditional): Required if `reportType` is `"user"`
 - `reportedPostId` (string, conditional): Required if `reportType` is `"post"`
 - `category` (string, required): One of:
-  - `spam`
-  - `harassment`
-  - `hate_speech`
-  - `violence`
-  - `misinformation`
-  - `inappropriate`
-  - `impersonation`
-  - `self_harm`
-  - `other`
+ - `spam`
+ - `harassment`
+ - `hate_speech`
+ - `violence`
+ - `misinformation`
+ - `inappropriate`
+ - `impersonation`
+ - `self_harm`
+ - `other`
 - `reason` (string, required): Detailed explanation (10-2000 chars)
 - `evidence` (string, optional): URL to evidence
 
 **Response:**
 ```json
 {
-  "success": true,
-  "message": "Report submitted successfully. Our moderation team will review it.",
-  "report": {
-    "id": "report_123",
-    "reporterId": "user_456",
-    "reportedUserId": "user_789",
-    "reportType": "user",
-    "category": "spam",
-    "reason": "Posting promotional content repeatedly",
-    "status": "pending",
-    "priority": "low",
-    "createdAt": "2025-11-13T10:00:00Z"
-  }
+ "success": true,
+ "message": "Report submitted successfully. Our moderation team will review it.",
+ "report": {
+ "id": "report_123",
+ "reporterId": "user_456",
+ "reportedUserId": "user_789",
+ "reportType": "user",
+ "category": "spam",
+ "reason": "Posting promotional content repeatedly",
+ "status": "pending",
+ "priority": "low",
+ "createdAt": "2025-11-13T10:00:00Z"
+ }
 }
 ```
 
@@ -133,27 +133,27 @@ Returns:
 **Response:**
 ```json
 {
-  "reports": [
-    {
-      "id": "report_123",
-      "reportType": "user",
-      "category": "spam",
-      "reason": "Posting promotional content",
-      "status": "pending",
-      "priority": "low",
-      "createdAt": "2025-11-13T10:00:00Z",
-      "reportedUser": {
-        "id": "user_789",
-        "username": "spammer",
-        "displayName": "Spam User"
-      }
-    }
-  ],
-  "pagination": {
-    "limit": 50,
-    "offset": 0,
-    "total": 1
-  }
+ "reports": [
+ {
+ "id": "report_123",
+ "reportType": "user",
+ "category": "spam",
+ "reason": "Posting promotional content",
+ "status": "pending",
+ "priority": "low",
+ "createdAt": "2025-11-13T10:00:00Z",
+ "reportedUser": {
+ "id": "user_789",
+ "username": "spammer",
+ "displayName": "Spam User"
+ }
+ }
+ ],
+ "pagination": {
+ "limit": 50,
+ "offset": 0,
+ "total": 1
+ }
 }
 ```
 
@@ -172,24 +172,24 @@ Returns:
 **Response:**
 ```json
 {
-  "blocks": [
-    {
-      "id": "block_123",
-      "createdAt": "2025-11-13T10:00:00Z",
-      "reason": "Spam posting",
-      "blocked": {
-        "id": "user_789",
-        "username": "spammer",
-        "displayName": "Spam User",
-        "profileImageUrl": "https://..."
-      }
-    }
-  ],
-  "pagination": {
-    "limit": 20,
-    "offset": 0,
-    "total": 1
-  }
+ "blocks": [
+ {
+ "id": "block_123",
+ "createdAt": "2025-11-13T10:00:00Z",
+ "reason": "Spam posting",
+ "blocked": {
+ "id": "user_789",
+ "username": "spammer",
+ "displayName": "Spam User",
+ "profileImageUrl": "https://..."
+ }
+ }
+ ],
+ "pagination": {
+ "limit": 20,
+ "offset": 0,
+ "total": 1
+ }
 }
 ```
 
@@ -208,23 +208,23 @@ Returns:
 **Response:**
 ```json
 {
-  "mutes": [
-    {
-      "id": "mute_123",
-      "createdAt": "2025-11-13T10:00:00Z",
-      "reason": "Too many posts",
-      "muted": {
-        "id": "user_789",
-        "username": "poster",
-        "displayName": "Frequent Poster"
-      }
-    }
-  ],
-  "pagination": {
-    "limit": 20,
-    "offset": 0,
-    "total": 1
-  }
+ "mutes": [
+ {
+ "id": "mute_123",
+ "createdAt": "2025-11-13T10:00:00Z",
+ "reason": "Too many posts",
+ "muted": {
+ "id": "user_789",
+ "username": "poster",
+ "displayName": "Frequent Poster"
+ }
+ }
+ ],
+ "pagination": {
+ "limit": 20,
+ "offset": 0,
+ "total": 1
+ }
 }
 ```
 
@@ -271,17 +271,17 @@ Returns:
 
 **Parameters:**
 - `action` (string, required): One of:
-  - `resolve` - Mark as resolved
-  - `dismiss` - Mark as dismissed
-  - `escalate` - Escalate to critical priority
-  - `ban_user` - Ban the reported user immediately
+ - `resolve` - Mark as resolved
+ - `dismiss` - Mark as dismissed
+ - `escalate` - Escalate to critical priority
+ - `ban_user` - Ban the reported user immediately
 - `resolution` (string, required): Resolution message (1-1000 chars)
 
 **Response:**
 ```json
 {
-  "success": true,
-  "message": "Report resolved successfully"
+ "success": true,
+ "message": "Report resolved successfully"
 }
 ```
 
@@ -296,37 +296,37 @@ Returns:
 **Response:**
 ```json
 {
-  "totals": {
-    "total": 125,
-    "pending": 23,
-    "reviewing": 15,
-    "resolved": 82,
-    "dismissed": 5
-  },
-  "byCategory": [
-    { "category": "spam", "count": 45 },
-    { "category": "harassment", "count": 32 }
-  ],
-  "byPriority": [
-    { "priority": "critical", "count": 8 },
-    { "priority": "high", "count": 28 }
-  ],
-  "topReportedUsers": [
-    {
-      "user": { "id": "user_123", "username": "spammer" },
-      "reportCount": 12
-    }
-  ],
-  "topReporters": [
-    {
-      "user": { "id": "user_456", "username": "moderator" },
-      "reportCount": 24
-    }
-  ],
-  "recentActivity": {
-    "last7Days": 32,
-    "resolved7Days": 28
-  }
+ "totals": {
+ "total": 125,
+ "pending": 23,
+ "reviewing": 15,
+ "resolved": 82,
+ "dismissed": 5
+ },
+ "byCategory": [
+ { "category": "spam", "count": 45 },
+ { "category": "harassment", "count": 32 }
+ ],
+ "byPriority": [
+ { "priority": "critical", "count": 8 },
+ { "priority": "high", "count": 28 }
+ ],
+ "topReportedUsers": [
+ {
+ "user": { "id": "user_123", "username": "spammer" },
+ "reportCount": 12
+ }
+ ],
+ "topReporters": [
+ {
+ "user": { "id": "user_456", "username": "moderator" },
+ "reportCount": 24
+ }
+ ],
+ "recentActivity": {
+ "last7Days": 32,
+ "resolved7Days": 28
+ }
 }
 ```
 

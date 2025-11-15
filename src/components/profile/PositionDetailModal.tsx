@@ -35,7 +35,7 @@ const formatErrorMessage = (payload: unknown, fallback: string): string => {
     return fallback;
   }
 
-  const data = payload as { error?: unknown; message?: unknown };
+  const data = payload as { error?: string | { message?: string }; message?: string };
 
   if (typeof data.error === 'string') {
     return data.error;
@@ -45,9 +45,9 @@ const formatErrorMessage = (payload: unknown, fallback: string): string => {
     data.error &&
     typeof data.error === 'object' &&
     'message' in data.error &&
-    typeof (data.error as { message?: unknown }).message === 'string'
+    typeof data.error.message === 'string'
   ) {
-    return (data.error as { message: string }).message;
+    return data.error.message;
   }
 
   if (typeof data.message === 'string') {

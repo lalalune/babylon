@@ -2,7 +2,7 @@
  * Reputation Calculation Service
  *
  * Aggregates performance metrics and feedback to calculate composite reputation scores.
- * Integrates PNL normalization, game scores, and user feedback into unified reputation.
+ * Integrates PNL normalization, game scores, and user feedback into reputation.
  */
 
 import { prisma } from '@/lib/prisma'

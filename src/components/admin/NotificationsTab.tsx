@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useTransition } from 'react'
 import { Bell, Send, Users, User, MessageCircle, UserPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 type NotificationType = 'system' | 'comment' | 'reaction' | 'follow' | 'mention' | 'reply' | 'share';
 
@@ -36,7 +37,13 @@ export function NotificationsTab() {
       })
       
       if (response.ok) {
-        const data = await response.json()
+        let data;
+        try {
+          data = await response.json()
+        } catch {
+          // Silently fail - this is just for debug info
+          return
+        }
         setCurrentUserId(data.user?.id || null)
       }
     }
@@ -75,7 +82,14 @@ export function NotificationsTab() {
         }),
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        logger.error('Failed to parse notification response', { error: parseError }, 'NotificationsTab')
+        toast.error('Failed to parse response')
+        return
+      }
 
       if (response.ok && data.success) {
         toast.success(data.message || 'Notification sent successfully');
@@ -107,8 +121,15 @@ export function NotificationsTab() {
         },
       });
 
-      const data = await response.json();
-      console.log('[Debug DM]', data)
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        logger.error('Failed to parse debug DM response', { error: parseError }, 'NotificationsTab')
+        toast.error('Failed to parse response')
+        return
+      }
+      logger.debug('Debug DM response', { data }, 'NotificationsTab')
       setDebugInfo(data);
       
       if (data.participantRecords?.length === 0) {
@@ -157,11 +178,18 @@ export function NotificationsTab() {
         }),
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        logger.error('Failed to parse test DM response', { error: parseError }, 'NotificationsTab')
+        toast.error('Failed to parse response')
+        return
+      }
 
       if (response.ok && data.success) {
         const chatId = data.chatId;
-        console.log('[Admin] Test DM messages sent. Chat ID:', chatId, 'Data:', data);
+        logger.debug('Test DM messages sent', { chatId, data }, 'NotificationsTab');
         toast.success(data.message || 'Test DM messages sent successfully', {
           duration: 10000,
           action: {
@@ -170,7 +198,7 @@ export function NotificationsTab() {
           }
         });
       } else {
-        console.error('[Admin] Failed to send messages:', data);
+        logger.error('Failed to send test DM messages', { data }, 'NotificationsTab');
         toast.error(data.message || 'Failed to send test DM messages');
       }
     });
@@ -573,7 +601,14 @@ function GroupInviteSection() {
       }),
     })
 
-    const data = await response.json()
+    let data;
+    try {
+      data = await response.json()
+    } catch (parseError) {
+      logger.error('Failed to parse group invite response', { error: parseError }, 'NotificationsTab')
+      toast.error('Failed to parse response')
+      return
+    }
 
     if (response.ok && data.success) {
       toast.success(data.message || 'Group invite sent successfully')

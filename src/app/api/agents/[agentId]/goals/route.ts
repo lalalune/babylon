@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authenticate } from '@/lib/api/auth-middleware'
 import { generateSnowflakeId } from '@/lib/snowflake'
+import { logger } from '@/lib/logger'
 
 /**
  * GET - List agent's goals
@@ -98,7 +99,13 @@ export async function POST(
     }
     
     // Parse request body
-    const body = await req.json()
+    let body: Record<string, unknown>
+    try {
+      body = await req.json() as Record<string, unknown>
+    } catch (error) {
+      logger.error('Failed to parse request body', { error, agentId }, 'POST /api/agents/[agentId]/goals')
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
     const {
       type,
       name,
@@ -108,7 +115,7 @@ export async function POST(
     } = body
     
     // Validate required fields
-    if (!type || !name || !description) {
+    if (!type || !name || !description || typeof type !== 'string' || typeof name !== 'string' || typeof description !== 'string') {
       return NextResponse.json(
         { error: 'Missing required fields: type, name, description' },
         { status: 400 }
@@ -125,7 +132,8 @@ export async function POST(
     }
     
     // Validate priority
-    if (priority < 1 || priority > 10) {
+    const priorityValue = typeof priority === 'number' ? priority : 5
+    if (priorityValue < 1 || priorityValue > 10) {
       return NextResponse.json(
         { error: 'Priority must be between 1 and 10' },
         { status: 400 }
@@ -140,8 +148,8 @@ export async function POST(
         type,
         name,
         description,
-        target: target || null,
-        priority,
+        target: typeof target === 'string' ? target : undefined,
+        priority: priorityValue,
         status: 'active',
         progress: 0,
         createdAt: new Date(),

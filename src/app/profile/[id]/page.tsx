@@ -21,6 +21,7 @@ import type { Actor, FeedPost, Organization } from '@/shared/types'
 import { useGameStore } from '@/stores/gameStore'
 import type { ProfileInfo } from '@/types/profiles'
 import { ArrowLeft, MessageCircle, Search, Coins } from 'lucide-react'
+import { ModerationMenu } from '@/components/moderation/ModerationMenu'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
@@ -196,8 +197,8 @@ export default function ActorProfilePage() {
       }
     }
       
-      // Try to load from actors.json (contains all actors)
-      const response = await fetch('/data/actors.json')
+      // Try to load from actors-full.json (contains all actors)
+      const response = await fetch('/data/actors-full.json')
       if (!response.ok) throw new Error('Failed to load actors')
       
       const actorsDb = await response.json() as { actors?: Actor[]; organizations?: Organization[] }
@@ -595,26 +596,25 @@ export default function ActorProfilePage() {
               <div className="flex items-center gap-2 pt-3">
                 {authenticated && user && user.id !== actorInfo.id && (
                   <>
-                    {/* Only show message and pay buttons for users, not actors/NPCs */}
+                    {/* Message button - only for regular users, not actors/NPCs/agents */}
                     {actorInfo.isUser && actorInfo.type === 'user' && (
-                      <>
-                        <button 
-                          onClick={handleMessageClick}
-                          disabled={isCreatingDM}
-                          className="p-2 rounded-full border border-border hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Send message"
-                        >
-                          <MessageCircle className="w-5 h-5" />
-                        </button>
-                        <button 
-                          onClick={() => setSendPointsModalOpen(true)}
-                          className="p-2 rounded-full border border-border hover:bg-muted/50 transition-colors"
-                          title="Send points"
-                        >
-                          <Coins className="w-5 h-5" />
-                        </button>
-                      </>
+                      <button 
+                        onClick={handleMessageClick}
+                        disabled={isCreatingDM}
+                        className="p-2 rounded-full border border-border hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Send message"
+                      >
+                        <MessageCircle className="w-5 h-5" />
+                      </button>
                     )}
+                    {/* Send points button - available for ALL users including agents and actors */}
+                    <button 
+                      onClick={() => setSendPointsModalOpen(true)}
+                      className="p-2 rounded-full border border-border hover:bg-muted/50 transition-colors"
+                      title="Send points"
+                    >
+                      <Coins className="w-5 h-5" />
+                    </button>
                     <FollowButton
                       userId={actorInfo.id}
                       size="md"
@@ -627,6 +627,19 @@ export default function ActorProfilePage() {
                         })
                       }}
                     />
+                    {/* Report button - only for users, not own profile */}
+                    {actorInfo.isUser && actorInfo.type === 'user' && (
+                      <ModerationMenu
+                        targetUserId={actorInfo.id}
+                        targetUsername={actorInfo.username ?? undefined}
+                        targetDisplayName={actorInfo.name ?? undefined}
+                        targetProfileImageUrl={actorInfo.profileImageUrl ?? undefined}
+                        onActionComplete={() => {
+                          // Refresh profile data after report
+                          loadActorInfo()
+                        }}
+                      />
+                    )}
                   </>
                 )}
                 {isOwnProfile && (
@@ -896,26 +909,25 @@ export default function ActorProfilePage() {
                 <div className="flex items-center gap-2 pt-3">
                   {authenticated && user && user.id !== actorInfo.id && (
                     <>
-                      {/* Only show message and pay buttons for users, not actors/NPCs */}
+                      {/* Message button - only for regular users, not actors/NPCs/agents */}
                       {actorInfo.isUser && actorInfo.type === 'user' && (
-                        <>
-                          <button 
-                            onClick={handleMessageClick}
-                            disabled={isCreatingDM}
-                            className="p-2 rounded-full border border-border hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Send message"
-                          >
-                            <MessageCircle className="w-5 h-5" />
-                          </button>
-                          <button 
-                            onClick={() => setSendPointsModalOpen(true)}
-                            className="p-2 rounded-full border border-border hover:bg-muted/50 transition-colors"
-                            title="Send points"
-                          >
-                            <Coins className="w-5 h-5" />
-                          </button>
-                        </>
+                        <button 
+                          onClick={handleMessageClick}
+                          disabled={isCreatingDM}
+                          className="p-2 rounded-full border border-border hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Send message"
+                        >
+                          <MessageCircle className="w-5 h-5" />
+                        </button>
                       )}
+                      {/* Send points button - available for ALL users including agents and actors */}
+                      <button 
+                        onClick={() => setSendPointsModalOpen(true)}
+                        className="p-2 rounded-full border border-border hover:bg-muted/50 transition-colors"
+                        title="Send points"
+                      >
+                        <Coins className="w-5 h-5" />
+                      </button>
                       <FollowButton
                         userId={actorInfo.id}
                         size="md"
@@ -1086,8 +1098,8 @@ export default function ActorProfilePage() {
         </div>
       </div>
 
-      {/* Send Points Modal */}
-      {actorInfo && actorInfo.isUser && actorInfo.type === 'user' && (
+      {/* Send Points Modal - Available for all users, agents, and actors */}
+      {actorInfo && (
         <SendPointsModal
           isOpen={sendPointsModalOpen}
           onClose={() => setSendPointsModalOpen(false)}
@@ -1095,7 +1107,7 @@ export default function ActorProfilePage() {
           recipientName={actorInfo.name ?? actorInfo.username ?? ''}
           recipientUsername={actorInfo.username}
           onSuccess={() => {
-            // Optionally refresh profile data after successful transfer
+            // Refresh profile data after successful transfer
             loadActorInfo()
           }}
         />

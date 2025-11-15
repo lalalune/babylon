@@ -10,6 +10,7 @@ import { generateSnowflakeId } from '@/lib/snowflake';
 import { withErrorHandling } from '@/lib/errors/error-handler';
 import { z } from 'zod';
 import { notifyUserGroupInvite } from '@/lib/services/notification-service';
+import { Prisma } from '@prisma/client';
 
 const addMemberSchema = z.object({
   userId: z.string(),
@@ -111,16 +112,47 @@ export const POST = withErrorHandling(async (
     select: { name: true },
   });
 
-  // Create invite
-  const invite = await prisma.userGroupInvite.create({
-    data: {
-      id: await generateSnowflakeId(),
-      groupId,
-      invitedUserId: inviteeId,
-      invitedBy: user.userId,
-      status: 'pending',
-    },
-  });
+  // Create invite - handle unique constraint race condition
+  let invite;
+  try {
+    invite = await prisma.userGroupInvite.create({
+      data: {
+        id: await generateSnowflakeId(),
+        groupId,
+        invitedUserId: inviteeId,
+        invitedBy: user.userId,
+        status: 'pending',
+      },
+    });
+  } catch (error: unknown) {
+    // Handle unique constraint violation (race condition)
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const target = error.meta?.target as string[] | undefined
+      if (target?.includes('groupId') && target?.includes('invitedUserId')) {
+        // Check if there's now a pending invite (another request created it)
+        const raceConditionInvite = await prisma.userGroupInvite.findUnique({
+          where: {
+            groupId_invitedUserId: {
+              groupId,
+              invitedUserId: inviteeId,
+            },
+          },
+        });
+        if (raceConditionInvite?.status === 'pending') {
+          return NextResponse.json(
+            { error: 'User already has a pending invite' },
+            { status: 400 }
+          );
+        }
+        // If it's not pending, we can retry or handle differently
+        return NextResponse.json(
+          { error: 'Failed to create invite due to existing record' },
+          { status: 400 }
+        );
+      }
+    }
+    throw error;
+  }
 
   // Send notification using service
   await notifyUserGroupInvite(

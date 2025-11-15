@@ -19,10 +19,10 @@ NEXT_PUBLIC_PRIVY_APP_ID="your_privy_app_id"
 PRIVY_APP_SECRET="your_privy_app_secret"
 
 # AI Provider (fallback chain: wandb -> groq -> claude -> openai)
-WANDB_API_KEY="..."         # Primary - Weights & Biases inference API
-GROQ_API_KEY="gsk_..."      # Fast inference fallback
-ANTHROPIC_API_KEY="sk-..."  # Claude fallback
-OPENAI_API_KEY="sk-..."     # Final fallback
+WANDB_API_KEY="..." # Primary - Weights & Biases inference API
+GROQ_API_KEY="gsk_..." # Fast inference fallback
+ANTHROPIC_API_KEY="sk-..." # Claude fallback
+OPENAI_API_KEY="sk-..." # Final fallback
 ```
 
 ### Authentication Setup
@@ -32,14 +32,14 @@ OPENAI_API_KEY="sk-..."     # Final fallback
 1. Sign up at [privy.io](https://privy.io)
 2. Create a new app
 3. Configure allowed domains:
-   - Add `http://localhost:3000` for development
-   - Add your production domain
-   - **Important**: Add `https://farcaster.xyz` for Farcaster Mini App support
+ - Add `http://localhost:3000` for development
+ - Add your production domain
+ - **Important**: Add `https://farcaster.xyz` for Farcaster Mini App support
 4. Enable authentication methods:
-   - Email
-   - Wallet (MetaMask, Rabby, etc.)
-   - Farcaster (optional)
-   - Twitter (optional)
+ - Email
+ - Wallet (MetaMask, Rabby, etc.)
+ - Farcaster (optional)
+ - Twitter (optional)
 5. Copy your App ID and App Secret to `.env.local`
 
 ### Optional Variables
@@ -129,7 +129,7 @@ BABYLON_MAX_POSITION_SIZE="500"
 BABYLON_MIN_CONFIDENCE="0.6"
 
 # AI Model Configuration (optional - can also be set in admin)
-WANDB_MODEL="meta-llama/Llama-3.3-70B-Instruct"  # Specific wandb model to use
+WANDB_MODEL="meta-llama/Llama-3.3-70B-Instruct" # Specific wandb model to use
 ```
 
 #### AI Provider Setup
@@ -307,14 +307,14 @@ When deploying to Vercel, set environment variables in the dashboard:
 ### Environment-Specific Variables
 
 - **Production Only**: 
-  - `CRON_SECRET`
-  - Production RPC URLs
-  - Production API keys
+ - `CRON_SECRET`
+ - Production RPC URLs
+ - Production API keys
 
 - **All Environments**:
-  - `DATABASE_URL` (different per environment)
-  - `NEXT_PUBLIC_PRIVY_APP_ID`
-  - `PRIVY_APP_SECRET`
+ - `DATABASE_URL` (different per environment)
+ - `NEXT_PUBLIC_PRIVY_APP_ID`
+ - `PRIVY_APP_SECRET`
 
 ## Security Best Practices
 
@@ -354,14 +354,14 @@ vercel secrets add database-url "postgresql://..."
 Check if all required variables are set:
 
 ```bash
-bun run api:verify
+
 ```
 
 This will:
-- ✅ Check if required variables exist
-- ✅ Validate API key formats
-- ✅ Test database connection
-- ✅ Verify external service connectivity
+- Check if required variables exist
+- Validate API key formats
+- Test database connection
+- Verify external service connectivity
 
 ## Troubleshooting
 

@@ -16,27 +16,41 @@ async function main() {
   const args = process.argv.slice(2);
   
   // Parse arguments
+  const durationMinutes = parseInt(args.find(a => a.startsWith('--duration'))?.split('=')[1] || '30');
+  const seed = parseInt(args.find(a => a.startsWith('--seed'))?.split('=')[1] || '') || 12345;
+  const force = args.includes('--force');
+  
   const config: BenchmarkConfig = {
-    durationMinutes: parseInt(args.find(a => a.startsWith('--duration'))?.split('=')[1] || '30'),
+    durationMinutes,
     tickInterval: parseInt(args.find(a => a.startsWith('--interval'))?.split('=')[1] || '60'), // 60 seconds
     numPredictionMarkets: parseInt(args.find(a => a.startsWith('--markets'))?.split('=')[1] || '5'),
     numPerpetualMarkets: parseInt(args.find(a => a.startsWith('--perpetuals'))?.split('=')[1] || '3'),
     numAgents: parseInt(args.find(a => a.startsWith('--agents'))?.split('=')[1] || '8'),
-    seed: parseInt(args.find(a => a.startsWith('--seed'))?.split('=')[1] || '') || Date.now(),
+    seed,
   };
+  
+  // Save to file
+  const outputDir = path.join(process.cwd(), 'benchmarks');
+  await fs.mkdir(outputDir, { recursive: true });
+  
+  // Generate filename based on config (for idempotency)
+  const configHash = `${durationMinutes}-${config.tickInterval}-${config.numPredictionMarkets}-${config.numPerpetualMarkets}-${config.numAgents}-${seed}`;
+  const filename = `benchmark-week-${configHash}.json`;
+  const filepath = path.join(outputDir, filename);
+  
+  // Idempotent check: skip if file exists and not forcing
+  if (!force && await fs.access(filepath).then(() => true).catch(() => false)) {
+    logger.info('Benchmark already exists, skipping generation', { filepath });
+    console.log(`\n✅ Benchmark already exists: ${filepath}`);
+    console.log(`   Use --force to regenerate\n`);
+    return;
+  }
   
   logger.info('Generating benchmark with config:', config);
   
   // Generate benchmark
   const generator = new BenchmarkDataGenerator(config);
   const snapshot = await generator.generate();
-  
-  // Save to file
-  const outputDir = path.join(process.cwd(), 'benchmarks');
-  await fs.mkdir(outputDir, { recursive: true });
-  
-  const filename = `benchmark-${snapshot.id}.json`;
-  const filepath = path.join(outputDir, filename);
   
   await fs.writeFile(filepath, JSON.stringify(snapshot, null, 2));
   
@@ -53,8 +67,9 @@ async function main() {
   console.log('\n✅ Benchmark Generated Successfully!\n');
   console.log(`ID: ${snapshot.id}`);
   console.log(`File: ${filepath}`);
-  console.log(`Duration: ${config.durationMinutes} minutes (${snapshot.ticks.length} ticks)`);
-  console.log(`Markets: ${snapshot.initialState.predictionMarkets.length} prediction, ${snapshot.initialState.perpetualMarkets.length} perpetuals`);
+  console.log(`Duration: ${durationMinutes} minutes (${(durationMinutes / 60).toFixed(1)} hours)`);
+  console.log(`Ticks: ${snapshot.ticks.length}`);
+  console.log(`Markets: ${snapshot.initialState.predictionMarkets.length} prediction, ${snapshot.initialState.perpetualMarkets.length} perpetual`);
   console.log(`Agents: ${snapshot.initialState.agents.length}`);
   console.log(`\nOptimal Actions: ${snapshot.groundTruth.optimalActions.length}`);
   console.log(`Social Opportunities: ${snapshot.groundTruth.socialOpportunities.length}`);

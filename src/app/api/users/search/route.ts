@@ -99,6 +99,7 @@ import { authenticate } from '@/lib/api/auth-middleware'
 import { withErrorHandling, successResponse } from '@/lib/errors/error-handler'
 import { logger } from '@/lib/logger'
 import { asUser } from '@/lib/db/context'
+import { getBlockedUserIds, getMutedUserIds, getBlockedByUserIds } from '@/lib/moderation/filters'
 
 /**
  * GET /api/users/search
@@ -117,7 +118,16 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
   const searchTerm = query.trim().toLowerCase()
 
-  // Search for users (excluding the current user and NPCs)
+  // Get blocked/muted users to exclude from search
+  const [blockedIds, mutedIds, blockedByIds] = await Promise.all([
+    getBlockedUserIds(user.userId),
+    getMutedUserIds(user.userId),
+    getBlockedByUserIds(user.userId),
+  ]);
+  
+  const excludedUserIds = [...blockedIds, ...mutedIds, ...blockedByIds];
+
+  // Search for users (excluding the current user, NPCs, and blocked/muted users)
   const users = await asUser(user, async (db) => {
     return await db.user.findMany({
       where: {
@@ -141,6 +151,11 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
           {
             id: {
               not: user.userId, // Exclude current user
+            },
+          },
+          {
+            id: {
+              notIn: excludedUserIds, // Exclude blocked/muted users
             },
           },
           {

@@ -77,56 +77,51 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   const startTime = Date.now();
   logger.info('🌍 World facts update started', undefined, 'Cron');
 
-  try {
-    // Step 1: Fetch all RSS feeds
-    logger.info('Fetching RSS feeds...', undefined, 'Cron');
-    const feedResult = await rssFeedService.fetchAllFeeds();
-    logger.info(
-      `RSS feeds fetched: ${feedResult.fetched} sources, ${feedResult.stored} new headlines, ${feedResult.errors} errors`,
-      feedResult,
-      'Cron'
-    );
+  // Step 1: Fetch all RSS feeds
+  logger.info('Fetching RSS feeds...', undefined, 'Cron');
+  const feedResult = await rssFeedService.fetchAllFeeds();
+  logger.info(
+    `RSS feeds fetched: ${feedResult.fetched} sources, ${feedResult.stored} new headlines, ${feedResult.errors} errors`,
+    feedResult,
+    'Cron'
+  );
 
-    // Step 2: Transform untransformed headlines into parodies
-    logger.info('Generating parody headlines...', undefined, 'Cron');
-    const untransformedHeadlines = await rssFeedService.getUntransformedHeadlines(20); // Process 20 at a time
-    
-    const generator = createParodyHeadlineGenerator();
-    const parodies = await generator.processHeadlines(untransformedHeadlines);
-    logger.info(
-      `Generated ${parodies.length} parody headlines`,
-      { count: parodies.length },
-      'Cron'
-    );
+  // Step 2: Transform untransformed headlines into parodies
+  logger.info('Generating parody headlines...', undefined, 'Cron');
+  const untransformedHeadlines = await rssFeedService.getUntransformedHeadlines(20); // Process 20 at a time
+  
+  const generator = createParodyHeadlineGenerator();
+  const parodies = await generator.processHeadlines(untransformedHeadlines);
+  logger.info(
+    `Generated ${parodies.length} parody headlines`,
+    { count: parodies.length },
+    'Cron'
+  );
 
-    // Step 3: Clean up old headlines (older than 7 days)
-    logger.info('Cleaning up old headlines...', undefined, 'Cron');
-    const cleaned = await rssFeedService.cleanupOldHeadlines();
-    logger.info(`Cleaned up ${cleaned} old headlines`, { count: cleaned }, 'Cron');
+  // Step 3: Clean up old headlines (older than 7 days)
+  logger.info('Cleaning up old headlines...', undefined, 'Cron');
+  const cleaned = await rssFeedService.cleanupOldHeadlines();
+  logger.info(`Cleaned up ${cleaned} old headlines`, { count: cleaned }, 'Cron');
 
-    const duration = Date.now() - startTime;
-    logger.info('✅ World facts update completed', {
-      duration: `${duration}ms`,
+  const duration = Date.now() - startTime;
+  logger.info('✅ World facts update completed', {
+    duration: `${duration}ms`,
+    feedsFetched: feedResult.fetched,
+    newHeadlines: feedResult.stored,
+    parodiesGenerated: parodies.length,
+    headlinesCleaned: cleaned,
+  }, 'Cron');
+
+  return successResponse({
+    success: true,
+    duration,
+    stats: {
       feedsFetched: feedResult.fetched,
       newHeadlines: feedResult.stored,
       parodiesGenerated: parodies.length,
       headlinesCleaned: cleaned,
-    }, 'Cron');
-
-    return successResponse({
-      success: true,
-      duration,
-      stats: {
-        feedsFetched: feedResult.fetched,
-        newHeadlines: feedResult.stored,
-        parodiesGenerated: parodies.length,
-        headlinesCleaned: cleaned,
-      },
-    });
-  } catch (error) {
-    logger.error('World facts update failed', { error }, 'Cron');
-    throw error;
-  }
+    },
+  });
 });
 
 // GET endpoint for Vercel Cron (some cron services use GET)

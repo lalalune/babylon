@@ -2,7 +2,7 @@
 /**
  * Babylon Status Tool
  * 
- * Unified status checker for all Babylon systems:
+ * Status checker for all Babylon systems:
  * - Game status (running/paused, tick info)
  * - Database health (actors, posts, markets)
  * - Agent0 registration status

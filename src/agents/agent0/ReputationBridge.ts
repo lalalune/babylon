@@ -2,7 +2,7 @@
  * Reputation Bridge
  * 
  * Aggregates reputation from ERC-8004 on-chain data and Agent0 network feedback
- * to provide unified reputation scores.
+ * to provide reputation scores.
  */
 
 import type { RegistryClient } from '@/lib/a2a/blockchain/registry-client'

@@ -19,7 +19,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   const authUser = await authenticate(request)
   const userId = authUser.dbUserId ?? authUser.userId
 
-  const body = await request.json().catch(() => ({}))
+  const body = await request.json()
   const { reason } = DeleteAccountSchema.parse(body)
 
   logger.info(

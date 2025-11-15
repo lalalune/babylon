@@ -12,7 +12,7 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getReputationBreakdown } from '@/lib/reputation/reputation-service';
 import { generateSnowflakeId } from '@/lib/snowflake';
-import type { TradingDecision, ExecutionResult } from '@/types/market-decisions';
+import type { TradingDecision, TradingExecutionResult } from '@/types/market-decisions';
 import { TradeExecutionService } from '@/lib/services/trade-execution-service';
 
 export interface PortfolioPosition {
@@ -217,7 +217,7 @@ export class NPCInvestmentManager {
    * Ensure each NPC pool has an initial baseline allocation
    * Invests ~80% of available balance across aligned companies
    */
-  static async executeBaselineInvestments(timestamp: Date = new Date()): Promise<ExecutionResult | null> {
+  static async executeBaselineInvestments(timestamp: Date = new Date()): Promise<TradingExecutionResult | null> {
     const baselineDecisions = await this.buildBaselineDecisions();
 
     if (baselineDecisions.length === 0) {

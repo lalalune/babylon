@@ -110,7 +110,10 @@ export class WorldFactsService {
       if (!byCategory[fact.category]) {
         byCategory[fact.category] = [];
       }
-      byCategory[fact.category]!.push(fact);
+      const categoryArray = byCategory[fact.category]
+      if (categoryArray) {
+        categoryArray.push(fact);
+      }
     }
 
     // Format each category
@@ -228,4 +231,5 @@ This context reflects the current state of the world. Use these facts to make yo
 
 // Singleton instance
 export const worldFactsService = new WorldFactsService();
+
 

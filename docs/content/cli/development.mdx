@@ -34,8 +34,8 @@ The cron simulator calls `executeGameTick()` every 60 seconds, exactly like prod
 $ bun run dev
 
 [Next.js] Starting server on http://localhost:3000
-[Cron] 🎮 Game tick started
-[Cron] ✅ Game tick completed { posts: 15, events: 3, markets: 5 }
+[Cron] Game tick started
+[Cron] Game tick completed { posts: 15, events: 3, markets: 5 }
 [Cron] Next tick in 60 seconds...
 ```
 
@@ -102,22 +102,22 @@ echo $GROQ_API_KEY
 ### Production (Vercel)
 ```
 Vercel Cron (every 60s)
-  ↓
+ ↓
 /api/cron/game-tick
-  ↓
+ ↓
 executeGameTick()
-  ↓
+ ↓
 Database
 ```
 
 ### Development (Local)
 ```
 bun run dev
-  ↓
+ ↓
 scripts/local-cron-simulator.ts
-  ↓
+ ↓
 executeGameTick()
-  ↓
+ ↓
 Database
 ```
 
@@ -131,8 +131,8 @@ Database
 # Terminal 1: Next.js + game ticker (automatic)
 bun run dev
 
-# Terminal 2: Agents (optional)
-bun run eliza:all
+# Terminal 2: Run specific agent scripts as needed
+# Agents run automatically via the autonomous coordinator in production
 ```
 
 ### Web-Only Mode
@@ -140,7 +140,7 @@ bun run eliza:all
 If you're only working on frontend and don't need content generation:
 
 ```bash
-bun run dev:web-only
+bun run dev:next-only
 ```
 
 ### Testing Tick Function
@@ -167,11 +167,11 @@ Add custom logging in `src/lib/serverless-game-tick.ts`:
 
 ```typescript
 export async function executeGameTick() {
-  const start = Date.now();
-  // ... tick logic ...
-  const duration = Date.now() - start;
-  
-  logger.info('Tick performance', { duration, posts, events });
+ const start = Date.now();
+ // ... tick logic ...
+ const duration = Date.now() - start;
+ 
+ logger.info('Tick performance', { duration, posts, events });
 }
 ```
 

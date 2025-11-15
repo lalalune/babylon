@@ -3,6 +3,7 @@
  */
 
 import type { Character } from '@elizaos/core'
+import type { JsonValue } from '@/types/common'
 
 export interface AgentConfig {
   id: string
@@ -15,7 +16,7 @@ export interface AgentConfig {
   character: Character
   
   // Runtime config
-  modelTier: 'free' | 'pro'
+  modelTier: 'lite' | 'standard' | 'pro'
   autonomousEnabled: boolean
   isActive: boolean
   
@@ -37,7 +38,7 @@ export interface AgentMessage {
   content: string
   modelUsed?: string
   pointsCost: number
-  metadata?: unknown
+  metadata?: Record<string, JsonValue>
   createdAt: Date
 }
 
@@ -50,7 +51,7 @@ export interface AgentLog {
   prompt?: string
   completion?: string
   thinking?: string
-  metadata?: unknown
+  metadata?: Record<string, JsonValue>
   createdAt: Date
 }
 
@@ -88,12 +89,13 @@ export interface CreateAgentParams {
   name: string
   description?: string
   profileImageUrl?: string
+  coverImageUrl?: string
   system: string
   bio?: string[]
   personality?: string
   tradingStrategy?: string
   initialDeposit?: number
-  modelTier?: 'free' | 'pro'
+  modelTier?: 'lite' | 'standard' | 'pro'
 }
 
 export interface ChatRequest {

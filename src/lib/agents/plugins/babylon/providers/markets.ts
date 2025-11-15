@@ -8,7 +8,7 @@
 import type { Provider, IAgentRuntime, Memory, State, ProviderResult } from '@elizaos/core'
 import { logger } from '@/lib/logger'
 import type { BabylonRuntime } from '../types'
-import type { A2APredictionsResponse, A2APerpetualsResponse } from '@/types/a2a-responses'
+// import type { A2APredictionsResponse, A2APerpetualsResponse } from '@/types/a2a-responses' // Commented out - not needed
 
 /**
  * Provider: Current Markets
@@ -23,31 +23,52 @@ export const marketsProvider: Provider = {
     
     // A2A is REQUIRED
     if (!babylonRuntime.a2aClient?.isConnected()) {
-      logger.error('A2A client not connected - markets provider requires A2A protocol', { 
-        agentId: runtime.agentId 
-      })
+      logger.error('A2A client not connected - markets provider requires A2A protocol', undefined, runtime.agentId)
       return { text: 'ERROR: A2A client not connected. Cannot fetch markets data. Please ensure A2A server is running.' }
     }
     
-    // Fetch markets via A2A protocol
-    const [predictions, perpetuals] = await Promise.all([
-      babylonRuntime.a2aClient.sendRequest('a2a.getPredictions', { status: 'active' }),
-      babylonRuntime.a2aClient.sendRequest('a2a.getPerpetuals', {})
-    ])
-    
-    const predictionsData = predictions as A2APredictionsResponse
-    const perpetualsData = perpetuals as A2APerpetualsResponse
-    
-    const tickers = perpetualsData.tickers || perpetualsData.perpetuals || []
-    
-    return { text: `Available Markets:
-
-Prediction Markets (${predictionsData.predictions?.length || 0}):
-${predictionsData.predictions?.slice(0, 10).map((m, i: number) => `${i + 1}. ${m.question}
-   YES: ${m.yesShares} | NO: ${m.noShares}
-   Liquidity: ${m.liquidity}`).join('\n') || 'None'}
-
-Perpetual Markets (${tickers.length}):
-${tickers.slice(0, 10).map((p, i: number) => `${i + 1}. ${p.name} (${p.ticker}) @ $${p.currentPrice}`).join('\n') || 'None'}` }
+    try {
+      const [predictionsResult, perpetualsResult] = await Promise.all([
+        babylonRuntime.a2aClient.getPredictions({ status: 'active' }),
+        babylonRuntime.a2aClient.getPerpetuals()
+      ]) as [unknown, unknown]
+      
+      const predictions = (predictionsResult as { predictions?: Array<{
+        id: string
+        question: string
+        yesShares: number
+        noShares: number
+        liquidity: number
+        resolved: boolean
+        endDate: string | Date
+      }> })?.predictions || []
+      
+      const perpetuals = (perpetualsResult as { perpetuals?: Array<{
+        name: string
+        type: string
+        currentPrice: number
+      }> })?.perpetuals || []
+      
+      const predictionsText = predictions.length > 0
+        ? `Prediction Markets:\n${predictions.slice(0, 10).map(m => 
+            `- ${m.question} (ID: ${m.id}) | YES: ${m.yesShares.toFixed(2)}, NO: ${m.noShares.toFixed(2)}, Liquidity: $${m.liquidity.toFixed(2)}`
+          ).join('\n')}`
+        : 'No active prediction markets available.'
+      
+      const perpetualsText = perpetuals.length > 0
+        ? `Perpetual Markets:\n${perpetuals.slice(0, 10).map(p => 
+            `- ${p.name} (${p.type}) | Price: $${p.currentPrice.toFixed(2)}`
+          ).join('\n')}`
+        : 'No perpetual markets available.'
+      
+      return { 
+        text: `${predictionsText}\n\n${perpetualsText}` 
+      }
+    } catch (error) {
+      logger.error('Error fetching markets via A2A', { error, agentId: runtime.agentId }, 'MarketsProvider')
+      return { 
+        text: `Error fetching markets: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      }
+    }
   }
 }

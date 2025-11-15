@@ -6,6 +6,7 @@
  */
 
 import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { authenticate } from '@/lib/api/auth-middleware';
 import { withErrorHandling, successResponse } from '@/lib/errors/error-handler';
 import { prisma } from '@/lib/prisma';
@@ -13,6 +14,7 @@ import { MuteUserSchema } from '@/lib/validation/schemas/moderation';
 import { logger } from '@/lib/logger';
 import { BusinessLogicError, NotFoundError } from '@/lib/errors';
 import { generateSnowflakeId } from '@/lib/snowflake';
+import { Prisma } from '@prisma/client';
 
 export const POST = withErrorHandling(async (
   request: NextRequest,
@@ -23,7 +25,16 @@ export const POST = withErrorHandling(async (
   const { userId: targetUserId } = await context.params;
 
   // Parse request body
-  const body = await request.json();
+  let body: { action: string; reason?: string }
+  try {
+    body = await request.json() as { action: string; reason?: string }
+  } catch (error) {
+    logger.error('Failed to parse request body', { error, userId: authUser.userId, targetUserId }, 'POST /api/users/[userId]/mute')
+    return NextResponse.json({
+      success: false,
+      error: 'Invalid request body'
+    }, { status: 400 })
+  }
   const { action, reason } = MuteUserSchema.parse(body);
 
   logger.info(`User ${action} request`, { 
@@ -47,10 +58,7 @@ export const POST = withErrorHandling(async (
     throw new NotFoundError('User', targetUserId);
   }
 
-  // Cannot mute actors/NPCs
-  if (targetUser.isActor) {
-    throw new BusinessLogicError('Cannot mute NPCs', 'CANNOT_MUTE_ACTOR');
-  }
+  // Note: Muting NPCs is allowed - it hides their posts from your feed
 
   if (action === 'mute') {
     // Check if already muted
@@ -67,15 +75,53 @@ export const POST = withErrorHandling(async (
       throw new BusinessLogicError('User is already muted', 'ALREADY_MUTED');
     }
 
-    // Create mute
-    const mute = await prisma.userMute.create({
-      data: {
-        id: await generateSnowflakeId(),
-        muterId: authUser.userId,
-        mutedId: targetUserId,
-        reason: reason || null,
-      },
-    });
+    // Create mute - handle race condition where mute might be created concurrently
+    let mute;
+    try {
+      mute = await prisma.userMute.create({
+        data: {
+          id: await generateSnowflakeId(),
+          muterId: authUser.userId,
+          mutedId: targetUserId,
+          reason: reason || null,
+        },
+      });
+    } catch (error: unknown) {
+      // Handle unique constraint violation (race condition)
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const target = error.meta?.target as string[] | undefined;
+        if (target?.includes('muterId') && target?.includes('mutedId')) {
+          // Race condition: mute was created by another concurrent request
+          // Fetch the existing mute and return success
+          const raceConditionMute = await prisma.userMute.findUnique({
+            where: {
+              muterId_mutedId: {
+                muterId: authUser.userId,
+                mutedId: targetUserId,
+              },
+            },
+          });
+          
+          if (raceConditionMute) {
+            logger.info(`User muted successfully (race condition handled)`, { 
+              userId: authUser.userId,
+              targetUserId,
+              muteId: raceConditionMute.id 
+            }, 'POST /api/users/[userId]/mute');
+            
+            return successResponse({
+              success: true,
+              message: 'User muted successfully',
+              mute: raceConditionMute,
+            });
+          }
+        }
+        // If we can't find the mute, throw the original error
+        throw error;
+      }
+      // Re-throw other errors
+      throw error;
+    }
 
     logger.info(`User muted successfully`, { 
       userId: authUser.userId,

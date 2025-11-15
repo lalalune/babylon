@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, Bot, Play, Pause, AlertCircle, CheckCircle, Activity, Clock, User, Zap } from 'lucide-react'
+import { RefreshCw, Bot, Play, Pause, AlertCircle, CheckCircle, Activity, Clock, User, Zap, Star, ArrowUp, ArrowDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { logger } from '@/lib/logger'
 
 interface RunningAgent {
   id: string
@@ -28,6 +29,9 @@ interface RunningAgent {
   lifetimePnL: number
   totalTrades: number
   winRate: number
+  reputationScore: number
+  averageFeedbackScore: number
+  totalFeedbackCount: number
   
   // Status
   agentStatus: string | null
@@ -58,6 +62,8 @@ export function AgentsTab() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'running' | 'paused' | 'error'>('all')
+  const [sortBy, setSortBy] = useState<'reputation' | 'pnl' | 'trades' | 'winRate' | 'name'>('reputation')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   const fetchData = useCallback(async () => {
     try {
@@ -79,7 +85,7 @@ export function AgentsTab() {
       setStats(result.data.stats)
       setLoading(false)
     } catch (error) {
-      console.error('Failed to load agents:', error)
+      logger.error('Failed to load agents', { error }, 'AgentsTab')
       toast.error('Failed to load agents')
       setLoading(false)
     }
@@ -180,6 +186,45 @@ export function AgentsTab() {
       a.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       a.creatorName?.toLowerCase().includes(searchQuery.toLowerCase())
     )
+    .sort((a, b) => {
+      let aValue: number | string
+      let bValue: number | string
+
+      switch (sortBy) {
+        case 'reputation':
+          aValue = a.reputationScore
+          bValue = b.reputationScore
+          break
+        case 'pnl':
+          aValue = a.lifetimePnL
+          bValue = b.lifetimePnL
+          break
+        case 'trades':
+          aValue = a.totalTrades
+          bValue = b.totalTrades
+          break
+        case 'winRate':
+          aValue = a.winRate
+          bValue = b.winRate
+          break
+        case 'name':
+          aValue = a.displayName.toLowerCase()
+          bValue = b.displayName.toLowerCase()
+          break
+        default:
+          return 0
+      }
+
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return sortOrder === 'asc' 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue)
+      }
+
+      return sortOrder === 'asc'
+        ? (aValue as number) - (bValue as number)
+        : (bValue as number) - (aValue as number)
+    })
 
   const getStatusColor = (agent: RunningAgent) => {
     if (agent.agentStatus === 'error' || agent.recentErrorsCount > 0) return 'text-red-500'
@@ -296,30 +341,64 @@ export function AgentsTab() {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex gap-4 items-center">
-        <input
-          type="text"
-          placeholder="Search agents..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 px-4 py-2 rounded-lg bg-muted border border-border focus:outline-none focus:ring-2 focus:ring-primary"
-        />
-        <div className="flex gap-2">
-          {(['all', 'running', 'paused', 'error'] as const).map((status) => (
-            <button
-              key={status}
-              onClick={() => setFilterStatus(status)}
-              className={cn(
-                'px-4 py-2 rounded-lg text-sm font-medium transition-all',
-                filterStatus === status
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted hover:bg-muted/80'
-              )}
-            >
-              {status.charAt(0).toUpperCase() + status.slice(1)}
-            </button>
-          ))}
+      {/* Filters & Sort */}
+      <div className="flex flex-col gap-4">
+        <div className="flex gap-4 items-center">
+          <input
+            type="text"
+            placeholder="Search agents..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 px-4 py-2 rounded-lg bg-muted border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+          <div className="flex gap-2">
+            {(['all', 'running', 'paused', 'error'] as const).map((status) => (
+              <button
+                key={status}
+                onClick={() => setFilterStatus(status)}
+                className={cn(
+                  'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                  filterStatus === status
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted hover:bg-muted/80'
+                )}
+              >
+                {status.charAt(0).toUpperCase() + status.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        {/* Sort Controls */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Sort by:</span>
+          <div className="flex gap-2">
+            {(['reputation', 'pnl', 'trades', 'winRate', 'name'] as const).map((sort) => (
+              <button
+                key={sort}
+                onClick={() => {
+                  if (sortBy === sort) {
+                    setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+                  } else {
+                    setSortBy(sort)
+                    setSortOrder(sort === 'name' ? 'asc' : 'desc')
+                  }
+                }}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1',
+                  sortBy === sort
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted hover:bg-muted/80'
+                )}
+              >
+                {sort === 'reputation' && <Star className="w-3 h-3" />}
+                {sort.charAt(0).toUpperCase() + sort.slice(1)}
+                {sortBy === sort && (
+                  sortOrder === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -377,7 +456,27 @@ export function AgentsTab() {
                   </div>
 
                   {/* Stats Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                  <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
+                    <div>
+                      <div className="text-muted-foreground text-xs mb-1 flex items-center gap-1">
+                        <Star className="w-3 h-3" />
+                        Reputation
+                      </div>
+                      <div className={cn(
+                        'font-mono text-xs font-semibold',
+                        agent.reputationScore >= 80 ? 'text-green-500' :
+                        agent.reputationScore >= 60 ? 'text-yellow-500' :
+                        agent.reputationScore >= 40 ? 'text-orange-500' :
+                        'text-red-500'
+                      )}>
+                        {Math.round(agent.reputationScore)}/100
+                      </div>
+                      {agent.totalFeedbackCount > 0 && (
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {agent.totalFeedbackCount} reviews
+                        </div>
+                      )}
+                    </div>
                     <div>
                       <div className="text-muted-foreground text-xs mb-1">Model</div>
                       <div className="font-mono text-xs capitalize">{agent.modelTier}</div>

@@ -4,16 +4,15 @@
  */
 
 import { describe, it, expect, beforeAll } from 'bun:test';
-import * as fs from 'fs';
-import * as path from 'path';
 import type { ActorsDataFile, ActorData, OrganizationData } from '../types/test-types';
 
 describe('Actors.json Data Integrity', () => {
   let actorsData: ActorsDataFile;
 
   beforeAll(() => {
-    const actorsPath = path.join(process.cwd(), 'public/data/actors.json');
-    actorsData = JSON.parse(fs.readFileSync(actorsPath, 'utf-8')) as ActorsDataFile;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { loadActorsData } = require('../../src/lib/data/actors-loader');
+    actorsData = loadActorsData() as ActorsDataFile;
   });
 
   describe('Actor Required Fields', () => {

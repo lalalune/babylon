@@ -10,15 +10,18 @@ import { prisma } from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import type { User } from '@prisma/client'
 import type { CreateAgentParams, AgentPerformance } from '../types'
+import type { JsonValue } from '@/types/common'
 import { agentRuntimeManager } from '../runtime/AgentRuntimeManager'
+import { agentIdentityService } from '../identity/AgentIdentityService'
 import { generateSnowflakeId } from '@/lib/snowflake'
+import { AuthorizationError } from '@/lib/errors/base.errors'
 
 export class AgentServiceV2 {
   /**
    * Create agent (creates a full User with isAgent=true)
    */
   async createAgent(params: CreateAgentParams): Promise<User> {
-    const { userId: managerUserId, name, description, profileImageUrl, system, bio, personality, tradingStrategy, initialDeposit, modelTier } = params
+    const { userId: managerUserId, name, description, profileImageUrl, coverImageUrl, system, bio, personality, tradingStrategy, initialDeposit } = params
 
     const manager = await prisma.user.findUnique({ where: { id: managerUserId } })
     if (!manager) throw new Error('Manager user not found')
@@ -35,6 +38,12 @@ export class AgentServiceV2 {
     const agentUsername = `agent_${baseUsername}_${randomSuffix}`
     const agentUserId = await generateSnowflakeId()
 
+    // Model selection happens at runtime via cascade:
+    // 1. WANDB RL model (if WANDB_API_KEY available and model exists)
+    // 2. Qwen 32b from Groq (if GROQ_API_KEY available)
+    // 3. Claude (if ANTHROPIC_API_KEY available)
+    // 4. OpenAI (if OPENAI_API_KEY available)
+
     const agent = await prisma.$transaction(async (tx) => {
       const newAgent = await tx.user.create({
         data: {
@@ -43,13 +52,13 @@ export class AgentServiceV2 {
           displayName: name,
           bio: description || `AI agent managed by ${manager.displayName || manager.username}`,
           profileImageUrl: profileImageUrl || null,
+          coverImageUrl: coverImageUrl || null,
           isAgent: true,
           managedBy: managerUserId,
           agentSystem: system,
           agentPersonality: personality,
           agentTradingStrategy: tradingStrategy,
           agentMessageExamples: bio ? JSON.parse(JSON.stringify(bio)) : undefined,
-          agentModelTier: modelTier || 'free',
           agentPointsBalance: initialDeposit || 0,
           agentTotalDeposited: initialDeposit || 0,
           virtualBalance: 0,
@@ -59,6 +68,7 @@ export class AgentServiceV2 {
           hasUsername: true,
           hasBio: Boolean(description),
           hasProfileImage: Boolean(profileImageUrl),
+          a2aEnabled: true, // Enable A2A by default for all agents
           updatedAt: new Date()
         }
       })
@@ -120,6 +130,11 @@ export class AgentServiceV2 {
     })
 
     logger.info(`Agent user created: ${agentUserId} managed by ${managerUserId}`, undefined, 'AgentService')
+
+    if (this.shouldAutoSetupAgentIdentity()) {
+      void this.setupAgentIdentity(agentUserId)
+    }
+
     return agent
   }
 
@@ -128,7 +143,11 @@ export class AgentServiceV2 {
     if (!agent) return null
     if (!agent.isAgent) throw new Error('User is not an agent')
     if (managerUserId && agent.managedBy !== managerUserId) {
-      throw new Error('Unauthorized: You do not manage this agent')
+      throw new AuthorizationError(
+        'You do not have permission to access this agent. You can only chat with agents you own.',
+        'agent',
+        'chat'
+      )
     }
     return agent
   }
@@ -146,6 +165,7 @@ export class AgentServiceV2 {
     description: string
     profileImageUrl: string
     system: string
+    bio: string[] // Bio array for ElizaOS agentMessageExamples
     personality: string
     tradingStrategy: string
     modelTier: 'free' | 'pro'
@@ -154,10 +174,11 @@ export class AgentServiceV2 {
     autonomousCommenting: boolean
     autonomousDMs: boolean
     autonomousGroupChats: boolean
+    a2aEnabled: boolean
   }>): Promise<User> {
     await this.getAgent(agentUserId, managerUserId) // Verify ownership
 
-    if (updates.system || updates.personality || updates.modelTier) {
+    if (updates.system || updates.personality || updates.modelTier || updates.bio) {
       agentRuntimeManager.clearRuntime(agentUserId)
     }
 
@@ -166,6 +187,7 @@ export class AgentServiceV2 {
     if (updates.description) userUpdates.bio = updates.description
     if (updates.profileImageUrl !== undefined) userUpdates.profileImageUrl = updates.profileImageUrl
     if (updates.system) userUpdates.agentSystem = updates.system
+    if (updates.bio) userUpdates.agentMessageExamples = JSON.stringify(updates.bio) // Store as JSON for ElizaOS
     if (updates.personality) userUpdates.agentPersonality = updates.personality
     if (updates.tradingStrategy) userUpdates.agentTradingStrategy = updates.tradingStrategy
     if (updates.modelTier) userUpdates.agentModelTier = updates.modelTier
@@ -174,6 +196,7 @@ export class AgentServiceV2 {
     if (updates.autonomousCommenting !== undefined) userUpdates.autonomousCommenting = updates.autonomousCommenting
     if (updates.autonomousDMs !== undefined) userUpdates.autonomousDMs = updates.autonomousDMs
     if (updates.autonomousGroupChats !== undefined) userUpdates.autonomousGroupChats = updates.autonomousGroupChats
+    if (updates.a2aEnabled !== undefined) userUpdates.a2aEnabled = updates.a2aEnabled
 
     const updatedAgent = await prisma.user.update({
       where: { id: agentUserId },
@@ -434,7 +457,7 @@ export class AgentServiceV2 {
     prompt?: string
     completion?: string
     thinking?: string
-    metadata?: unknown
+    metadata?: Record<string, JsonValue>
   }) {
     return prisma.agentLog.create({
       data: {
@@ -449,6 +472,44 @@ export class AgentServiceV2 {
         metadata: log.metadata || undefined
       }
     })
+  }
+
+  private shouldAutoSetupAgentIdentity(): boolean {
+    if (process.env.AUTO_CREATE_AGENT_WALLETS === 'false') {
+      return false
+    }
+
+    // Require Privy credentials outside development so we do not spam errors
+    const hasPrivyConfig = Boolean(
+      process.env.NEXT_PUBLIC_PRIVY_APP_ID &&
+      process.env.PRIVY_APP_SECRET
+    )
+
+    if (!hasPrivyConfig && process.env.NODE_ENV !== 'development') {
+      logger.warn('Skipping automatic agent identity setup - Privy credentials missing', undefined, 'AgentService')
+      return false
+    }
+
+    return true
+  }
+
+  private async setupAgentIdentity(agentUserId: string): Promise<void> {
+    const skipAgent0Registration = process.env.AGENT0_ENABLED !== 'true'
+
+    try {
+      const agent = await agentIdentityService.setupAgentIdentity(agentUserId, {
+        skipAgent0Registration
+      })
+
+      logger.info('Agent identity setup complete', {
+        agentUserId,
+        walletProvisioned: Boolean(agent.walletAddress),
+        agent0TokenId: agent.agent0TokenId,
+        skippedAgent0: skipAgent0Registration
+      }, 'AgentService')
+    } catch (error) {
+      logger.error('Agent identity setup failed', { agentUserId, error }, 'AgentService')
+    }
   }
 }
 

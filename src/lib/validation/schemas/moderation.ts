@@ -99,9 +99,20 @@ export const GetReportsSchema = z.object({
 // ============ Admin Report Schemas ============
 
 export const AdminReportActionSchema = z.object({
-  action: z.enum(['resolve', 'dismiss', 'escalate', 'ban_user']),
-  resolution: z.string().min(1).max(1000),
-});
+  action: z.enum(['resolve', 'dismiss', 'escalate', 'ban_user', 'evaluate']),
+  resolution: z.string().min(1).max(1000).optional(),
+}).refine(
+  (data) => {
+    // Resolution required for all actions except 'evaluate'
+    if (data.action !== 'evaluate' && !data.resolution) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'Resolution is required for this action',
+  }
+);
 
 export const GetAdminReportsStatsSchema = z.object({
   startDate: z.string().datetime().optional(),

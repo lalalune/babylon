@@ -10,6 +10,7 @@ import { prisma } from '@/lib/prisma'
 import { processOnchainRegistration } from '@/lib/onboarding/onchain-service'
 import { logger } from '@/lib/logger'
 import { BusinessLogicError, ConflictError } from '@/lib/errors'
+import type { JsonValue } from '@/types/common'
 
 interface OnchainRequestBody {
   walletAddress?: string | null
@@ -33,7 +34,7 @@ const selectUserForOnchain = {
 
 export const POST = withErrorHandling(async (request: NextRequest) => {
   const authUser = await authenticate(request)
-  const body = await request.json().catch(() => ({})) as OnchainRequestBody | Record<string, unknown>
+  const body = await request.json() as OnchainRequestBody | Record<string, JsonValue>
 
   const txHash =
     typeof (body as OnchainRequestBody).txHash === 'string'

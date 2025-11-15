@@ -257,38 +257,6 @@ export interface A2ALeaderboardResponse {
 }
 
 /**
- * Pool data
- */
-export interface A2APool {
-  id: string;
-  name: string;
-  totalValue: number;
-}
-
-/**
- * Pools response from a2a.getPools
- */
-export interface A2APoolsResponse {
-  pools: A2APool[];
-}
-
-/**
- * Pool deposit
- */
-export interface A2APoolDeposit {
-  poolId: string;
-  amount: number;
-}
-
-/**
- * Pool deposits response from a2a.getPoolDeposits
- */
-export interface A2APoolDepositsResponse {
-  deposits: A2APoolDeposit[];
-  count?: number;
-}
-
-/**
  * System stats response from a2a.getSystemStats
  */
 export interface A2ASystemStatsResponse {

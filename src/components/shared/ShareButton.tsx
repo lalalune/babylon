@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import { Share2, Twitter, Link as LinkIcon, Check } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { useFarcasterMiniApp } from '@/components/providers/FarcasterMiniAppProvider'
 import { ShareVerificationModal } from './ShareVerificationModal'
 import { trackExternalShare } from '@/lib/share/trackExternalShare'
 
@@ -37,6 +38,7 @@ export function ShareButton({
   className = '',
 }: ShareButtonProps) {
   const { authenticated, user } = useAuth()
+  const { isMiniApp, share: miniAppShare } = useFarcasterMiniApp()
   const [showMenu, setShowMenu] = useState(false)
   const [shared, setShared] = useState(false)
   const [showVerification, setShowVerification] = useState(false)
@@ -78,6 +80,34 @@ export function ShareButton({
   }
 
   const handleShareToFarcaster = async () => {
+    // Use Mini App SDK share if in mini app context
+    if (isMiniApp) {
+      try {
+        await miniAppShare({
+          text: shareText,
+          url: shareUrl,
+        })
+        
+        // Track the share
+        if (authenticated && user) {
+          void trackExternalShare({
+            platform: 'farcaster',
+            contentType,
+            contentId,
+            url: shareUrl,
+            userId: user.id,
+          })
+        }
+        setShared(true)
+        setTimeout(() => setShared(false), 2000)
+        setShowMenu(false)
+        return
+      } catch (error) {
+        console.error('Mini App share failed:', error)
+        // Fall through to regular Warpcast compose
+      }
+    }
+
     // Warpcast compose URL format
     const castText = `${shareText}\n\n${shareUrl}`
     const warpcastUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(castText)}`

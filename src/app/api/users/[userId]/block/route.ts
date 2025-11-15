@@ -47,10 +47,7 @@ export const POST = withErrorHandling(async (
     throw new NotFoundError('User', targetUserId);
   }
 
-  // Cannot block actors/NPCs
-  if (targetUser.isActor) {
-    throw new BusinessLogicError('Cannot block NPCs', 'CANNOT_BLOCK_ACTOR');
-  }
+  // Note: Blocking NPCs is allowed - it means they won't add you to group chats
 
   if (action === 'block') {
     // Check if already blocked

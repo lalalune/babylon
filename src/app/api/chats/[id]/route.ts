@@ -54,7 +54,7 @@ export const GET = withErrorHandling(async (
     return await db.chat.findUnique({
       where: { id: chatId },
     })
-  })
+  }, 'get-chat-by-id')
 
   if (!chat) {
     throw new NotFoundError('Chat', chatId)
@@ -123,7 +123,7 @@ export const GET = withErrorHandling(async (
         ChatParticipant: true,
       },
     })
-  }))
+  }, 'get-chat-with-messages-debug'))
 
   if (!fullChat) {
     throw new NotFoundError('Chat', chatId)
@@ -186,7 +186,7 @@ export const GET = withErrorHandling(async (
     });
 
     return { users, actors };
-  }));
+  }, 'get-chat-participants-debug'));
 
     const usersMap = new Map<string, typeof users[number]>(users.map((u: typeof users[number]) => [u.id, u]));
     const actorsMap = new Map<string, typeof actors[number]>(actors.map((a: typeof actors[number]) => [a.id, a]));

@@ -8,13 +8,15 @@
 import dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
 
-import { AgentMemory } from './memory.js'
-import { AgentDecisionMaker, type PredictionMarket, type PerpMarket, type FeedPost } from './decision.js'
-import { executeAction } from './actions.js'
+import { AgentMemory } from './memory'
+import { AgentDecisionMaker, type PredictionMarket, type PerpMarket, type FeedPost } from './decision'
+import { executeAction, type A2AActionClient } from './actions'
 import fs from 'fs'
 import path from 'path'
 import { BenchmarkGameSnapshot } from '../../../src/lib/benchmark/BenchmarkDataGenerator'
 import type { SimulationResult } from '../../../src/lib/benchmark/SimulationEngine'
+import type { A2APerpPosition } from '../../../src/types/a2a-responses'
+import type { JsonValue } from '../../../src/types/common'
 
 const LOG_DIR = './logs'
 const LOG_FILE = path.join(LOG_DIR, 'benchmark.log')
@@ -52,9 +54,9 @@ async function runBenchmark(
   // 2. Dynamic import of benchmark modules
   log('🔧 Loading simulation modules...')
   
-  const { SimulationEngine } = await import('../../../src/lib/benchmark/SimulationEngine.js')
-  const { SimulationA2AInterface } = await import('../../../src/lib/benchmark/SimulationA2AInterface.js')
-  const { MetricsVisualizer } = await import('../../../src/lib/benchmark/MetricsVisualizer.js')
+  const { SimulationEngine } = await import('../../../src/lib/benchmark/SimulationEngine')
+  const { SimulationA2AInterface } = await import('../../../src/lib/benchmark/SimulationA2AInterface')
+  const { MetricsVisualizer } = await import('../../../src/lib/benchmark/MetricsVisualizer')
   
   // 3. Create simulation engine
   log('🎮 Creating simulation engine...')
@@ -100,30 +102,66 @@ async function runBenchmark(
     
     await (async () => {
       // Gather context via A2A interface
-      const portfolio = await a2aInterface.sendRequest('a2a.getPortfolio') as { balance: number; positions: Array<Record<string, unknown>>; pnl: number }
-      const predictions = await a2aInterface.sendRequest('a2a.getPredictions') as { predictions: PredictionMarket[] }
-      const perpetuals = await a2aInterface.sendRequest('a2a.getPerpetuals') as { perpetuals: PerpMarket[] }
-      const feed = await a2aInterface.sendRequest('a2a.getFeed', { limit: 10 }) as { posts: FeedPost[] }
+      const portfolioResponse = await a2aInterface.sendRequest('a2a.getPortfolio') as { balance: number; positions: Array<Record<string, unknown>>; pnl: number }
+      const portfolio: { balance: number; positions: A2APerpPosition[]; pnl: number } = {
+        balance: portfolioResponse?.balance ?? 10000,
+        positions: (portfolioResponse?.positions ?? []) as unknown as A2APerpPosition[],
+        pnl: portfolioResponse?.pnl ?? 0
+      }
+      
+      const predictionsResponse = await a2aInterface.sendRequest('a2a.getPredictions') as { predictions: PredictionMarket[] }
+      const perpetualsResponse = await a2aInterface.sendRequest('a2a.getPerpetuals') as { perpetuals: PerpMarket[] }
+      const feedResponse = await a2aInterface.sendRequest('a2a.getFeed', { limit: 10 }) as { posts: FeedPost[] }
       
       const markets = {
-        predictions: predictions?.predictions ?? [],
-        perps: perpetuals?.perpetuals ?? []
+        predictions: predictionsResponse?.predictions ?? [],
+        perps: perpetualsResponse?.perpetuals ?? []
       }
       
       const recentMemory = memory.getRecent(5)
       
       // Make decision
       const decision = await decisionMaker.decide({
-        portfolio: portfolio ?? { balance: 10000, positions: [], pnl: 0 },
+        portfolio,
         markets,
-        feed: feed ? { posts: feed.posts } : { posts: [] },
+        feed: feedResponse ? { posts: feedResponse.posts } : { posts: [] },
         memory: recentMemory
       })
       
       // Execute action (if not HOLD)
       if (decision.action !== 'HOLD') {
-        // SimulationA2AInterface implements A2AActionClient interface
-        const result = await executeAction(a2aInterface, decision)
+        // Create a wrapper that matches A2AActionClient interface
+        // SimulationA2AInterface returns Record<string, unknown> but A2AActionClient expects Record<string, JsonValue>
+        const actionClient: A2AActionClient = {
+          buyShares: async (marketId: string, outcome: 'YES' | 'NO', amount: number) => {
+            const result = await a2aInterface.buyShares(marketId, outcome, amount)
+            return result as Record<string, JsonValue>
+          },
+          sellShares: async (positionId: string, shares: number) => {
+            const result = await a2aInterface.sellShares(positionId, shares)
+            return result as Record<string, JsonValue>
+          },
+          openPosition: async (ticker: string, side: 'LONG' | 'SHORT', amount: number, leverage: number) => {
+            // Convert LONG/SHORT to long/short for SimulationA2AInterface
+            const simSide = side === 'LONG' ? 'long' : 'short'
+            const result = await a2aInterface.openPosition(ticker, simSide, amount, leverage)
+            return result as Record<string, JsonValue>
+          },
+          closePosition: async (positionId: string) => {
+            const result = await a2aInterface.closePosition(positionId)
+            return result as Record<string, JsonValue>
+          },
+          createPost: async (content: string, type?: string) => {
+            const result = await a2aInterface.createPost(content, type)
+            return result as Record<string, JsonValue>
+          },
+          createComment: async (postId: string, content: string) => {
+            const result = await a2aInterface.createComment(postId, content)
+            return result as Record<string, JsonValue>
+          }
+        }
+        
+        const result = await executeAction(actionClient, decision)
         
         if (result.success) {
           memory.add({

@@ -4,6 +4,7 @@ import * as React from "react";
 import * as RechartsPrimitive from "recharts";
 
 import { cn } from "@/lib/utils";
+import type { JsonValue } from "@/types/common";
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const;
@@ -125,8 +126,8 @@ function ChartTooltipContent({
     name?: string;
     dataKey?: string;
     color?: string;
-    payload?: Record<string, unknown>;
-    [key: string]: unknown;
+    payload?: Record<string, JsonValue>;
+    [key: string]: JsonValue | undefined;
   }>;
   className?: string;
   indicator?: "line" | "dot" | "dashed";
@@ -135,15 +136,15 @@ function ChartTooltipContent({
   label?: React.ReactNode;
   labelFormatter?: (
     value: React.ReactNode,
-    payload: Array<unknown>
+    payload: Array<Record<string, JsonValue>>
   ) => React.ReactNode;
   labelClassName?: string;
   formatter?: (
     value: number | string,
     name: string,
-    item: Record<string, unknown>,
+    item: Record<string, JsonValue>,
     index: number,
-    payload: Record<string, unknown>
+    payload: Record<string, JsonValue>
   ) => React.ReactNode;
   color?: string;
   nameKey?: string;
@@ -175,7 +176,7 @@ function ChartTooltipContent({
 
     const [item] = filteredPayload;
     const key = `${labelKey || item?.dataKey || item?.name || "value"}`;
-    const itemConfig = getPayloadConfigFromPayload(config, item, key);
+    const itemConfig = item ? getPayloadConfigFromPayload(config, item as JsonValue, key) : undefined;
     const value =
       !labelKey && typeof label === "string"
         ? config[label as keyof typeof config]?.label || label
@@ -184,7 +185,7 @@ function ChartTooltipContent({
     if (labelFormatter) {
       return (
         <div className={cn("font-medium", labelClassName)}>
-          {labelFormatter(value, payload ?? [])}
+          {labelFormatter(value, (payload ?? []) as Array<Record<string, JsonValue>>)}
         </div>
       );
     }
@@ -221,7 +222,7 @@ function ChartTooltipContent({
       <div className="grid gap-1.5">
         {filteredPayload.map((item, index) => {
           const key = `${nameKey || item.name || item.dataKey || "value"}`;
-          const itemConfig = getPayloadConfigFromPayload(config, item, key);
+          const itemConfig = getPayloadConfigFromPayload(config, item as JsonValue, key);
           const indicatorColor = color || item.payload?.fill || item.color;
 
           return (
@@ -236,9 +237,9 @@ function ChartTooltipContent({
                 formatter(
                   item.value,
                   item.name,
-                  item,
+                  item as Record<string, JsonValue>,
                   index,
-                  item.payload || {}
+                  (item.payload || {}) as Record<string, JsonValue>
                 )
               ) : (
                 <>
@@ -307,7 +308,7 @@ function ChartLegendContent({
     value?: string;
     dataKey?: string;
     color?: string;
-    [key: string]: unknown;
+    [key: string]: JsonValue | undefined;
   }>;
   verticalAlign?: "top" | "bottom";
   hideIcon?: boolean;
@@ -331,7 +332,7 @@ function ChartLegendContent({
     >
         {safePayload.map((item) => {
         const key = `${nameKey || item.dataKey || "value"}`;
-        const itemConfig = getPayloadConfigFromPayload(config, item, key);
+        const itemConfig = getPayloadConfigFromPayload(config, item as JsonValue, key);
 
         return (
           <div
@@ -361,7 +362,7 @@ function ChartLegendContent({
 // Helper to extract item config from a payload.
 function getPayloadConfigFromPayload(
   config: ChartConfig,
-  payload: unknown,
+  payload: JsonValue,
   key: string
 ) {
   if (typeof payload !== "object" || payload === null) {
@@ -377,19 +378,20 @@ function getPayloadConfigFromPayload(
 
   let configLabelKey: string = key;
 
+  const payloadObj = payload as Record<string, JsonValue>;
+  const payloadPayloadObj = payloadPayload as Record<string, JsonValue> | undefined;
+  
   if (
-    key in payload &&
-    typeof payload[key as keyof typeof payload] === "string"
+    key in payloadObj &&
+    typeof payloadObj[key] === "string"
   ) {
-    configLabelKey = payload[key as keyof typeof payload] as string;
+    configLabelKey = payloadObj[key] as string;
   } else if (
-    payloadPayload &&
-    key in payloadPayload &&
-    typeof payloadPayload[key as keyof typeof payloadPayload] === "string"
+    payloadPayloadObj &&
+    key in payloadPayloadObj &&
+    typeof payloadPayloadObj[key] === "string"
   ) {
-    configLabelKey = payloadPayload[
-      key as keyof typeof payloadPayload
-    ] as string;
+    configLabelKey = payloadPayloadObj[key] as string;
   }
 
   return configLabelKey in config

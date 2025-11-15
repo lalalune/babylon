@@ -6,6 +6,7 @@ import { ArrowDownToLine, ArrowUpFromLine, History } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
+import { logger } from '@/lib/logger'
 
 interface Transaction {
   id: string
@@ -43,20 +44,32 @@ export function AgentWallet({ agent, onUpdate }: AgentWalletProps) {
 
   const fetchTransactions = async () => {
     setLoading(true)
-    const token = await getAccessToken()
-    if (!token) return
-    
-    const res = await fetch(`/api/agents/${agent.id}/wallet`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
+    try {
+      const token = await getAccessToken()
+      if (!token) {
+        setLoading(false)
+        return
       }
-    })
+      
+      const res = await fetch(`/api/agents/${agent.id}/wallet`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
 
-    if (res.ok) {
-      const data = await res.json()
-      setTransactions(data.transactions)
+      if (res.ok) {
+        const data = await res.json() as { success: boolean; transactions: Transaction[] }
+        if (data.success && data.transactions) {
+          setTransactions(data.transactions)
+        }
+      } else {
+        logger.error('Failed to fetch transactions', undefined, 'AgentWallet')
+      }
+    } catch (error) {
+      logger.error('Error fetching transactions', { error }, 'AgentWallet')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const handleTransaction = async () => {

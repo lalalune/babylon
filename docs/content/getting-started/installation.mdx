@@ -118,13 +118,13 @@ BABYLON_GAME_PRIVATE_KEY=""
 
 ```bash
 # Generate Prisma client
-bun run prisma:generate
+bun install
 
 # Run database migrations
-bun run prisma:migrate
+bun run db:migrate
 
 # Seed initial data
-bun run prisma:seed
+bun run db:seed
 ```
 
 This will create all necessary tables and populate the database with:
@@ -142,10 +142,10 @@ Test that everything is set up correctly:
 bun run db:status
 
 # Verify API keys
-bun run api:verify
+
 
 # Run type checking
-bun run type-check
+bun run typecheck
 ```
 
 ## Optional: Foundry (for Smart Contracts)
@@ -156,9 +156,6 @@ If you plan to work with smart contracts:
 # Install Foundry
 curl -L https://foundry.paradigm.xyz | bash
 foundryup
-
-# Compile contracts
-bun run contracts:compile
 
 # Run contract tests
 bun run contracts:test
@@ -175,8 +172,8 @@ If you see `ECONNREFUSED localhost:5432`:
 pg_isready
 
 # If not, start it
-brew services start postgresql@14  # macOS
-sudo systemctl start postgresql    # Linux
+brew services start postgresql@14 # macOS
+sudo systemctl start postgresql # Linux
 ```
 
 ### Permission Denied on Database
@@ -191,7 +188,7 @@ psql postgres -c "GRANT ALL PRIVILEGES ON DATABASE babylon TO babylon_user;"
 ```bash
 # Clear Prisma cache and regenerate
 rm -rf node_modules/.prisma
-bun run prisma:generate
+bun install
 ```
 
 ### Port Already in Use
@@ -217,9 +214,4 @@ Now that Babylon is installed:
 2. **[Run Locally](/getting-started/local-development)** - Start the development server
 3. **[Explore the API](/api-reference)** - Learn about available endpoints
 
-## Need Help?
-
-- Check the [Troubleshooting Guide](/getting-started/troubleshooting)
-- Join our [Discord](https://discord.gg/babylon)
-- Open an issue on [GitHub](https://github.com/elizaos/babylon/issues)
 

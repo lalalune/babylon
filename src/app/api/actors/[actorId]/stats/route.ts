@@ -20,15 +20,28 @@ export const GET = withErrorHandling(async (
   const params = await context.params;
   const { actorId } = params;
 
-  // Verify actor exists
-  const actor = await prisma.actor.findUnique({
+  // Try to find actor by ID first, then by name (case-insensitive)
+  let actor = await prisma.actor.findUnique({
     where: { id: actorId },
     select: { id: true },
   });
 
+  // If not found by ID, try finding by name
+  if (!actor) {
+    actor = await prisma.actor.findFirst({
+      where: { 
+        name: { equals: actorId, mode: 'insensitive' }
+      },
+      select: { id: true },
+    });
+  }
+
   if (!actor) {
     throw new BusinessLogicError(`Actor ${actorId} not found`, 'NOT_FOUND');
   }
+
+  // Use the actual actor ID for all queries
+  const actualActorId = actor.id;
 
   // Get follower counts (both from ActorFollow and UserActorFollow)
   const [
@@ -40,29 +53,29 @@ export const GET = withErrorHandling(async (
   ] = await Promise.all([
     // NPCs following this actor (ActorFollow)
     prisma.actorFollow.count({
-      where: { followingId: actorId },
+      where: { followingId: actualActorId },
     }),
     // Users following this actor (UserActorFollow)
     prisma.userActorFollow.count({
       where: {
-        actorId,
+        actorId: actualActorId,
       },
     }),
     // Legacy FollowStatus entries created before migration
     prisma.followStatus.count({
       where: {
-        npcId: actorId,
+        npcId: actualActorId,
         isActive: true,
         followReason: 'user_followed',
       },
     }),
     // This actor following others (only NPC-to-NPC follows via ActorFollow)
     prisma.actorFollow.count({
-      where: { followerId: actorId },
+      where: { followerId: actualActorId },
     }),
     // Posts by this actor
     prisma.post.count({
-      where: { authorId: actorId },
+      where: { authorId: actualActorId },
     }),
   ]);
 
@@ -70,7 +83,8 @@ export const GET = withErrorHandling(async (
   const totalFollowers = actorFollowerCount + totalUserFollowers;
 
   logger.info('Actor stats fetched successfully', { 
-    actorId, 
+    actorId,
+    actualActorId, 
     totalFollowers,
     actorFollowerCount,
     userActorFollowerCount,

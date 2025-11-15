@@ -147,6 +147,26 @@ export function SendPointsModal({
                 />
               </div>
 
+              {/* Quick Amount Buttons */}
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                {[10, 100, 1000].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => setAmount(amt.toString())}
+                    className={cn(
+                      'px-4 py-2 rounded-lg border transition-colors',
+                      amount === amt.toString()
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background border-border hover:border-primary hover:bg-muted/50'
+                    )}
+                    disabled={isSubmitting}
+                  >
+                    {amt} pts
+                  </button>
+                ))}
+              </div>
+
               {/* Optional Message */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-foreground mb-2">
@@ -212,4 +232,5 @@ export function SendPointsModal({
     </div>
   )
 }
+
 

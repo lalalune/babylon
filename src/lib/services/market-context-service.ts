@@ -32,7 +32,10 @@ export class MarketContextService {
     
     // Fetch all NPCs (no pool requirement)
     // Note: All records in Actor table are NPCs
-    const npcs = await prisma.actor.findMany();
+    // Filter out test actors (Group Test Alice, Bob, Charlie)
+    const npcs = (await prisma.actor.findMany()).filter(
+      actor => !actor.name.includes('Group Test')
+    );
     
     // Fetch shared data once (used by all NPCs)
     const [marketSnapshots, recentPosts, recentEvents] = await Promise.all([
@@ -72,7 +75,7 @@ export class MarketContextService {
       // Filter group chats this NPC is a member of (based on chat participants)
       const npcGroupChats = groupChats.filter(chat =>
         chat.Message.some(msg => msg.senderId === npc.id) ||
-        chat.name?.toLowerCase().includes(npc.name.toLowerCase().split(' ')[0] || '')
+        chat.name?.toLowerCase().includes((npc.name.toLowerCase().split(' ')[0] ?? ''))
       );
       
       const groupChatMessages: GroupChatContext[] = npcGroupChats.flatMap(chat => 

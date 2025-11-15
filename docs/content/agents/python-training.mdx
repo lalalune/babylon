@@ -12,20 +12,20 @@ The Python RL training system enables continuous learning from live agent gamepl
 
 **Based on**: OpenPipe GRPO, Stanford RULER architecture
 
-**Status**: ✅ **Production Ready** - Complete automation pipeline
+**Status**: **Production Ready** - Complete automation pipeline
 
 ## Architecture
 
 ```mermaid
 graph TB
-    A[Live Agents] --> B[Trajectory Collection]
-    B --> C[(PostgreSQL)]
-    C --> D[Training Pipeline]
-    D --> E[GRPO Trainer]
-    E --> F[Model Checkpoint]
-    F --> G[Deployment]
-    G --> H[Updated Agents]
-    H --> A
+ A[Live Agents] --> B[Trajectory Collection]
+ B --> C[(PostgreSQL)]
+ C --> D[Training Pipeline]
+ D --> E[GRPO Trainer]
+ E --> F[Model Checkpoint]
+ F --> G[Deployment]
+ G --> H[Updated Agents]
+ H --> A
 ```
 
 ### Continuous Learning Loop
@@ -83,9 +83,9 @@ Runs indefinitely, training on new data as it arrives:
 
 ```bash
 python src/training/continuous_trainer.py \
-  --mode continuous \
-  --window-hours 1 \
-  --frequency 1
+ --mode continuous \
+ --window-hours 1 \
+ --frequency 1
 ```
 
 **Process**:
@@ -101,8 +101,8 @@ Train on one window and exit:
 
 ```bash
 python src/training/continuous_trainer.py \
-  --mode single \
-  --window-hours 6
+ --mode single \
+ --window-hours 6
 ```
 
 ### Backfill Mode (Catch-up)
@@ -111,8 +111,8 @@ Train on historical data:
 
 ```bash
 python src/training/continuous_trainer.py \
-  --mode backfill \
-  --backfill-hours 48
+ --mode backfill \
+ --backfill-hours 48
 ```
 
 ## Data Collection
@@ -137,17 +137,17 @@ Window: 2024-11-13 10:00 - 11:00
 ### Quality Filters
 
 **Trajectories must have**:
-- ✅ Complete provider data
-- ✅ LLM call with reasoning
-- ✅ Action result
-- ✅ Reward score
-- ✅ All timestamps
+- Complete provider data
+- LLM call with reasoning
+- Action result
+- Reward score
+- All timestamps
 
 **Rejected if**:
-- ❌ Missing required fields
-- ❌ Reward below threshold
-- ❌ Incomplete data
-- ❌ Malformed JSON
+- Missing required fields
+- Reward below threshold
+- Incomplete data
+- Malformed JSON
 
 ## Training Configuration
 
@@ -157,13 +157,13 @@ Window: 2024-11-13 10:00 - 11:00
 from training.grpo_config import GRPOConfig
 
 config = GRPOConfig(
-    model_name="Qwen/Qwen2.5-0.5B-Instruct",
-    batch_size=4,
-    gradient_accumulation_steps=2,
-    learning_rate=1e-6,
-    kl_penalty=0.05,
-    iterations_per_window=10,
-    reward_threshold=0.5
+ model_name="Qwen/Qwen2.5-0.5B-Instruct",
+ batch_size=4,
+ gradient_accumulation_steps=2,
+ learning_rate=1e-6,
+ kl_penalty=0.05,
+ iterations_per_window=10,
+ reward_threshold=0.5
 )
 ```
 
@@ -173,9 +173,9 @@ config = GRPOConfig(
 from training.ruler_scorer import RULERScorer
 
 scorer = RULERScorer(
-    model_path="./checkpoints/latest",
-    scoring_method="preference",  # or "regression"
-    temperature=0.7
+ model_path="./checkpoints/latest",
+ scoring_method="preference", # or "regression"
+ temperature=0.7
 )
 
 scores = scorer.score_trajectories(trajectories)
@@ -189,10 +189,10 @@ Replace old model with new model atomically:
 
 ```python
 deployment = {
-    "strategy": "replace",
-    "endpoint": "http://localhost:8000",
-    "model_path": "./checkpoints/window_123",
-    "validation": True  # Test before deploying
+ "strategy": "replace",
+ "endpoint": "http://localhost:8000",
+ "model_path": "./checkpoints/window_123",
+ "validation": True # Test before deploying
 }
 ```
 
@@ -202,10 +202,10 @@ Run two models simultaneously:
 
 ```python
 deployment = {
-    "strategy": "ab_test",
-    "model_a": "./checkpoints/baseline",
-    "model_b": "./checkpoints/window_123",
-    "split": 0.5  # 50/50 split
+ "strategy": "ab_test",
+ "model_a": "./checkpoints/baseline",
+ "model_b": "./checkpoints/window_123",
+ "split": 0.5 # 50/50 split
 }
 ```
 
@@ -217,14 +217,14 @@ Track key metrics:
 
 ```python
 {
-    "window_id": 123,
-    "agents": 5,
-    "trajectories": 47,
-    "avg_reward": 0.73,
-    "training_loss": 0.21,
-    "kl_divergence": 0.03,
-    "deployment_success": True,
-    "duration_minutes": 15
+ "window_id": 123,
+ "agents": 5,
+ "trajectories": 47,
+ "avg_reward": 0.73,
+ "training_loss": 0.21,
+ "kl_divergence": 0.03,
+ "deployment_success": True,
+ "duration_minutes": 15
 }
 ```
 
@@ -240,7 +240,7 @@ baseline_win_rate = 0.52
 improved_win_rate = 0.67
 
 # Improvement
-delta = +0.15  # 15% better!
+delta = +0.15 # 15% better!
 ```
 
 ## Advanced Features
@@ -249,23 +249,23 @@ delta = +0.15  # 15% better!
 
 ```python
 class TradingRewardFunction:
-    def compute(self, trajectory):
-        # Extract metrics
-        pnl = trajectory['result']['pnl']
-        hold_time = trajectory['result']['hold_time_minutes']
-        win_rate = trajectory['agent_stats']['win_rate']
-        
-        # Compute components
-        pnl_reward = pnl / trajectory['result']['investment']
-        speed_reward = 1.0 if hold_time < 60 else 0.5
-        consistency_reward = win_rate
-        
-        # Weighted combination
-        return (
-            0.5 * pnl_reward +
-            0.2 * speed_reward +
-            0.3 * consistency_reward
-        )
+ def compute(self, trajectory):
+ # Extract metrics
+ pnl = trajectory['result']['pnl']
+ hold_time = trajectory['result']['hold_time_minutes']
+ win_rate = trajectory['agent_stats']['win_rate']
+ 
+ # Compute components
+ pnl_reward = pnl / trajectory['result']['investment']
+ speed_reward = 1.0 if hold_time < 60 else 0.5
+ consistency_reward = win_rate
+ 
+ # Weighted combination
+ return (
+ 0.5 * pnl_reward +
+ 0.2 * speed_reward +
+ 0.3 * consistency_reward
+ )
 ```
 
 ### Multi-Agent Learning
@@ -276,8 +276,8 @@ agents = ["agent-1", "agent-2", "agent-3"]
 
 trajectories = []
 for agent in agents:
-    agent_data = collect_trajectories(agent, window)
-    trajectories.extend(agent_data)
+ agent_data = collect_trajectories(agent, window)
+ trajectories.extend(agent_data)
 
 # Train on combined experience
 model = train_grpo(trajectories)
@@ -288,9 +288,9 @@ model = train_grpo(trajectories)
 ```python
 # Fine-tune on Babylon-specific strategies
 trainer = GRPOTrainer(
-    base_model="Qwen/Qwen2.5-0.5B-Instruct",  # General model
-    babylon_data="./trajectories/",            # Babylon-specific
-    transfer_layers=["attention", "ffn"]       # What to fine-tune
+ base_model="Qwen/Qwen2.5-0.5B-Instruct", # General model
+ babylon_data="./trajectories/", # Babylon-specific
+ transfer_layers=["attention", "ffn"] # What to fine-tune
 )
 ```
 
@@ -303,23 +303,23 @@ trainer = GRPOTrainer(
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: babylon-rl-training
+ name: babylon-rl-training
 spec:
-  replicas: 1
-  template:
-    spec:
-      containers:
-      - name: trainer
-        image: babylon/rl-training:latest
-        env:
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: db-credentials
-              key: url
-        resources:
-          limits:
-            nvidia.com/gpu: 1
+ replicas: 1
+ template:
+ spec:
+ containers:
+ - name: trainer
+ image: babylon/rl-training:latest
+ env:
+ - name: DATABASE_URL
+ valueFrom:
+ secretKeyRef:
+ name: db-credentials
+ key: url
+ resources:
+ limits:
+ nvidia.com/gpu: 1
 ```
 
 ### Automation

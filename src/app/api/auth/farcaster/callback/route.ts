@@ -223,12 +223,15 @@ async function verifyFarcasterSignature(
     }),
   })
 
-  const errorText = await response.text()
-  logger.error('Neynar verification failed', { 
-    status: response.status, 
-    error: errorText,
-    fid 
-  }, 'verifyFarcasterSignature')
+  if (!response.ok) {
+    const errorText = await response.text()
+    logger.error('Neynar verification failed', { 
+      status: response.status, 
+      error: errorText,
+      fid 
+    }, 'verifyFarcasterSignature')
+    return false
+  }
 
   const data = await response.json() as { valid: boolean }
   return data.valid

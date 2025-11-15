@@ -63,8 +63,8 @@ export async function GET(_req: NextRequest) {
       success: true,
       data: {
         currentSettings: {
-          wandbModel: settings?.wandbModel || null,
-          wandbEnabled: settings?.wandbEnabled || false,
+          wandbModel: settings?.wandbModel ?? null,
+          wandbEnabled: settings?.wandbEnabled ?? false,
         },
         providers,
         activeProvider,
@@ -106,7 +106,16 @@ export async function GET(_req: NextRequest) {
  */
 export async function PUT(req: NextRequest) {
   try {
-    const body = await req.json();
+    let body: { wandbModel?: string; wandbEnabled?: boolean }
+    try {
+      body = await req.json() as { wandbModel?: string; wandbEnabled?: boolean }
+    } catch (error) {
+      logger.error('Failed to parse request body', { error }, 'POST /api/admin/ai-models')
+      return NextResponse.json({
+        success: false,
+        error: 'Invalid request body'
+      }, { status: 400 })
+    }
     const { wandbModel, wandbEnabled } = body;
 
     // Validate inputs
@@ -124,13 +133,13 @@ export async function PUT(req: NextRequest) {
     const settings = await prisma.systemSettings.upsert({
       where: { id: 'system' },
       update: {
-        wandbModel: wandbModel || null,
-        wandbEnabled: wandbEnabled || false,
+        wandbModel: typeof wandbModel === 'string' ? wandbModel : null,
+        wandbEnabled: typeof wandbEnabled === 'boolean' ? wandbEnabled : undefined,
       },
       create: {
         id: 'system',
-        wandbModel: wandbModel || null,
-        wandbEnabled: wandbEnabled || false,
+        wandbModel: typeof wandbModel === 'string' ? wandbModel : null,
+        wandbEnabled: typeof wandbEnabled === 'boolean' ? wandbEnabled : undefined,
       },
     });
 
@@ -144,7 +153,7 @@ export async function PUT(req: NextRequest) {
     clearAIModelConfigCache();
 
     // Also update the environment variable for immediate effect
-    if (wandbEnabled && wandbModel) {
+    if (wandbEnabled && typeof wandbModel === 'string') {
       process.env.WANDB_MODEL = wandbModel;
     }
 

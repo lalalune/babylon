@@ -277,6 +277,10 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       scenario: q.scenarioId,
       yesShares: market ? Number(market.yesShares) : 0,
       noShares: market ? Number(market.noShares) : 0,
+      // Include oracle status for on-chain verification
+      oracleCommitTxHash: (q as { oracleCommitTxHash?: string | null }).oracleCommitTxHash ?? null,
+      oracleRevealTxHash: (q as { oracleRevealTxHash?: string | null }).oracleRevealTxHash ?? null,
+      oraclePublishedAt: (q as { oraclePublishedAt?: Date | null }).oraclePublishedAt ?? null,
       // Include user position if exists
       userPosition: primaryPosition,
       userPositions,

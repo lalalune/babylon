@@ -2,10 +2,11 @@
 
 import { Avatar } from '@/components/shared/Avatar'
 import { cn } from '@/lib/utils'
-import { ArrowDownRight, ArrowUpRight, TrendingDown, TrendingUp } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, TrendingDown, TrendingUp, Send, Coins } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime'
 
-type TradeType = 'balance' | 'npc' | 'position' | 'perp'
+type TradeType = 'balance' | 'npc' | 'position' | 'perp' | 'transfer'
 
 interface BaseTrade {
   type: TradeType
@@ -75,7 +76,23 @@ interface PerpTrade extends BaseTrade {
   closedAt: Date | string | null
 }
 
-export type Trade = BalanceTrade | NPCTrade | PositionTrade | PerpTrade
+interface TransferTrade extends BaseTrade {
+  type: 'transfer'
+  otherParty: {
+    id: string
+    username: string | null
+    displayName: string | null
+    profileImageUrl: string | null
+    isActor: boolean
+  } | null
+  amount: number
+  pointsBefore: number
+  pointsAfter: number
+  direction: 'sent' | 'received'
+  message?: string
+}
+
+export type Trade = BalanceTrade | NPCTrade | PositionTrade | PerpTrade | TransferTrade
 
 interface TradeCardProps {
   trade: Trade
@@ -180,6 +197,9 @@ export function TradeCard({ trade }: TradeCardProps) {
           )}
           {trade.type === 'perp' && (
             <PerpTradeContent trade={trade} onAssetClick={handleAssetClick} formatCurrency={formatCurrency} />
+          )}
+          {trade.type === 'transfer' && (
+            <TransferTradeContent trade={trade} router={router} />
           )}
         </div>
       </div>
@@ -374,6 +394,61 @@ function PerpTradeContent({
             {isPnLPositive ? '+' : ''}{formatCurrency(pnl)}
           </span>
         </div>
+      )}
+    </div>
+  )
+}
+
+function TransferTradeContent({ 
+  trade,
+  router
+}: { 
+  trade: TransferTrade
+  router: AppRouterInstance
+}) {
+  const isSent = trade.direction === 'sent'
+  const otherPartyName = trade.otherParty?.displayName || trade.otherParty?.username || 'Unknown'
+  
+  const handleOtherPartyClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (trade.otherParty) {
+      router.push(`/profile/${trade.otherParty.id}`)
+    }
+  }
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        {isSent ? (
+          <Send className="w-4 h-4 text-blue-500" />
+        ) : (
+          <Coins className="w-4 h-4 text-green-500" />
+        )}
+        <span className="text-sm text-muted-foreground">
+          {isSent ? 'Sent points to' : 'Received points from'}
+        </span>
+        <span 
+          className="font-medium hover:underline cursor-pointer"
+          onClick={handleOtherPartyClick}
+        >
+          {otherPartyName}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className={cn(
+          'text-base font-semibold',
+          isSent ? 'text-red-600' : 'text-green-600'
+        )}>
+          {isSent ? '-' : '+'}{Math.abs(trade.amount)} pts
+        </span>
+        <span className="text-xs text-muted-foreground">
+          Balance: {trade.pointsAfter} pts
+        </span>
+      </div>
+      {trade.message && (
+        <p className="text-sm text-muted-foreground italic">
+          &quot;{trade.message}&quot;
+        </p>
       )}
     </div>
   )

@@ -1,135 +1,62 @@
 /**
  * Agent Wallet Provider
- * Provides complete view of agent's own wallet, investments, and positions
+ * Provides complete view of agent's own wallet, investments, and positions via A2A protocol
  */
 
 import type { Provider, IAgentRuntime, Memory, State, ProviderResult } from '@elizaos/core'
 import { logger } from '@/lib/logger'
-import { prisma } from '@/lib/prisma'
+import type { BabylonRuntime } from '../types'
+import type { A2ABalanceResponse, A2APositionsResponse } from '@/types/a2a-responses'
 
 /**
  * Provider: Agent's Own Wallet & Investments
- * Comprehensive view of the agent's portfolio, positions, and assets
+ * Comprehensive view of the agent's portfolio, positions, and assets via A2A protocol
  */
 export const agentWalletProvider: Provider = {
   name: 'BABYLON_AGENT_WALLET',
-  description: "Get the agent's own complete wallet state including balance, reputation points, all investments, and positions",
+  description: "Get the agent's own complete wallet state including balance, reputation points, all investments, and positions via A2A protocol",
   
   get: async (runtime: IAgentRuntime, _message: Memory, _state: State): Promise<ProviderResult> => {
+    const babylonRuntime = runtime as BabylonRuntime
+    const agentUserId = runtime.agentId
+    
+    // A2A is REQUIRED
+    if (!babylonRuntime.a2aClient?.isConnected()) {
+      logger.error('A2A client not connected - agent wallet provider requires A2A protocol', undefined, runtime.agentId)
+      return { text: 'ERROR: A2A client not connected. Cannot fetch wallet data. Please ensure A2A server is running.' }
+    }
+    
     try {
-      const agentUserId = runtime.agentId
+      // Get balance and positions via A2A
+      const [balanceData, positionsData] = await Promise.all([
+        babylonRuntime.a2aClient.getBalance(),
+        babylonRuntime.a2aClient.getPositions(agentUserId)
+      ])
       
-      // Get agent user with all financial data
-      const agent = await prisma.user.findUnique({
-        where: { id: agentUserId },
-        select: {
-          id: true,
-          username: true,
-          displayName: true,
-          virtualBalance: true,
-          reputationPoints: true,
-          agentPointsBalance: true,
-          lifetimePnL: true,
-          walletAddress: true,
-          // Get agent's prediction market positions
-          Position: {
-            where: {
-              shares: {
-                gt: 0
-              },
-              status: 'active'
-            },
-            include: {
-              Market: {
-                select: {
-                  id: true,
-                  question: true,
-                  yesShares: true,
-                  noShares: true,
-                  liquidity: true,
-                  resolved: true,
-                  resolution: true
-                }
-              },
-              Question: {
-                select: {
-                  questionNumber: true,
-                  text: true,
-                  outcome: true,
-                  resolvedOutcome: true
-                }
-              }
-            }
-          }
-        }
-      })
+      const balance = balanceData as unknown as A2ABalanceResponse
+      const positions = positionsData as unknown as A2APositionsResponse
       
-      if (!agent) {
-        return { text: 'Agent wallet data not found.' }
-      }
-      
-      // Calculate market positions value
-      const marketPositionsWithValue = agent.Position.map(pos => {
-        const shares = parseFloat(pos.shares.toString())
-        const avgPrice = parseFloat(pos.avgPrice?.toString() || '50')
-        const side = pos.side ? 'yes' : 'no' // Boolean: true = yes, false = no
-        
-        // Calculate current price from Market's constant product AMM (k = y * n)
-        let currentPrice = avgPrice
-        if (pos.Market) {
-          const yesShares = parseFloat(pos.Market.yesShares.toString())
-          const noShares = parseFloat(pos.Market.noShares.toString())
-          const liquidity = parseFloat(pos.Market.liquidity.toString())
-          if (yesShares > 0 && noShares > 0) {
-            currentPrice = pos.side 
-              ? (liquidity / (yesShares + noShares)) * (noShares / yesShares) * 100
-              : (liquidity / (yesShares + noShares)) * (yesShares / noShares) * 100
-          }
-        }
-        
-        const currentValue = shares * currentPrice
-        const costBasis = shares * avgPrice
-        const unrealizedPnL = currentValue - costBasis
-        
-        return {
-          ...pos,
-          side,
-          currentPrice,
-          currentValue,
-          costBasis,
-          unrealizedPnL
-        }
-      })
-      
-      const totalUnrealizedMarketPnL = marketPositionsWithValue.reduce((sum, p) => sum + p.unrealizedPnL, 0)
-      
-      // Format output
-      const virtualBalance = parseFloat(agent.virtualBalance.toString())
-      const lifetimePnL = parseFloat(agent.lifetimePnL.toString())
+      const totalUnrealizedPnL = (positions.marketPositions?.reduce((sum, p) => sum + (p.unrealizedPnL || 0), 0) || 0) +
+                                  (positions.perpPositions?.reduce((sum, p) => sum + (p.unrealizedPnL || 0), 0) || 0)
       
       let output = `🤖 Your Wallet & Investments:
 
 💰 BALANCES:
-• Virtual Balance: $${virtualBalance.toFixed(2)}
-• Reputation Points: ${agent.reputationPoints.toFixed(0)} pts
-• Agent Points: ${agent.agentPointsBalance.toFixed(0)} pts
-• Lifetime P&L: ${lifetimePnL >= 0 ? '+' : ''}$${lifetimePnL.toFixed(2)}
-• Wallet Address: ${agent.walletAddress || 'Not connected'}
+• Virtual Balance: $${(balance.balance || 0).toFixed(2)}
+• Reputation Points: ${(balance.reputationPoints || 0).toFixed(0)} pts
+• Lifetime P&L: ${(balance.lifetimePnL || 0) >= 0 ? '+' : ''}$${(balance.lifetimePnL || 0).toFixed(2)}
 
 `
       
       // Prediction Market Positions
-      if (marketPositionsWithValue.length > 0) {
-        output += `📊 PREDICTION MARKET POSITIONS (${marketPositionsWithValue.length}):
-${marketPositionsWithValue.map(p => {
-  const question = p.Market?.question || p.Question?.text || 'Unknown market'
-  return `• ${question.substring(0, 60)}...
-  Side: ${p.side.toUpperCase()} | Shares: ${parseFloat(p.shares.toString()).toFixed(2)} @ avg $${parseFloat(p.avgPrice.toString()).toFixed(2)}
-  Current: $${p.currentPrice.toFixed(2)} | Value: $${p.currentValue.toFixed(2)}
-  P&L: ${p.unrealizedPnL >= 0 ? '+' : ''}$${p.unrealizedPnL.toFixed(2)} (${((p.unrealizedPnL / p.costBasis) * 100).toFixed(1)}%)`
+      if (positions.marketPositions && positions.marketPositions.length > 0) {
+        output += `📊 PREDICTION MARKET POSITIONS (${positions.marketPositions.length}):
+${positions.marketPositions.map(p => {
+  return `• ${p.question.substring(0, 60)}...
+  Side: ${p.side.toUpperCase()} | Shares: ${p.shares.toFixed(2)} @ avg $${p.avgPrice.toFixed(2)}
+  Current: $${p.currentPrice.toFixed(2)} | Value: $${(p.shares * p.currentPrice).toFixed(2)}
+  P&L: ${(p.unrealizedPnL || 0) >= 0 ? '+' : ''}$${(p.unrealizedPnL || 0).toFixed(2)}`
 }).join('\n\n')}
-
-Total Unrealized P&L: ${totalUnrealizedMarketPnL >= 0 ? '+' : ''}$${totalUnrealizedMarketPnL.toFixed(2)}
 
 `
       } else {
@@ -138,33 +65,38 @@ Total Unrealized P&L: ${totalUnrealizedMarketPnL >= 0 ? '+' : ''}$${totalUnreali
 `
       }
       
+      // Perpetual Positions
+      if (positions.perpPositions && positions.perpPositions.length > 0) {
+        output += `🔮 PERPETUAL POSITIONS (${positions.perpPositions.length}):
+${positions.perpPositions.map(p => {
+  const amount = p.amount || p.size || 0
+  return `• ${p.ticker}: ${p.side.toUpperCase()} $${amount} @ $${p.entryPrice} (${p.leverage}x)
+  Current: $${p.currentPrice} | P&L: ${(p.unrealizedPnL || 0) >= 0 ? '+' : ''}$${(p.unrealizedPnL || 0).toFixed(2)}`
+}).join('\n\n')}
+
+`
+      }
+      
+      if (totalUnrealizedPnL !== 0) {
+        output += `Total Unrealized P&L: ${totalUnrealizedPnL >= 0 ? '+' : ''}$${totalUnrealizedPnL.toFixed(2)}`
+      }
+      
       return { 
         text: output,
         data: {
           balances: {
-            virtualBalance: agent.virtualBalance,
-            reputationPoints: agent.reputationPoints,
-            agentPointsBalance: agent.agentPointsBalance,
-            lifetimePnL: agent.lifetimePnL,
-            walletAddress: agent.walletAddress
+            virtualBalance: balance.balance || 0,
+            reputationPoints: balance.reputationPoints || 0,
+            lifetimePnL: balance.lifetimePnL || 0
           },
-          marketPositions: marketPositionsWithValue.map(p => ({
-            id: p.id,
-            marketId: p.questionId,
-            question: p.Market?.question || p.Question?.text || 'Unknown market',
-            side: p.side,
-            shares: parseFloat(p.shares.toString()),
-            averagePrice: parseFloat(p.avgPrice.toString()),
-            currentPrice: p.currentPrice,
-            currentValue: p.currentValue,
-            unrealizedPnL: p.unrealizedPnL
-          })),
-          totalUnrealizedPnL: totalUnrealizedMarketPnL
+          marketPositions: positions.marketPositions || [],
+          perpPositions: positions.perpPositions || [],
+          totalUnrealizedPnL
         }
       }
     } catch (error) {
-      logger.error('Failed to fetch agent wallet', error, 'AgentWalletProvider')
-      return { text: 'Unable to fetch agent wallet data at this time.' }
+      logger.error('Failed to fetch agent wallet via A2A', error, 'AgentWalletProvider')
+      return { text: `Error fetching wallet: ${error instanceof Error ? error.message : 'Unknown error'}` }
     }
   }
 }

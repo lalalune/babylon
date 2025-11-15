@@ -11,6 +11,7 @@ import { gameService } from '@/lib/game-service';
 import { logger } from '@/lib/logger';
 import { PostIdParamSchema } from '@/lib/validation/schemas';
 import type { NextRequest } from 'next/server';
+import type { JsonValue } from '@/types/common';
 
 /**
  * Parse repost content to extract metadata
@@ -227,7 +228,7 @@ export const GET = withErrorHandling(async (
         const parsedRepostData = gamePost.content ? parseRepostContent(gamePost.content) : null;
         let repostMetadata = {};
         
-        const originalPostIdFromGame = 'originalPostId' in gamePost ? (gamePost as Record<string, unknown>).originalPostId as string | undefined : undefined;
+        const originalPostIdFromGame = 'originalPostId' in gamePost ? (gamePost as Record<string, JsonValue>).originalPostId as string | undefined : undefined;
         if (parsedRepostData || originalPostIdFromGame) {
           // Try to get original author info
           let originalAuthor = null;

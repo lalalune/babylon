@@ -22,7 +22,7 @@ export const portfolioProvider: Provider = {
     
     // A2A is required
     if (!babylonRuntime.a2aClient?.isConnected()) {
-      logger.error('A2A client not connected - portfolio provider requires A2A', { agentId: runtime.agentId })
+      logger.error('A2A client not connected - portfolio provider requires A2A', undefined, runtime.agentId)
       return { text: 'A2A client not connected. Cannot fetch portfolio data.' }
     }
     
@@ -31,8 +31,8 @@ export const portfolioProvider: Provider = {
       babylonRuntime.a2aClient.sendRequest('a2a.getPositions', { userId: agentUserId })
     ])
     
-    const balance = balanceData as A2ABalanceResponse
-    const positions = positionsData as A2APositionsResponse
+    const balance = balanceData as unknown as A2ABalanceResponse
+    const positions = positionsData as unknown as A2APositionsResponse
     
     return { text: `Your Portfolio:
 

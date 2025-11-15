@@ -11,6 +11,7 @@ import { Prisma } from '@prisma/client';
 import { isAuthenticationError } from '@/lib/api/auth-middleware';
 import { trackServerError } from '@/lib/posthog/server';
 import * as Sentry from '@sentry/nextjs';
+import type { JsonValue } from '@/types/common';
 
 /**
  * Main error handler that processes all errors and returns appropriate responses
@@ -42,20 +43,88 @@ export function errorHandler(error: Error | unknown, request: NextRequest): Next
     );
   }
 
-  // Log the error
-  logger.error('API Error', {
-    error: error.message,
-    stack: error.stack,
-    name: error.name,
-    ...errorContext
-  });
+  // Handle authentication errors early - these are expected and shouldn't be logged as errors
+  if (isAuthenticationError(error)) {
+    // Skip logging for test tokens to reduce noise in test output
+    const authHeader = request.headers.get('authorization');
+    const isTestToken = authHeader?.includes('test-token');
+    
+    // Log authentication failures at warn level (expected behavior for unauthenticated requests)
+    // But skip logging for test tokens
+    if (!isTestToken) {
+      logger.warn('Authentication failed', {
+        error: error.message,
+        ...errorContext
+      });
+    }
+
+    return NextResponse.json(
+      {
+        error: error.message || 'Authentication required'
+      },
+      { status: 401 }
+    );
+  }
+
+  // Handle validation errors early - these are expected client input issues
+  if (error instanceof ZodError) {
+    // Skip logging for test tokens to reduce noise in test output
+    const authHeader = request.headers.get('authorization');
+    const isTestToken = authHeader?.includes('test-token');
+    
+    // Log validation errors at warn level (expected behavior for invalid client input)
+    // But skip logging for test requests
+    if (!isTestToken) {
+      logger.warn('Validation error', {
+        error: error.message,
+        issues: error.issues,
+        name: error.name,
+        ...errorContext
+      });
+    }
+
+    return NextResponse.json(
+      {
+        error: 'Validation failed',
+        details: error.issues.map(err => ({
+          field: err.path.join('.'),
+          message: err.message
+        }))
+      },
+      { status: 400 }
+    );
+  }
+
+  // Handle client errors (4xx) at lower log level - these are expected behavior
+  if (error instanceof BabylonError && error.statusCode >= 400 && error.statusCode < 500) {
+    // Log 4xx client errors at warn level (expected behavior for invalid requests)
+    logger.warn('Client error', {
+      error: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      name: error.name,
+      ...errorContext
+    });
+  } else {
+    // Log unexpected errors at ERROR level
+    logger.error('API Error', {
+      error: error.message,
+      stack: error.stack,
+      name: error.name,
+      ...errorContext
+    });
+  }
 
   // Track error with PostHog (async, don't await to avoid slowing down response)
+  // Skip tracking authentication errors, validation errors, and 4xx client errors as they're expected behavior
   const userId = request.headers.get('x-user-id') || null;
-  void trackServerError(userId, error, {
-    endpoint: new URL(request.url).pathname,
-    method: request.method,
-  });
+  const isClientError = error instanceof BabylonError && error.statusCode >= 400 && error.statusCode < 500;
+  if (!isAuthenticationError(error) && !(error instanceof ZodError) && !isClientError) {
+    void trackServerError(userId, error, {
+      endpoint: new URL(request.url).pathname,
+      method: request.method,
+    });
+  }
 
   // Capture error in Sentry (only for server errors, not client errors like validation)
   // Skip capturing validation errors, authentication errors, and known operational errors
@@ -91,25 +160,17 @@ export function errorHandler(error: Error | unknown, request: NextRequest): Next
     });
   }
 
-  // Handle authentication errors consistently
-  if (isAuthenticationError(error)) {
-    return NextResponse.json(
-      {
-        error: error.message || 'Authentication required'
-      },
-      { status: 401 }
-    );
-  }
-
   // Handle Babylon errors (our custom errors)
   if (error instanceof BabylonError) {
-    const errorData: Record<string, unknown> = { error: error.message }
+    const errorData: Record<string, JsonValue> = { error: error.message }
     if (error.context?.details) {
-      errorData.details = error.context.details
+      errorData.details = error.context.details as JsonValue
     }
     if (process.env.NODE_ENV === 'development') {
       errorData.code = error.code
-      errorData.stack = error.stack
+      if (error.stack) {
+        errorData.stack = error.stack
+      }
     }
     
     return NextResponse.json(
@@ -129,26 +190,12 @@ export function errorHandler(error: Error | unknown, request: NextRequest): Next
   }
 
   if (error instanceof Prisma.PrismaClientValidationError) {
-    const errorData: Record<string, unknown> = { error: 'Invalid database query' }
+    const errorData: Record<string, JsonValue> = { error: 'Invalid database query' }
     if (process.env.NODE_ENV === 'development') {
       errorData.details = error.message
     }
     
     return NextResponse.json(errorData, { status: 400 });
-  }
-
-  // Handle Zod validation errors
-  if (error instanceof ZodError) {
-    return NextResponse.json(
-      {
-        error: 'Validation failed',
-        details: error.issues.map(err => ({
-          field: err.path.join('.'),
-          message: err.message
-        }))
-      },
-      { status: 400 }
-    );
   }
 
   // Handle native JavaScript errors
@@ -173,7 +220,7 @@ export function errorHandler(error: Error | unknown, request: NextRequest): Next
   }
 
   // Default error response
-  const errorData: Record<string, unknown> = {
+  const errorData: Record<string, JsonValue> = {
     error: process.env.NODE_ENV === 'production'
       ? 'An unexpected error occurred'
       : error.message
@@ -194,7 +241,7 @@ function handlePrismaError(error: Prisma.PrismaClientKnownRequestError): NextRes
     case 'P2002':
       // Unique constraint violation
       const fields = error.meta?.target as string[] | undefined;
-      const errorData: Record<string, unknown> = { error: `Duplicate entry for field(s): ${fields?.join(', ') || 'unknown'}` }
+      const errorData: Record<string, JsonValue> = { error: `Duplicate entry for field(s): ${fields?.join(', ') || 'unknown'}` }
       if (fields) errorData.fields = fields
       return NextResponse.json(errorData, { status: 409 });
 
@@ -205,7 +252,7 @@ function handlePrismaError(error: Prisma.PrismaClientKnownRequestError): NextRes
     case 'P2003':
       // Foreign key constraint failure
       const field = error.meta?.field_name as string | undefined;
-      const fkErrorData: Record<string, unknown> = { error: `Foreign key constraint failed on field: ${field || 'unknown'}` }
+      const fkErrorData: Record<string, JsonValue> = { error: `Foreign key constraint failed on field: ${field || 'unknown'}` }
       if (field) fkErrorData.field = field
       return NextResponse.json(fkErrorData, { status: 400 });
 
@@ -229,10 +276,10 @@ function handlePrismaError(error: Prisma.PrismaClientKnownRequestError): NextRes
 
     default:
       // Generic database error
-      const dbErrorData: Record<string, unknown> = { error: 'Database operation failed' }
+      const dbErrorData: Record<string, JsonValue> = { error: 'Database operation failed' }
       if (process.env.NODE_ENV === 'development') {
         dbErrorData.prismaCode = error.code
-        dbErrorData.meta = error.meta
+        dbErrorData.meta = error.meta as JsonValue
       }
       return NextResponse.json(dbErrorData, { status: 500 });
   }
@@ -326,7 +373,7 @@ export function errorResponse(
   message: string,
   code: string,
   statusCode: number,
-  details?: Record<string, unknown>
+  details?: Record<string, JsonValue>
 ): NextResponse {
   return NextResponse.json(
     {

@@ -4,6 +4,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useAuthStore } from '@/stores/authStore'
+import { logger } from '@/lib/logger'
 
 interface TwitterAuthStatus {
   connected: boolean
@@ -44,9 +45,15 @@ export function useTwitterAuth(): UseTwitterAuthReturn {
     })
 
     if (response.ok) {
-      const data = await response.json() as TwitterAuthStatus
-      setAuthStatus(data)
-      setError(null)
+      try {
+        const data = await response.json() as TwitterAuthStatus
+        setAuthStatus(data)
+        setError(null)
+      } catch (error) {
+        logger.error('Failed to parse Twitter auth status response', { error }, 'useTwitterAuth')
+        setAuthStatus(null)
+        setError('Failed to parse response')
+      }
     } else {
       setAuthStatus(null)
     }
@@ -77,15 +84,14 @@ export function useTwitterAuth(): UseTwitterAuthReturn {
     }
   }, [checkAuthStatus])
 
-  const connectTwitter = useCallback((returnPath?: string) => {
+  const connectTwitter = useCallback((_returnPath?: string) => {
     if (!user?.id) {
       setError('Please sign in first')
       return
     }
 
-    // Redirect to OAuth flow
-    const currentPath = returnPath || window.location.pathname
-    window.location.href = `/api/twitter/oauth/request-token?user_id=${user.id}&return_path=${encodeURIComponent(currentPath)}`
+    // Redirect to OAuth 2.0 flow
+    window.location.href = `/api/auth/twitter/initiate`
   }, [user?.id])
 
   const disconnectTwitter = useCallback(async () => {

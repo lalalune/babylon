@@ -15,17 +15,16 @@ export interface ApiFetchOptions extends RequestInit {
 async function getPrivyAccessToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
   
-  // Use the Privy hook's getAccessToken if available
-  const privy = (window as typeof window & { __privyGetAccessToken?: () => Promise<string | null> }).__privyGetAccessToken;
-  if (privy) {
-    const token = await privy();
+  // Use the Privy hook's getAccessToken if available (preferred - gets fresh token)
+  if (window.__privyGetAccessToken) {
+    const token = await window.__privyGetAccessToken();
     // Update the cached token
-    (window as typeof window & { __privyAccessToken?: string | null }).__privyAccessToken = token;
+    window.__privyAccessToken = token;
     return token;
   }
   
   // Fallback to cached token
-  return (window as typeof window & { __privyAccessToken?: string | null }).__privyAccessToken ?? null;
+  return window.__privyAccessToken ?? null;
 }
 
 /**
@@ -41,8 +40,8 @@ export async function apiFetch(input: RequestInfo, init: ApiFetchOptions = {}) {
   const finalHeaders = new Headers(headers ?? {});
 
   if (auth) {
-    const token =
-      typeof window !== 'undefined' ? (window as typeof window & { __privyAccessToken?: string | null }).__privyAccessToken : null;
+    // Always try to get a fresh token first, fallback to cached token
+    const token = await getPrivyAccessToken();
 
     if (token) {
       finalHeaders.set('Authorization', `Bearer ${token}`);

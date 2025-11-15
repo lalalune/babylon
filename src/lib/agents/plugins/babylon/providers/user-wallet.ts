@@ -24,9 +24,7 @@ export const userWalletProvider: Provider = {
     
     // A2A is REQUIRED
     if (!babylonRuntime.a2aClient?.isConnected()) {
-      logger.error('A2A client not connected - user wallet provider requires A2A protocol', { 
-        agentId: runtime.agentId 
-      })
+      logger.error('A2A client not connected - user wallet provider requires A2A protocol', undefined, runtime.agentId)
       return { text: 'ERROR: A2A client not connected. Cannot query user wallets. Please ensure A2A server is running.' }
     }
     
@@ -53,7 +51,7 @@ Example: "Check user_abc123's wallet" or "What positions does @trader have?"` }
     // Fetch wallet data via A2A protocol
     const walletData = await babylonRuntime.a2aClient.sendRequest('a2a.getUserWallet', { userId })
     
-    const walletTyped = walletData as A2AUserWalletResponse
+    const walletTyped = walletData as unknown as A2AUserWalletResponse
     
     const balance = walletTyped.balance
     const positions = walletTyped.positions

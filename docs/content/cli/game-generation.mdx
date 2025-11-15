@@ -1,13 +1,13 @@
 # Game Generation (Optional)
 
-**⚠️ Note:** With the continuous engine (daemon), you typically **don't need** to pre-generate games. The daemon generates everything in real-time. This command is mainly for **testing**, **demos**, or creating **curated scenarios**.
+**Note:** With the continuous engine (daemon), you typically **don't need** to pre-generate games. The daemon generates everything in real-time. This command is mainly for **testing**, **demos**, or creating **curated scenarios**.
 
 ## When to Use This
 
-- ✅ Testing game mechanics with known outcomes
-- ✅ Creating demo scenarios for presentations  
-- ✅ Generating test data for analysis
-- ❌ NOT needed for normal production use (use daemon instead)
+- Testing game mechanics with known outcomes
+- Creating demo scenarios for presentations 
+- Generating test data for analysis
+- NOT needed for normal production use (use daemon instead)
 
 ## Overview
 
@@ -137,13 +137,13 @@ Ready for next game! Run `bun run generate` again in 30 days.
 SCENARIOS & QUESTIONS:
 =========================
 1. AI Regulation Breakthrough
-   A major international summit produces surprising consensus
-   Theme: politics
-   Questions:
-     1. Will the AI Safety Bill pass by March 15?
-        Outcome: YES | Rank: 1
-     2. Will OpenLie commit to safety protocols?
-        Outcome: NO | Rank: 2
+ A major international summit produces surprising consensus
+ Theme: politics
+ Questions:
+ 1. Will the AI Safety Bill pass by March 15?
+ Outcome: YES | Rank: 1
+ 2. Will OpenLie commit to safety protocols?
+ Outcome: NO | Rank: 2
 ```
 
 ### Verbose Mode
@@ -177,7 +177,7 @@ This generator requires an LLM API key to function.
 ```
 ACTOR VALIDATION FAILED
 Invalid affiliations found:
-❌ Actor1 has invalid affiliation: "nonexistent-org"
+Actor1 has invalid affiliation: "nonexistent-org"
 ```
 
 **Solution:** Fix actors data or run validation tool first
@@ -202,7 +202,10 @@ The generator uses the last 2-3 games for context. To start fresh:
 
 ```bash
 # This will create a new genesis game
-bun run db:reset
+# Manual reset (caution: loses data):
+psql babylon -c "DROP SCHEMA public CASCADE;"
+psql babylon -c "CREATE SCHEMA public;"
+bun run db:migrate
 bun run db:seed
 bun run command:generate
 ```
@@ -239,6 +242,6 @@ Factors affecting speed:
 
 ## Next Steps
 
-- [🚀 Start Development (Recommended) →](/cli/development)
-- [🧪 Test with Simulations →](/cli/simulation)
+- [Start Development (Recommended) →](/cli/development)
+- [Test with Simulations →](/cli/simulation)
 

@@ -7,6 +7,7 @@ import { Send, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
+import { logger } from '@/lib/logger'
 
 interface Message {
   id: string
@@ -51,20 +52,32 @@ export function AgentChat({ agent, onUpdate }: AgentChatProps) {
 
   const fetchMessages = async () => {
     setLoading(true)
-    const token = await getAccessToken()
-    if (!token) return
-    
-    const res = await fetch(`/api/agents/${agent.id}/chat?limit=50`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
+    try {
+      const token = await getAccessToken()
+      if (!token) {
+        setLoading(false)
+        return
       }
-    })
+      
+      const res = await fetch(`/api/agents/${agent.id}/chat?limit=50`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
 
-    if (res.ok) {
-      const data = await res.json() as { messages: Message[] }
-      setMessages(data.messages.reverse())
+      if (res.ok) {
+        const data = await res.json() as { success: boolean; messages: Message[] }
+        if (data.success && data.messages) {
+          setMessages(data.messages.reverse())
+        }
+      } else {
+        logger.error('Failed to fetch messages', undefined, 'AgentChat')
+      }
+    } catch (error) {
+      logger.error('Error fetching messages', { error }, 'AgentChat')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const sendMessage = async () => {
@@ -110,7 +123,7 @@ export function AgentChat({ agent, onUpdate }: AgentChatProps) {
         return
       }
 
-      const data = await res.json() as { messageId: string; response: string; modelUsed: string; pointsCost: number }
+      const data = await res.json() as { success: boolean; messageId: string; response: string; modelUsed: string; pointsCost: number }
 
       if (!data.response || !data.messageId) {
         throw new Error('Invalid response from agent')
@@ -136,7 +149,7 @@ export function AgentChat({ agent, onUpdate }: AgentChatProps) {
       setMessages(prev => prev.filter(m => m.id !== optimisticMessage.id))
       const errorMessage = error instanceof Error ? error.message : 'Failed to send message'
       toast.error(errorMessage)
-      console.error('Chat error:', error)
+      logger.error('Chat error', { error }, 'AgentChat')
     } finally {
       setSending(false)
     }

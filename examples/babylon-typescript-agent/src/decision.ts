@@ -9,28 +9,31 @@ import { createGroq } from '@ai-sdk/groq'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
 import { generateText } from 'ai'
-import type { MemoryEntry } from './memory.js'
+import type { MemoryEntry } from './memory'
 
 export interface PredictionMarket {
   question: string
   yesShares: number
   noShares: number
-  [key: string]: unknown
+  [key: string]: JsonValue | undefined
 }
 
 export interface PerpMarket {
   name: string
   currentPrice: number
-  [key: string]: unknown
+  [key: string]: JsonValue | undefined
 }
 
 export interface FeedPost {
   content: string
-  [key: string]: unknown
+  [key: string]: JsonValue | undefined
 }
 
+import type { JsonValue } from '../../../src/types/common'
+import type { A2APerpPosition } from '../../../src/types/a2a-responses'
+
 export interface DecisionContext {
-  portfolio: { balance: number; positions: Array<Record<string, unknown>>; pnl: number }
+  portfolio: { balance: number; positions: A2APerpPosition[]; pnl: number }
   markets: { predictions: PredictionMarket[]; perps: PerpMarket[] }
   feed: { posts: FeedPost[] }
   memory: MemoryEntry[]
@@ -38,7 +41,7 @@ export interface DecisionContext {
 
 export interface Decision {
   action: 'BUY_YES' | 'BUY_NO' | 'SELL' | 'OPEN_LONG' | 'OPEN_SHORT' | 'CLOSE_POSITION' | 'CREATE_POST' | 'CREATE_COMMENT' | 'HOLD'
-  params?: Record<string, unknown>
+  params?: Record<string, JsonValue>
   reasoning?: string
 }
 
@@ -77,11 +80,11 @@ export class AgentDecisionMaker {
       this.providerName = 'Groq (llama-3.1-8b-instant)'
     } else if (config.anthropicApiKey) {
       const anthropic = createAnthropic({ apiKey: config.anthropicApiKey })
-      this.model = anthropic('claude-sonnet-4-5') as Parameters<typeof generateText>[0]['model']
+      this.model = anthropic('claude-sonnet-4-5') as unknown as Parameters<typeof generateText>[0]['model']
       this.providerName = 'Claude (claude-sonnet-4-5)'
     } else if (config.openaiApiKey) {
       const openai = createOpenAI({ apiKey: config.openaiApiKey })
-      this.model = openai('gpt-4o-mini') as Parameters<typeof generateText>[0]['model']
+      this.model = openai('gpt-4o-mini') as unknown as Parameters<typeof generateText>[0]['model']
       this.providerName = 'OpenAI (gpt-4o-mini)'
     } else {
       throw new Error('At least one LLM API key is required (GROQ_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY)')

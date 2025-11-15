@@ -7,6 +7,7 @@
  */
 
 import { AsyncLocalStorage } from 'async_hooks'
+import { logger } from '../logger'
 
 // Create an AsyncLocalStorage instance to track cache tags in the current execution context
 const cacheContextStorage = new AsyncLocalStorage<{
@@ -56,9 +57,10 @@ export function cacheTag(...tags: string[]): void {
     // Still track for reference/debugging
     // In production, this might indicate a misuse
     if (process.env.NODE_ENV === 'development') {
-      console.warn(
-        `cacheTag called outside of cache context: ${tags.join(', ')}. ` +
-        'Tags will not be associated with any cache entry.'
+      logger.warn(
+        `cacheTag called outside of cache context: ${tags.join(', ')}. Tags will not be associated with any cache entry.`,
+        { tags },
+        'cache-polyfill'
       )
     }
   }
@@ -84,9 +86,10 @@ export function cacheLife(options: { expire: number }): void {
   } else {
     // If no context, we're not in a cached function
     if (process.env.NODE_ENV === 'development') {
-      console.warn(
-        `cacheLife called outside of cache context with expire: ${options.expire}s. ` +
-        'Expiration will not be applied.'
+      logger.warn(
+        `cacheLife called outside of cache context with expire: ${options.expire}s. Expiration will not be applied.`,
+        { expire: options.expire },
+        'cache-polyfill'
       )
     }
   }

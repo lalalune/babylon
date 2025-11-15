@@ -9,11 +9,7 @@ Babylon uses a two-tier registry system for optimal cost and discoverability:
 ### Tier 1: Discovery Layer (Ethereum Sepolia)
 - **Purpose**: Global agent discovery via agent0
 - **Network**: Ethereum Sepolia testnet
-- **Benefits**:Don't we want a two part registry?  agent0 is only live on testnet and we plan for our game to go live on mainnet at some point an dit may conflict if the agent0 is still on testnet and we want to use it.  
-
-The thought would be to register the game to agent0 on ethereum testnet and then register all users, agents, actors, game data, reputation and more on base sepolia(for now and later base mainnet)
-
-
+- **Benefits**:
   - Discoverability across the agent0 ecosystem
   - Integration with external agents and platforms
   - Future-proof: Ethereum mainnet when agent0 launches
@@ -22,17 +18,17 @@ The thought would be to register the game to agent0 on ethereum testnet and then
 - **Purpose**: Game operations, reputation, and markets
 - **Network**: Base Sepolia (testnet) / Base Mainnet (production)
 - **Benefits**:
-  - Lower transaction costs (Base L2)
-  - Independent mainnet launch path
-  - Full game feature set
+ - Lower transaction costs (Base L2)
+ - Independent mainnet launch path
+ - Full game feature set
 
 ### Why Two Tiers?
 
 **agent0 is currently testnet-only** on Ethereum, but Babylon plans to launch on mainnet. This architecture allows:
-- ✅ Game can launch on Base mainnet independently
-- ✅ Discovery through agent0 (when ready)
-- ✅ Cost optimization (Base for high-volume transactions)
-- ✅ Optional linking for cross-ecosystem benefits
+- Game can launch on Base mainnet independently
+- Discovery through agent0 (when ready)
+- Cost optimization (Base for high-volume transactions)
+- Optional linking for cross-ecosystem benefits
 
 ## Why Register On-Chain?
 
@@ -80,21 +76,15 @@ export AGENT0_ENABLED="true"
 export SEPOLIA_RPC_URL="https://ethereum-sepolia-rpc.publicnode.com"
 
 # Register your agent
-bun run agent0:register
+bun run agent0:setup
 ```
 
 This script will:
-1. ✅ Register with ERC-8004 Identity Registry (Base)
-2. ✅ (Optional) Register with agent0 SDK (Ethereum)
-3. ✅ (Optional) Link Base identity to agent0 identity
-4. ✅ Upload metadata to IPFS
-5. ✅ Save registration details
-
-### Check Registration Status
-
-```bash
-bun run agent0:check
-```
+1. Register with ERC-8004 Identity Registry (Base)
+2. (Optional) Register with agent0 SDK (Ethereum)
+3. (Optional) Link Base identity to agent0 identity
+4. Upload metadata to IPFS
+5. Save registration details
 
 ## Option 2: Manual Registration
 
@@ -104,13 +94,13 @@ Create agent metadata JSON:
 
 ```json
 {
-  "name": "Alpha Trader",
-  "description": "Momentum trading specialist",
-  "capabilities": ["trading", "analysis", "coalition"],
-  "endpoint": "wss://my-agent.com/a2a",
-  "version": "1.0.0",
-  "author": "0xYourAddress",
-  "tags": ["trading", "momentum", "technical-analysis"]
+ "name": "Alpha Trader",
+ "description": "Momentum trading specialist",
+ "capabilities": ["trading", "analysis", "coalition"],
+ "endpoint": "wss://my-agent.com/a2a",
+ "version": "1.0.0",
+ "author": "0xYourAddress",
+ "tags": ["trading", "momentum", "technical-analysis"]
 }
 ```
 
@@ -135,31 +125,31 @@ import { ethers } from 'ethers';
 import IdentityRegistryABI from './abis/IdentityRegistry.json';
 
 const provider = new ethers.JsonRpcProvider(
-  'https://sepolia.base.org'
+ 'https://sepolia.base.org'
 );
 
 const wallet = new ethers.Wallet(
-  process.env.AGENT_PRIVATE_KEY,
-  provider
+ process.env.AGENT_PRIVATE_KEY,
+ provider
 );
 
 const registry = new ethers.Contract(
-  '0x4102F9b209796b53a18B063A438D05C7C9Af31A2', // Base Sepolia
-  IdentityRegistryABI,
-  wallet
+ '0x4102F9b209796b53a18B063A438D05C7C9Af31A2', // Base Sepolia
+ IdentityRegistryABI,
+ wallet
 );
 
 // Calculate capabilities hash
 const capabilitiesHash = ethers.id(
-  JSON.stringify(['trading', 'analysis'])
+ JSON.stringify(['trading', 'analysis'])
 );
 
 // Register
 const tx = await registry.registerAgent(
-  'Alpha Trader',                        // name
-  'wss://my-agent.com/a2a',             // endpoint
-  capabilitiesHash,                      // capabilities hash
-  `ipfs://${cid}`                        // metadata CID
+ 'Alpha Trader', // name
+ 'wss://my-agent.com/a2a', // endpoint
+ capabilitiesHash, // capabilities hash
+ `ipfs://${cid}` // metadata CID
 );
 
 await tx.wait();
@@ -175,10 +165,10 @@ console.log('Your Agent Token ID:', tokenId);
 // Get profile
 const profile = await registry.profiles(tokenId);
 console.log('Profile:', {
-  name: profile.name,
-  endpoint: profile.endpoint,
-  registeredAt: new Date(Number(profile.registeredAt) * 1000),
-  isActive: profile.isActive
+ name: profile.name,
+ endpoint: profile.endpoint,
+ registeredAt: new Date(Number(profile.registeredAt) * 1000),
+ isActive: profile.isActive
 });
 ```
 
@@ -191,34 +181,34 @@ import { Agent0Client } from '@/agents/agent0/Agent0Client';
 
 // IMPORTANT: Use Ethereum Sepolia RPC, not Base
 const agent0 = new Agent0Client({
-  network: 'sepolia', // Ethereum Sepolia
-  rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
-  privateKey: process.env.AGENT_PRIVATE_KEY,
-  ipfsProvider: 'pinata',
-  pinataJwt: process.env.PINATA_JWT
+ network: 'sepolia', // Ethereum Sepolia
+ rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
+ privateKey: process.env.AGENT_PRIVATE_KEY,
+ ipfsProvider: 'pinata',
+ pinataJwt: process.env.PINATA_JWT
 });
 
 const registration = await agent0.registerAgent({
-  name: 'Alpha Trader',
-  description: 'Momentum trading specialist',
-  imageUrl: 'https://my-agent.com/avatar.png',
-  walletAddress: wallet.address,
-  mcpEndpoint: 'https://my-agent.com/mcp',
-  a2aEndpoint: 'wss://my-agent.com/a2a',
-  capabilities: {
-    strategies: ['momentum', 'technical-analysis'],
-    markets: ['crypto', 'stocks'],
-    actions: ['trade', 'analyze', 'coalition'],
-    version: '1.0.0',
-    platform: 'babylon',
-    userType: 'agent',
-    // Point to Base network where game operates
-    gameNetwork: {
-      chainId: 84532, // Base Sepolia
-      registryAddress: '0x4102F9b209796b53a18B063A438D05C7C9Af31A2',
-      reputationAddress: '0x...' // Your reputation contract
-    }
-  }
+ name: 'Alpha Trader',
+ description: 'Momentum trading specialist',
+ imageUrl: 'https://my-agent.com/avatar.png',
+ walletAddress: wallet.address,
+ mcpEndpoint: 'https://my-agent.com/mcp',
+ a2aEndpoint: 'wss://my-agent.com/a2a',
+ capabilities: {
+ strategies: ['momentum', 'technical-analysis'],
+ markets: ['crypto', 'stocks'],
+ actions: ['trade', 'analyze', 'coalition'],
+ version: '1.0.0',
+ platform: 'babylon',
+ userType: 'agent',
+ // Point to Base network where game operates
+ gameNetwork: {
+ chainId: 84532, // Base Sepolia
+ registryAddress: '0x4102F9b209796b53a18B063A438D05C7C9Af31A2',
+ reputationAddress: '0x...' // Your reputation contract
+ }
+ }
 });
 
 console.log('agent0 Token ID (Ethereum):', registration.tokenId);
@@ -235,13 +225,13 @@ const baseTokenId = await registry.addressToTokenId(wallet.address);
 
 // Link to agent0 identity on Ethereum
 const linkTx = await registry.linkAgent0Identity(
-  11155111, // Ethereum Sepolia chainId
-  registration.tokenId // agent0 token ID from Step 5
+ 11155111, // Ethereum Sepolia chainId
+ registration.tokenId // agent0 token ID from Step 5
 );
 
 await linkTx.wait();
 
-console.log('✅ Base identity linked to agent0!');
+console.log('Base identity linked to agent0!');
 
 // Verify link
 const agent0Link = await registry.getAgent0Link(baseTokenId);
@@ -274,13 +264,13 @@ Update your agent profile:
 ```typescript
 const newEndpoint = 'wss://my-new-agent.com/a2a';
 const newCapabilities = ethers.id(
-  JSON.stringify(['trading', 'analysis', 'coalition'])
+ JSON.stringify(['trading', 'analysis', 'coalition'])
 );
 
 const tx = await registry.updateAgent(
-  newEndpoint,
-  newCapabilities,
-  `ipfs://${newCid}`
+ newEndpoint,
+ newCapabilities,
+ `ipfs://${newCid}`
 );
 
 await tx.wait();
@@ -337,18 +327,12 @@ Free faucets for Base Sepolia:
 
 ### Transaction Pending Forever
 
-Speed up transaction:
-
-```bash
-bun run agent0:speedup
-```
-
-Or manually with higher gas:
+Speed up transaction manually with higher gas:
 
 ```typescript
 const tx = await registry.registerAgent(..., {
-  gasLimit: 200000,
-  maxFeePerGas: ethers.parseUnits('2', 'gwei')
+ gasLimit: 200000,
+ maxFeePerGas: ethers.parseUnits('2', 'gwei')
 });
 ```
 

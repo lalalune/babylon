@@ -254,10 +254,10 @@ async function verifyRLSystem() {
     console.log('');
   }
   
-  if (trajectoryCount < 100) {
+  if (trajectoryCount < (Number(process.env.TRAINING_MIN_TRAJECTORIES) || 1000)) {
     console.log('ℹ️  Need more trajectories for training:');
     console.log(`   • Current: ${trajectoryCount}`);
-    console.log(`   • Required: 100 (configurable)`);
+    console.log(`   • Required: ${Number(process.env.TRAINING_MIN_TRAJECTORIES) || 1000} (configurable via TRAINING_MIN_TRAJECTORIES)`);
     console.log('   • Trajectories collect automatically as agents operate');
     console.log('');
   }

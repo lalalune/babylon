@@ -6,7 +6,7 @@ Babylon provides a comprehensive set of command-line tools for game generation, 
 
 | Command | Purpose | When to Use |
 |---------|---------|-------------|
-| `bun run dev` | **Start development server** (PRIMARY) | ✅ Always - This runs everything |
+| `bun run dev` | **Start development server** (PRIMARY) | Always - This runs everything |
 | `command:validate` | Validate actor data integrity | Before setup |
 | `command:images` | Generate AI profile pictures and banners | One-time setup |
 | `command:simulate` | Run game simulations for testing | Testing/debugging |
@@ -16,7 +16,7 @@ Babylon provides a comprehensive set of command-line tools for game generation, 
 ## How It Works
 
 ```
-Production:  Vercel Cron (every 60s) → /api/cron/game-tick → executeGameTick()
+Production: Vercel Cron (every 60s) → /api/cron/game-tick → executeGameTick()
 Development: bun run dev → local cron simulator → executeGameTick()
 ```
 
@@ -28,7 +28,7 @@ All CLI tools are included in the main Babylon repository. No separate installat
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/babylon.git
+git clone https://github.com/elizaOS/babylon.git
 cd babylon
 
 # Install dependencies
@@ -40,7 +40,7 @@ bun run command:validate
 
 ## Common Workflows
 
-### 🚀 Quick Start (Recommended)
+### Quick Start (Recommended)
 
 ```bash
 # 1. Set API key
@@ -52,7 +52,7 @@ bun run dev
 
 Content generates automatically every 60 seconds - posts, events, markets, questions. No pre-generation needed!
 
-### 🎨 One-Time Setup
+### One-Time Setup
 
 Only needed once or when adding new actors:
 
@@ -65,17 +65,17 @@ export FAL_KEY=your_fal_key
 bun run command:images
 ```
 
-### 💻 Local Development
+### Local Development
 
 ```bash
 # Full dev server (includes automatic game tick)
 bun run dev
 
 # OR web only (no game tick)
-bun run dev:web-only
+bun run dev:next-only
 ```
 
-### 🧪 Testing & Analysis
+### Testing & Analysis
 
 ```bash
 # Test game mechanics
@@ -94,17 +94,17 @@ Most CLI tools require API keys:
 
 ```bash
 # LLM API Keys (at least one required)
-export GROQ_API_KEY=your_groq_key          # Preferred (fast)
-export OPENAI_API_KEY=your_openai_key      # Fallback
+export GROQ_API_KEY=your_groq_key # Preferred (fast)
+export OPENAI_API_KEY=your_openai_key # Fallback
 
 # Image Generation
-export FAL_KEY=your_fal_key                # Required for image generation
+export FAL_KEY=your_fal_key # Required for image generation
 
 # Optional Features
-export AGENT0_ENABLED=true                 # Enable Agent0 blockchain integration
-export AUTO_START_AGENTS=false             # Auto-start agents with daemon (not recommended)
-export AGENT_AUTO_TRADE=false              # Enable agent auto-trading
-export A2A_ENABLE_BLOCKCHAIN=false         # Enable blockchain for agent discovery
+export AGENT0_ENABLED=true # Enable Agent0 blockchain integration
+export AUTO_START_AGENTS=false # Auto-start agents with daemon (not recommended)
+export AGENT_AUTO_TRADE=false # Enable agent auto-trading
+export A2A_ENABLE_BLOCKCHAIN=false # Enable blockchain for agent discovery
 ```
 
 ## Output Formats
@@ -146,10 +146,10 @@ Example error handling in scripts:
 ```bash
 #!/bin/bash
 if bun run generate; then
-  echo "Game generated successfully"
+ echo "Game generated successfully"
 else
-  echo "Game generation failed"
-  exit 1
+ echo "Game generation failed"
+ exit 1
 fi
 ```
 
@@ -162,8 +162,8 @@ fi
 
 ## Next Steps
 
-- [💻 Development Tools →](/cli/development) - **Start here!**
-- [🎨 Setup Images →](/cli/images)
-- [🧪 Testing & Simulation →](/cli/simulation)
-- [✅ Data Validation →](/cli/validation)
+- [Development Tools →](/cli/development) - **Start here!**
+- [Setup Images →](/cli/images)
+- [Testing & Simulation →](/cli/simulation)
+- [Data Validation →](/cli/validation)
 

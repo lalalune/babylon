@@ -53,6 +53,9 @@ interface PredictionMarket {
   noShares?: number;
   userPosition?: PredictionUserPosition | null;
   userPositions?: PredictionUserPosition[];
+  oracleCommitTxHash?: string | null;
+  oracleRevealTxHash?: string | null;
+  oraclePublishedAt?: string | null;
 }
 
 type PredictionSort = 'trending' | 'newest' | 'ending-soon' | 'volume';
@@ -509,7 +512,20 @@ export default function PredictionsPage() {
                     : 'bg-muted/30 hover:bg-muted'
                 )}
               >
-                <div className="font-medium mb-2">{prediction.text}</div>
+                <div className="font-medium mb-2">
+                  {prediction.text}
+                  {/* Oracle Status Indicators */}
+                  {prediction.oracleCommitTxHash && (
+                    <span className="ml-2 text-xs text-green-600" title="Committed to oracle">
+                      ✓ Committed
+                    </span>
+                  )}
+                  {prediction.oracleRevealTxHash && (
+                    <span className="ml-2 text-xs text-purple-600" title="Revealed on-chain">
+                      ✓ Revealed
+                    </span>
+                  )}
+                </div>
                 <div className="flex flex-col gap-2">
                   <div className="flex gap-3 text-xs items-center justify-between">
                     <div className="flex gap-3 text-muted-foreground">

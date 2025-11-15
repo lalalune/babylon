@@ -8,6 +8,7 @@ import {
   WALLET_ERROR_MESSAGES,
   getWalletErrorMessage,
 } from '@/lib/wallet-utils';
+import { logger } from '@/lib/logger';
 
 type SmartWalletTxInput = Parameters<
   SmartWalletClientType['sendTransaction']
@@ -28,7 +29,7 @@ interface UseSmartWalletResult {
 
 export function useSmartWallet(): UseSmartWalletResult {
   const { client } = useSmartWallets();
-  console.log('client', client);
+  logger.debug('Smart wallet client initialized', { hasClient: !!client });
   const typedClient = client as SmartWalletClientType | undefined;
   const smartWalletAddress = typedClient?.account?.address;
   const smartWalletReady = useMemo(

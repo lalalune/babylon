@@ -87,6 +87,7 @@ import { logger } from '@/lib/logger';
 import { DMChatCreateSchema } from '@/lib/validation/schemas';
 import { trackServerEvent } from '@/lib/posthog/server';
 import { generateSnowflakeId } from '@/lib/snowflake';
+import { hasBlocked } from '@/lib/moderation/filters';
 
 /**
  * POST /api/chats/dm
@@ -128,6 +129,19 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       throw new BusinessLogicError(
         'Cannot send direct messages to NPC actors. Use group chats to interact with NPCs.',
         'INVALID_DM_TARGET'
+      );
+    }
+
+    // Check if either user has blocked the other
+    const [isBlocked, hasBlockedMe] = await Promise.all([
+      hasBlocked(user.userId, targetUserId),
+      hasBlocked(targetUserId, user.userId),
+    ]);
+
+    if (isBlocked || hasBlockedMe) {
+      throw new BusinessLogicError(
+        'Cannot send messages to this user',
+        'BLOCKED_USER'
       );
     }
 
@@ -179,15 +193,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       // Reload chat with participants
       existingChat = await db.chat.findUnique({
         where: { id: chatId },
-        select: {
-          id: true,
-          name: true,
-          isGroup: true,
-          gameId: true,
-          groupId: true,
-          dayNumber: true,
-          createdAt: true,
-          updatedAt: true,
+        include: {
           ChatParticipant: {
             select: {
               userId: true,

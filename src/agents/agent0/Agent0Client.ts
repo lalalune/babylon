@@ -1,7 +1,8 @@
 /**
- * Agent0 SDK Client Wrapper
+ * Agent0 SDK Client
  * 
- * Wrapper around Agent0 SDK for agent registration, search, and feedback.
+ * Full implementation of Agent0 SDK client for agent registration, search, and feedback.
+ * Implements IAgent0Client interface for complete Agent0 integration.
  * Uses dynamic imports to handle CommonJS/ESM interop.
  */
 
@@ -24,14 +25,8 @@ import type {
   SearchParams,
   RegistrationFile
 } from 'agent0-sdk'
-import { z } from 'zod';
-
-const CapabilitiesSchema = z.object({
-  strategies: z.array(z.string()).optional(),
-  markets: z.array(z.string()).optional(),
-  actions: z.array(z.string()).optional(),
-  version: z.string().optional(),
-});
+import type { JsonValue } from '@/types/common'
+import { parseCapabilities } from './capabilities-schema'
 
 export class Agent0Client implements IAgent0Client {
   private sdk: SDK | null
@@ -82,22 +77,45 @@ export class Agent0Client implements IAgent0Client {
     }
     
     this.initPromise = (async () => {
-      const sdkConfig: SDKConfig = {
-        chainId: this.chainId,
-        rpcUrl: this.config.rpcUrl,
-        signer: this.config.privateKey,
-        ipfs: this.config.ipfsProvider || 'node',
-        ipfsNodeUrl: this.config.ipfsNodeUrl,
-        pinataJwt: this.config.pinataJwt,
-        filecoinPrivateKey: this.config.filecoinPrivateKey,
-        subgraphUrl: this.config.subgraphUrl
+      try {
+        // For localnet with 'node' provider, provide default IPFS node URL if not specified
+        const ipfsProvider = this.config.ipfsProvider || 'node'
+        let ipfsNodeUrl = this.config.ipfsNodeUrl
+        if (ipfsProvider === 'node' && !ipfsNodeUrl) {
+          // Default to public IPFS gateway for localnet/testing
+          ipfsNodeUrl = 'https://ipfs.io'
+        }
+        
+        const sdkConfig: SDKConfig = {
+          chainId: this.chainId,
+          rpcUrl: this.config.rpcUrl,
+          signer: this.config.privateKey,
+          ipfs: ipfsProvider,
+          ipfsNodeUrl: ipfsNodeUrl,
+          pinataJwt: this.config.pinataJwt,
+          filecoinPrivateKey: this.config.filecoinPrivateKey,
+          subgraphUrl: this.config.subgraphUrl
+        }
+        
+        this.sdk = new SDK(sdkConfig)
+        logger.info('Agent0Client initialized successfully', { 
+          chainId: this.chainId, 
+          rpcUrl: this.config.rpcUrl,
+          isReadOnly: this.sdk.isReadOnly
+        }, 'Agent0Client')
+      } catch (error) {
+        logger.error(
+          'Failed to initialize Agent0 SDK',
+          {
+            error: error instanceof Error ? error.message : String(error),
+            chainId: this.chainId,
+            rpcUrl: this.config.rpcUrl
+          },
+          'Agent0Client'
+        )
+        // Don't set SDK on error - keep it null
+        throw error
       }
-      
-      this.sdk = new SDK(sdkConfig)
-      logger.info('Agent0Client initialized successfully', { 
-        chainId: this.chainId, 
-        rpcUrl: this.config.rpcUrl 
-      }, 'Agent0Client')
     })()
     
     await this.initPromise
@@ -326,42 +344,65 @@ export class Agent0Client implements IAgent0Client {
     }
   }
 
-  private parseCapabilities(extras: Record<string, unknown> | undefined): {
+  private parseCapabilities(extras: Record<string, JsonValue> | undefined): {
     strategies: string[];
     markets: string[];
     actions: string[];
     version: string;
   } {
-    const defaultCapabilities = {
-      strategies: [],
-      markets: [],
-      actions: [],
-      version: '1.0.0',
-    };
-
     if (!extras?.capabilities) {
-      return defaultCapabilities;
+      return parseCapabilities(undefined)
     }
 
-    const validation = CapabilitiesSchema.safeParse(extras.capabilities);
-    if (!validation.success) {
-      logger.warn('Invalid agent capabilities in search result', { error: validation.error, capabilities: extras.capabilities });
-      return defaultCapabilities;
+    const result = parseCapabilities(extras.capabilities)
+    if (result.strategies.length === 0 && result.markets.length === 0 && result.actions.length === 0) {
+      logger.warn('Invalid or empty agent capabilities in search result', { capabilities: extras.capabilities })
     }
 
-    return {
-      strategies: validation.data.strategies ?? [],
-      markets: validation.data.markets ?? [],
-      actions: validation.data.actions ?? [],
-      version: validation.data.version ?? '1.0.0',
-    };
+    return result
   }
   
   /**
    * Check if Agent0 SDK is available
+   * Note: This will return false if SDK hasn't been initialized yet.
+   * Call ensureSDK() or any method that uses the SDK to initialize it first.
    */
   isAvailable(): boolean {
     return this.sdk !== null && !this.sdk.isReadOnly
+  }
+  
+  /**
+   * Initialize SDK synchronously if possible, or return current availability
+   * For async initialization, use any method that calls ensureSDK()
+   */
+  async ensureAvailable(): Promise<boolean> {
+    try {
+      await this.ensureSDK()
+      const available = this.isAvailable()
+      if (!available && this.sdk) {
+        logger.debug(
+          'SDK initialized but in read-only mode',
+          { 
+            isReadOnly: this.sdk.isReadOnly,
+            chainId: this.chainId,
+            rpcUrl: this.config.rpcUrl 
+          },
+          'Agent0Client'
+        )
+      }
+      return available
+    } catch (error) {
+      logger.debug(
+        'SDK initialization failed',
+        { 
+          error: error instanceof Error ? error.message : String(error),
+          chainId: this.chainId,
+          rpcUrl: this.config.rpcUrl 
+        },
+        'Agent0Client'
+      )
+      return false
+    }
   }
   
   /**

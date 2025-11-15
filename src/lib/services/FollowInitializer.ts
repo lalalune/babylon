@@ -97,7 +97,13 @@ export class FollowInitializer {
     }
 
     const fileContent = readFileSync(filePath, 'utf-8');
-    const relationships: RelationshipData[] = JSON.parse(fileContent);
+    let relationships: RelationshipData[]
+    try {
+      relationships = JSON.parse(fileContent) as RelationshipData[]
+    } catch (error) {
+      logger.error('Failed to parse relationships JSON', { error, filePath }, 'FollowInitializer')
+      throw new Error(`Invalid JSON in relationships file: ${filePath}`)
+    }
 
     logger.info(`Loaded ${relationships.length} relationships from ${filePath}`, { count: relationships.length, filePath }, 'FollowInitializer');
 

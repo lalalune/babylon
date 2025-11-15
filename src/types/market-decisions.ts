@@ -47,7 +47,7 @@ export interface ExecutedTrade {
   timestamp: string;
 }
 
-export interface ExecutionResult {
+export interface TradingExecutionResult {
   totalDecisions: number;
   successfulTrades: number;
   failedTrades: number;

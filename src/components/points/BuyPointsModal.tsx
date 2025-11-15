@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/shared/Skeleton';
 
 import { cn } from '@/lib/utils';
 import { WALLET_ERROR_MESSAGES } from '@/lib/wallet-utils';
+import { logger } from '@/lib/logger';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useBuyPointsTx } from '@/hooks/useBuyPointsTx';
@@ -223,7 +224,7 @@ export function BuyPointsModal({
       // Initiate blockchain transaction
       await handleSendPayment(data.paymentRequest);
     } catch (err) {
-      console.error('Failed to create payment:', err);
+      logger.error('Failed to create payment', { error: err }, 'BuyPointsModal');
       setError(err instanceof Error ? err.message : 'Failed to create payment');
       setStep('error');
       toast.error('Failed to create payment request');
@@ -255,7 +256,7 @@ export function BuyPointsModal({
       // Verify payment and credit points
       await handleVerifyPayment(paymentRequest.requestId, hash, paymentRequest);
     } catch (err) {
-      console.error('Payment failed:', err);
+      logger.error('Payment failed', { error: err }, 'BuyPointsModal');
       const errorMessage =
         err instanceof Error ? err.message : 'Payment failed';
 
@@ -312,7 +313,7 @@ export function BuyPointsModal({
         onSuccess();
       }
     } catch (err) {
-      console.error('Payment verification failed:', err);
+      logger.error('Payment verification failed', { error: err }, 'BuyPointsModal');
       setError(
         err instanceof Error ? err.message : 'Payment verification failed'
       );

@@ -1,8 +1,8 @@
 /**
  * Babylon A2A Plugin for Eliza Agents
  * 
- * Comprehensive integration with Babylon via A2A protocol.
- * Provides full access to all 74 A2A methods through providers and actions.
+ * Integration with Babylon via A2A protocol.
+ * Provides access to 10 core A2A methods for agent discovery, market data, portfolio, and payments.
  * 
  * ⚠️ IMPORTANT: A2A SERVER IS REQUIRED
  * This plugin ONLY works with an active A2A connection.
@@ -25,7 +25,7 @@
 
 import type { Plugin } from '@elizaos/core'
 import { logger } from '@/lib/logger'
-import { createHttpA2AClient } from '@/lib/a2a/client'
+import { initializeAgentA2AClient } from './integration-a2a-sdk'
 // Import all providers
 import {
   marketsProvider,
@@ -36,6 +36,7 @@ import {
   notificationsProvider,
   dashboardProvider,
   userWalletProvider,
+  userProfileProvider,
   headlinesProvider,
   marketMoversProvider,
   agentWalletProvider,
@@ -122,7 +123,7 @@ export * from './services'
  * 
  * Advanced Usage (With A2A Client):
  * ```typescript
- * import { A2AClient } from '@/lib/a2a/client'
+ * import { A2AClient } from '@a2a-js/sdk/client'
  * import { babylonPlugin } from '@/lib/agents/plugins/babylon'
  * 
  * const a2aClient = new A2AClient({
@@ -155,7 +156,7 @@ export * from './services'
  */
 export const babylonPlugin: Plugin = {
   name: 'babylon',
-  description: 'Babylon prediction market game integration for AI agents via A2A protocol. Provides comprehensive access to markets, trading, social features, and messaging through 74 A2A methods.',
+  description: 'Babylon prediction market game integration for AI agents via A2A protocol. Provides access to all 73+ A2A methods for complete platform functionality including trading, social, messaging, and more.',
   
   providers: [
     goalsProvider, // Agent goals, directives, and constraints - highest priority context
@@ -171,8 +172,12 @@ export const babylonPlugin: Plugin = {
     messagesProvider,
     notificationsProvider,
     userWalletProvider, // Query any user's wallet and positions
+    userProfileProvider, // View any user's profile information
     entityMentionsProvider // Detect and enrich entity mentions (users, companies, stocks)
   ],
+  
+  // Note: Trust tracking and performance evaluation moved to plugin-experience
+  // See: marketOutcomeEvaluator in plugin-experience/src/evaluators
   
   actions: [
     // Trading actions
@@ -201,7 +206,7 @@ export const babylonPlugin: Plugin = {
  * A2A connection is REQUIRED - will throw if connection fails
  */
 export async function initializeBabylonPlugin(
-  runtime: { a2aClient?: unknown; registerPlugin?: (plugin: unknown) => void | Promise<void> },
+  runtime: { a2aClient?: unknown; registerPlugin?: (plugin: unknown) => void | Promise<void>; agentId?: string },
   config: {
     endpoint: string
     credentials: {
@@ -218,16 +223,16 @@ export async function initializeBabylonPlugin(
   }
 ) {
   
-  logger.info('Initializing Babylon plugin with A2A protocol', { endpoint: config.endpoint })
+  logger.info('Initializing Babylon plugin with A2A SDK', { endpoint: config.endpoint })
   
-  const a2aClient = createHttpA2AClient({
-    endpoint: config.endpoint,
-    agentId: config.credentials.tokenId?.toString() || config.credentials.address,
-    address: config.credentials.address,
-    tokenId: config.credentials.tokenId
-  })
+  // Use A2A client - requires agentId from runtime
+  if (!runtime.agentId) {
+    throw new Error('Runtime must have agentId to initialize A2A client')
+  }
   
-  logger.info('✅ HTTP A2A client ready (no connection needed)')
+  const a2aClient = await initializeAgentA2AClient(runtime.agentId)
+  
+  logger.info('✅ A2A client ready')
   
   // Inject into runtime
   runtime.a2aClient = a2aClient
@@ -235,7 +240,7 @@ export async function initializeBabylonPlugin(
   // Register plugin
   if (runtime.registerPlugin) {
     runtime.registerPlugin(babylonPlugin)
-    logger.info('✅ Babylon plugin registered with A2A protocol')
+    logger.info('✅ Babylon plugin registered with A2A client')
   }
   
   return { a2aClient, plugin: babylonPlugin }

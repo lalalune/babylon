@@ -170,7 +170,44 @@ export function LikeButton({
     }
   };
 
-  const reaction = REACTION_TYPES[currentReaction]!;
+  const reaction = REACTION_TYPES[currentReaction];
+  if (!reaction) {
+    // Fallback to 'like' if reaction type is invalid
+    const fallbackReaction = REACTION_TYPES.like;
+    if (!fallbackReaction) {
+      // This should never happen, but handle it gracefully
+      return null;
+    }
+    const FallbackIcon = fallbackReaction.icon;
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          disabled={isLoading}
+          className={cn(
+            'flex items-center transition-all duration-200',
+            'bg-transparent hover:opacity-70',
+            isLiked ? fallbackReaction.color : 'text-muted-foreground',
+            sizeClasses[size],
+            isLoading && 'opacity-50 cursor-wait',
+            className
+          )}
+        >
+          {isLoading ? (
+            <Skeleton className={cn("rounded", skeletonSizes[size])} />
+          ) : (
+            <FallbackIcon
+              size={iconSizes[size]}
+              className="transition-all duration-200"
+            />
+          )}
+          {showCount && likeCount > 0 && (
+            <span className="font-medium tabular-nums">{likeCount}</span>
+          )}
+        </button>
+      </div>
+    );
+  }
   const Icon = reaction.icon;
 
   return (

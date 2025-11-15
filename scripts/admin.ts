@@ -2,7 +2,7 @@
 /**
  * Admin Management Tool
  * 
- * Unified admin management script for all admin operations:
+ * Admin management script for all admin operations:
  * - Check admin status
  * - Grant/revoke admin privileges
  * - List all admins

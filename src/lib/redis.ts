@@ -1,5 +1,5 @@
 /**
- * Redis Client - Unified interface for both local and production Redis
+ * Redis Client - Common interface for both local and production Redis
  * 
  * Local Development:
  * - Uses standard Redis protocol via ioredis

@@ -18,6 +18,7 @@ import { generateSnowflakeId } from '@/lib/snowflake';
 import { BabylonLLMClient } from '@/generator/llm/openai-client';
 import { generateWorldContext } from '@/lib/prompts/world-context';
 import { validateNoRealNames, validateNoHashtags, validateNoEmojis } from '@/lib/prompts/validate-output';
+import { Prisma } from '@prisma/client';
 
 export interface GroupDynamicsResult {
   groupsCreated: number;
@@ -41,6 +42,10 @@ export class NPCGroupDynamicsService {
   private static readonly MIN_GROUP_SIZE = 3;
   private static readonly MAX_GROUP_SIZE = 12;
   private static readonly IDEAL_GROUP_SIZE = 7;
+  
+  // User group participation limits (prevent unlimited accumulation)
+  private static readonly MAX_ACTIVE_USER_GROUPS = 5; // Max groups a user can be in simultaneously
+  private static readonly INVITE_COOLDOWN_HOURS = 4; // Hours after joining before next invite eligible
 
   /**
    * Process all NPC group dynamics for one tick
@@ -580,6 +585,9 @@ Return your response as XML in this exact format:
       likes: number;
       reposts: number;
       penalties: number;
+      relationshipModifier: number;
+      friendBoosts: number;
+      enemyPenalties: number;
     };
   }> {
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -591,6 +599,9 @@ Return your response as XML in this exact format:
       likes: 0,
       reposts: 0,
       penalties: 0,
+      relationshipModifier: 1.0,
+      friendBoosts: 0,
+      enemyPenalties: 0,
     };
 
     try {
@@ -713,11 +724,119 @@ Return your response as XML in this exact format:
         score += goodReposts + penalty;
       }
 
+      // 5. Apply relationship modifier
+      const relationshipModifier = await this.calculateRelationshipModifier(userId, npcIds);
+      breakdown.relationshipModifier = relationshipModifier.modifier;
+      breakdown.friendBoosts = relationshipModifier.friendBoosts;
+      breakdown.enemyPenalties = relationshipModifier.enemyPenalties;
+      
+      // Apply the modifier to the final score
+      score = score * relationshipModifier.modifier;
+
     } catch (error) {
       logger.warn('Error calculating reply guy score', { error, userId }, 'NPCGroupDynamicsService');
     }
 
     return { score, breakdown };
+  }
+
+  /**
+   * Calculate relationship-based modifier for invite probability
+   * 
+   * If user engages with friends of the candidate NPC, boost invite chance slightly
+   * If user engages with enemies of the candidate NPC, reduce invite chance
+   * 
+   * @param userId - The user being evaluated
+   * @param targetNpcIds - The NPCs in the group (candidates for inviting)
+   * @returns Modifier between 0.2x and 2.0x
+   */
+  private static async calculateRelationshipModifier(
+    userId: string,
+    targetNpcIds: string[]
+  ): Promise<{
+    modifier: number;
+    friendBoosts: number;
+    enemyPenalties: number;
+  }> {
+    let modifier = 1.0;
+    let friendBoosts = 0;
+    let enemyPenalties = 0;
+
+    try {
+      // Get all NPCs the user has engaged with (via UserInteraction table)
+      const userInteractions = await prisma.userInteraction.findMany({
+        where: {
+          userId,
+          timestamp: {
+            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
+          },
+        },
+        select: {
+          npcId: true,
+        },
+        distinct: ['npcId'],
+      });
+
+      const userEngagedNpcIds = userInteractions.map(i => i.npcId);
+
+      if (userEngagedNpcIds.length === 0) {
+        return { modifier: 1.0, friendBoosts: 0, enemyPenalties: 0 };
+      }
+
+      // For each target NPC (in the group), check relationships with NPCs user engages with
+      for (const targetNpcId of targetNpcIds) {
+        const relationships = await prisma.actorRelationship.findMany({
+          where: {
+            OR: [
+              {
+                actor1Id: targetNpcId,
+                actor2Id: { in: userEngagedNpcIds },
+              },
+              {
+                actor2Id: targetNpcId,
+                actor1Id: { in: userEngagedNpcIds },
+              },
+            ],
+          },
+        });
+
+        for (const rel of relationships) {
+          // Enemy relationship: reduce invite chance
+          if (rel.sentiment < -0.3) {
+            modifier *= 0.8; // 20% reduction per enemy
+            enemyPenalties++;
+            logger.debug('User engages with enemy NPC, reducing invite chance', {
+              userId,
+              targetNpcId,
+              enemyNpcId: rel.actor1Id === targetNpcId ? rel.actor2Id : rel.actor1Id,
+              sentiment: rel.sentiment,
+              newModifier: modifier,
+            }, 'NPCGroupDynamicsService');
+          }
+          // Friend relationship: boost invite chance slightly
+          else if (rel.sentiment > 0.5) {
+            modifier *= 1.1; // 10% boost per friend
+            friendBoosts++;
+            logger.debug('User engages with friend NPC, boosting invite chance', {
+              userId,
+              targetNpcId,
+              friendNpcId: rel.actor1Id === targetNpcId ? rel.actor2Id : rel.actor1Id,
+              sentiment: rel.sentiment,
+              newModifier: modifier,
+            }, 'NPCGroupDynamicsService');
+          }
+        }
+      }
+
+      // Cap the modifier between 0.2x (80% penalty max) and 2.0x (100% boost max)
+      modifier = Math.max(0.2, Math.min(2.0, modifier));
+
+    } catch (error) {
+      logger.warn('Error calculating relationship modifier', { error, userId }, 'NPCGroupDynamicsService');
+      return { modifier: 1.0, friendBoosts: 0, enemyPenalties: 0 };
+    }
+
+    return { modifier, friendBoosts, enemyPenalties };
   }
 
   /**
@@ -812,7 +931,10 @@ Return your response as XML in this exact format:
         );
 
         // Filter out users with negative scores (spammers)
-        const eligibleUsers = scoredUsers.filter(su => su.score > 0);
+        let eligibleUsers = scoredUsers.filter(su => su.score > 0);
+        
+        // Filter users at their group limit or in cooldown
+        eligibleUsers = await this.filterUsersForInvite(eligibleUsers);
 
         if (eligibleUsers.length === 0) {
           continue;
@@ -831,6 +953,7 @@ Return your response as XML in this exact format:
         }
 
         // Weighted random selection
+        if (topCandidates.length === 0) continue;
         let randomValue = Math.random() * totalScore;
         let selectedCandidate = topCandidates[0];
         
@@ -845,6 +968,7 @@ Return your response as XML in this exact format:
         if (!selectedCandidate) continue;
 
         // Get an NPC admin from the group to send the invite
+        if (npcMemberIds.length === 0) continue;
         const invitingNpc = npcMemberIds[0];
         if (!invitingNpc) continue;
 
@@ -854,32 +978,106 @@ Return your response as XML in this exact format:
           select: { name: true },
         });
 
-        // Create the invitation
-        await prisma.userGroupInvite.create({
-          data: {
-            id: await generateSnowflakeId(),
-            groupId: group.id,
-            invitedUserId: selectedCandidate.user.id,
-            invitedBy: invitingNpc.id,
-            status: 'pending',
-            message: `Join our group chat "${group.name}"!`,
-            invitedAt: new Date(),
-          },
-        });
-
-        usersInvited++;
-        logger.info(`User invited to NPC group (reply guy score)`, {
-          userId: selectedCandidate.user.id,
-          userName: selectedCandidate.user.displayName,
-          chatId: group.id,
-          chatName: group.name,
-          invitedBy: npcData?.name,
-          replyGuyScore: selectedCandidate.score,
-          breakdown: selectedCandidate.breakdown,
-        }, 'NPCGroupDynamicsService');
+        // Create the invitation - handle unique constraint (user may already be invited)
+        try {
+          await prisma.userGroupInvite.create({
+            data: {
+              id: await generateSnowflakeId(),
+              groupId: group.id,
+              invitedUserId: selectedCandidate.user.id,
+              invitedBy: invitingNpc.id,
+              status: 'pending',
+              message: `Join our group chat "${group.name}"!`,
+              invitedAt: new Date(),
+            },
+          });
+          usersInvited++;
+          logger.info(`User invited to NPC group (reply guy score)`, {
+            userId: selectedCandidate.user.id,
+            userName: selectedCandidate.user.displayName,
+            chatId: group.id,
+            chatName: group.name,
+            invitedBy: npcData?.name,
+            replyGuyScore: selectedCandidate.score,
+            breakdown: selectedCandidate.breakdown,
+          }, 'NPCGroupDynamicsService');
+        } catch (error: unknown) {
+          // Handle unique constraint violation - user already has an invite
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            const target = error.meta?.target as string[] | undefined
+            if (target?.includes('groupId') && target?.includes('invitedUserId')) {
+              // User already has an invite, skip silently (this is expected in NPC dynamics)
+              logger.debug(`User already has invite, skipping`, {
+                userId: selectedCandidate.user.id,
+                groupId: group.id,
+              }, 'NPCGroupDynamicsService');
+              continue;
+            }
+          }
+          // Re-throw other errors
+          throw error;
+        }
       }
 
     return usersInvited;
+  }
+
+  /**
+   * Filter users who are at their group limit or in invite cooldown
+   * Prevents unlimited group chat accumulation
+   */
+  private static async filterUsersForInvite<T extends { user: { id: string }; score: number; breakdown: Record<string, number | string> }>(
+    candidates: T[]
+  ): Promise<T[]> {
+    const filtered: T[] = [];
+    
+    for (const candidate of candidates) {
+      // Check 1: Total active groups limit
+      const activeGroupCount = await prisma.groupChatMembership.count({
+        where: {
+          userId: candidate.user.id,
+          isActive: true,
+        },
+      });
+      
+      if (activeGroupCount >= this.MAX_ACTIVE_USER_GROUPS) {
+        logger.debug('User at group limit, skipping invite', {
+          userId: candidate.user.id,
+          activeGroups: activeGroupCount,
+          maxGroups: this.MAX_ACTIVE_USER_GROUPS,
+        }, 'NPCGroupDynamicsService');
+        continue;
+      }
+      
+      // Check 2: Invite cooldown
+      const latestMembership = await prisma.groupChatMembership.findFirst({
+        where: {
+          userId: candidate.user.id,
+          isActive: true,
+        },
+        orderBy: {
+          joinedAt: 'desc',
+        },
+      });
+      
+      if (latestMembership) {
+        const hoursSinceJoin = (Date.now() - latestMembership.joinedAt.getTime()) / (1000 * 60 * 60);
+        
+        if (hoursSinceJoin < this.INVITE_COOLDOWN_HOURS) {
+          logger.debug('User in invite cooldown, skipping', {
+            userId: candidate.user.id,
+            hoursSinceJoin: hoursSinceJoin.toFixed(2),
+            cooldownRequired: this.INVITE_COOLDOWN_HOURS,
+          }, 'NPCGroupDynamicsService');
+          continue;
+        }
+      }
+      
+      // User passed all checks
+      filtered.push(candidate);
+    }
+    
+    return filtered;
   }
 
   /**

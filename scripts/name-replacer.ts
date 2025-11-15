@@ -39,8 +39,15 @@ export class NameReplacer {
   private patterns: ReplacementPattern[] = [];
   private actorsData: ActorsData;
 
-  constructor(actorsJsonPath: string) {
-    this.actorsData = JSON.parse(fs.readFileSync(actorsJsonPath, 'utf-8'));
+  constructor(actorsJsonPath?: string) {
+    // Load from new split structure if no path provided
+    if (!actorsJsonPath) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { loadActorsData } = require('../src/lib/data/actors-loader');
+      this.actorsData = loadActorsData();
+    } else {
+      this.actorsData = JSON.parse(fs.readFileSync(actorsJsonPath, 'utf-8'));
+    }
     this.buildPatterns();
   }
 
@@ -179,8 +186,8 @@ if (require.main === module) {
     process.exit(1);
   }
 
-  const actorsPath = path.join(process.cwd(), 'public/data/actors.json');
-  const replacer = new NameReplacer(actorsPath);
+  // Use new loader (no path needed)
+  const replacer = new NameReplacer();
 
   if (args[0] === '--test') {
     const testText = args.slice(1).join(' ');

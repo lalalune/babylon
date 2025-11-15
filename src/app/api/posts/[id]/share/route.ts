@@ -19,6 +19,8 @@ import { trackServerEvent } from '@/lib/posthog/server';
 import { broadcastToChannel } from '@/lib/sse/event-broadcaster';
 import { cachedDb } from '@/lib/cached-database-service';
 import { checkRateLimitAndDuplicates, RATE_LIMIT_CONFIGS } from '@/lib/rate-limiting';
+import type { JsonValue } from '@/types/common';
+import { hasBlocked } from '@/lib/moderation/filters';
 
 /**
  * POST /api/posts/[id]/share
@@ -58,6 +60,18 @@ export const POST = withErrorHandling(async (
       where: { id: postId },
       select: { id: true, deletedAt: true, authorId: true },
     });
+
+    // Check if either user has blocked the other (if post exists)
+    if (post) {
+      const [isBlocked, hasBlockedMe] = await Promise.all([
+        hasBlocked(post.authorId, canonicalUserId),
+        hasBlocked(canonicalUserId, post.authorId),
+      ]);
+
+      if (isBlocked || hasBlockedMe) {
+        throw new BusinessLogicError('Cannot share this post', 'BLOCKED_USER');
+      }
+    }
 
     // If post doesn't exist, try to auto-create it based on format
     if (!post) {
@@ -193,7 +207,7 @@ export const POST = withErrorHandling(async (
 
       broadcastToChannel('feed', {
         type: 'new_post',
-        post: repostPostData,
+        post: repostPostData as JsonValue,
       })
       logger.info('Broadcast repost to feed channel', { repostId, postId }, 'POST /api/posts/[id]/share')
     }

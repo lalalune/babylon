@@ -7,6 +7,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Check, RefreshCw, Sparkles, Zap, Bot, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { logger } from '@/lib/logger'
 
 interface WandbModel {
   id: string
@@ -54,13 +55,19 @@ export function AIModelsTab() {
 
       if (!response.ok) throw new Error('Failed to fetch AI models')
 
-      const result = await response.json()
+      let result;
+      try {
+        result = await response.json()
+      } catch (parseError) {
+        logger.error('Failed to parse AI models response', { error: parseError }, 'AIModelsTab')
+        throw new Error('Failed to parse response')
+      }
       setData(result.data)
       setSelectedModel(result.data.currentSettings.wandbModel)
       setWandbEnabled(result.data.currentSettings.wandbEnabled)
       setLoading(false)
     } catch (err) {
-      console.error('Failed to load AI models:', err)
+      logger.error('Failed to load AI models', { error: err }, 'AIModelsTab')
       toast.error('Failed to load AI models')
       setLoading(false)
     }
@@ -96,8 +103,14 @@ export function AIModelsTab() {
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to save')
+        let error;
+        try {
+          error = await response.json()
+        } catch (parseError) {
+          logger.error('Failed to parse save error response', { error: parseError }, 'AIModelsTab')
+          throw new Error('Failed to save')
+        }
+        throw new Error((error as { error?: string }).error || 'Failed to save')
       }
 
       toast.success('AI model configuration updated successfully')
@@ -126,7 +139,13 @@ export function AIModelsTab() {
         },
       })
 
-      const result = await response.json()
+      let result;
+      try {
+        result = await response.json()
+      } catch (parseError) {
+        logger.error('Failed to parse test response', { error: parseError }, 'AIModelsTab')
+        throw new Error('Failed to parse test response')
+      }
 
       if (response.ok) {
         setTestResult(result.data)
