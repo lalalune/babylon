@@ -155,7 +155,7 @@ export class AgentServiceV2 {
     autonomousDMs: boolean
     autonomousGroupChats: boolean
   }>): Promise<User> {
-    await this.getAgent(agentUserId, managerUserId) // Verify ownership
+    const agent = await this.getAgent(agentUserId, managerUserId) // Verify ownership
 
     if (updates.system || updates.personality || updates.modelTier) {
       agentRuntimeManager.clearRuntime(agentUserId)
@@ -179,6 +179,59 @@ export class AgentServiceV2 {
       where: { id: agentUserId },
       data: { ...userUpdates, updatedAt: new Date() }
     })
+
+    // If agent is registered on Agent0, sync the updates
+    if (agent?.agent0TokenId && process.env.AGENT0_ENABLED === 'true') {
+      try {
+        const { getAgent0Client } = await import('@/agents/agent0/Agent0Client')
+        const agent0Client = getAgent0Client()
+
+        // Build capabilities from updated agent
+        const actions: string[] = []
+        if (updatedAgent.autonomousTrading) actions.push('trade')
+        if (updatedAgent.autonomousPosting) actions.push('post', 'comment')
+        if (updatedAgent.autonomousDMs || updatedAgent.autonomousGroupChats) actions.push('message')
+        actions.push('read', 'analyze')
+
+        const capabilities = {
+          strategies: updatedAgent.agentTradingStrategy
+            ? ['autonomous-trading', 'prediction-markets', 'social-interaction', updatedAgent.agentTradingStrategy]
+            : ['social-interaction', 'chat'],
+          markets: ['prediction', 'perp'],
+          actions,
+          version: '1.0.0'
+        }
+
+        // Update on Agent0 network
+        const agent0Update = await agent0Client.updateAgent(agent.agent0TokenId, {
+          name: updates.name ? updates.name : (updatedAgent.displayName || undefined),
+          description: updates.description ? updates.description : (updatedAgent.bio || undefined),
+          imageUrl: updates.profileImageUrl !== undefined ? updates.profileImageUrl : updatedAgent.profileImageUrl,
+          walletAddress: updatedAgent.walletAddress,
+          mcpEndpoint: process.env.NEXT_PUBLIC_APP_URL
+            ? `${process.env.NEXT_PUBLIC_APP_URL}/mcp`
+            : undefined,
+          a2aEndpoint: process.env.NEXT_PUBLIC_APP_URL
+            ? `${process.env.NEXT_PUBLIC_APP_URL}/a2a`
+            : undefined,
+          capabilities
+        })
+
+        // Update Agent0 metadata in database
+        await prisma.user.update({
+          where: { id: agentUserId },
+          data: {
+            agent0MetadataCID: agent0Update.metadataCID,
+            updatedAt: new Date()
+          }
+        })
+
+        logger.info(`Agent ${agentUserId} updated on Agent0 network`, { tokenId: agent.agent0TokenId }, 'AgentService')
+      } catch (error) {
+        logger.warn(`Failed to update agent ${agentUserId} on Agent0 network`, { error }, 'AgentService')
+        // Continue without failing the local update
+      }
+    }
 
     await prisma.agentLog.create({
       data: {

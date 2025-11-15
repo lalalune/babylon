@@ -76,7 +76,10 @@ export class AgentIdentityService {
       description: agentUser.bio || `Autonomous AI agent in Babylon`,
       imageUrl: agentUser.profileImageUrl || undefined,
       walletAddress: agentUser.walletAddress,
-      a2aEndpoint: process.env.NEXT_PUBLIC_APP_URL 
+      mcpEndpoint: process.env.NEXT_PUBLIC_APP_URL
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/mcp`
+        : undefined,
+      a2aEndpoint: process.env.NEXT_PUBLIC_APP_URL
         ? `${process.env.NEXT_PUBLIC_APP_URL}/a2a`
         : undefined,
       capabilities

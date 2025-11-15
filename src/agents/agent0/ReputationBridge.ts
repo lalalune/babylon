@@ -79,56 +79,134 @@ export class ReputationBridge implements IReputationBridge {
   }
   
   /**
-   * Calculate weighted accuracy score
-   * Prefers local data (60%) but incorporates Agent0 data (40%)
+   * Calculate advanced accuracy score using Bayesian estimation
+   * Uses beta distribution to handle small sample sizes better
    */
   private calculateWeightedAccuracy(
     local: AgentReputation,
     agent0: AgentReputation
   ): number {
-    const localWeight = 0.6
-    const agent0Weight = 0.4
-    
-    // If one source has no data, use the other
+    // Use Bayesian estimation for accuracy
+    const alphaPrior = 1 // Prior successes
+    const betaPrior = 1  // Prior failures
+
+    // Local accuracy with Bayesian smoothing
+    const localAccuracy = local.totalBets > 0
+      ? (local.winningBets + alphaPrior) / (local.totalBets + alphaPrior + betaPrior)
+      : 0
+
+    // Agent0 accuracy with Bayesian smoothing
+    const agent0Accuracy = agent0.totalBets > 0
+      ? (agent0.winningBets + alphaPrior) / (agent0.totalBets + alphaPrior + betaPrior)
+      : 0
+
+    // Weight by sample size and recency
+    const localWeight = this.calculateSourceWeight(local)
+    const agent0Weight = this.calculateSourceWeight(agent0)
+
     if (local.totalBets === 0 && agent0.totalBets === 0) {
       return 0
     }
-    
+
     if (local.totalBets === 0) {
-      return agent0.accuracyScore
+      return agent0Accuracy * 100
     }
-    
+
     if (agent0.totalBets === 0) {
-      return local.accuracyScore
+      return localAccuracy * 100
     }
-    
-    // Weighted average
-    return (local.accuracyScore * localWeight) + (agent0.accuracyScore * agent0Weight)
+
+    // Weighted average with Bayesian smoothing
+    const combinedAccuracy = (localAccuracy * localWeight + agent0Accuracy * agent0Weight) / (localWeight + agent0Weight)
+    return combinedAccuracy * 100
   }
-  
+
   /**
-   * Calculate trust score
-   * Takes the maximum of both sources (more conservative)
+   * Calculate advanced trust score using multi-factor analysis
    */
   private calculateTrustScore(
     local: AgentReputation,
     agent0: AgentReputation
   ): number {
-    // If one source has no data, use the other
-    if (local.totalBets === 0 && agent0.totalBets === 0) {
-      return 0
+    let trustScore = 0
+    let totalWeight = 0
+
+    // Factor 1: Accuracy-based trust (40% weight)
+    const accuracyTrust = Math.min(100, Math.max(0,
+      (local.accuracyScore * 0.6 + agent0.accuracyScore * 0.4) / 2
+    ))
+    trustScore += accuracyTrust * 0.4
+    totalWeight += 0.4
+
+    // Factor 2: Volume-based trust (30% weight)
+    const totalVolume = this.sumVolumesAsNumber(local.totalVolume, agent0.totalVolume)
+    const volumeTrust = Math.min(100, totalVolume / 1000000 * 100) // Scale by 1M wei
+    trustScore += volumeTrust * 0.3
+    totalWeight += 0.3
+
+    // Factor 3: Consistency-based trust (20% weight)
+    const consistencyTrust = this.calculateConsistencyTrust(local, agent0)
+    trustScore += consistencyTrust * 0.2
+    totalWeight += 0.2
+
+    // Factor 4: Time-based decay (10% weight)
+    const timeTrust = this.calculateTimeBasedTrust(local, agent0)
+    trustScore += timeTrust * 0.1
+    totalWeight += 0.1
+
+    return trustScore / totalWeight
+  }
+
+  /**
+   * Calculate source weight based on sample size and recency
+   */
+  private calculateSourceWeight(reputation: AgentReputation): number {
+    const baseWeight = Math.min(reputation.totalBets / 100, 1) // Max weight at 100 bets
+
+    // Recency bonus (newer data gets higher weight)
+    const now = Date.now()
+    const timeSinceUpdate = now - (reputation.lastUpdated || now)
+    const recencyBonus = Math.max(0, 1 - (timeSinceUpdate / (30 * 24 * 60 * 60 * 1000))) // 30 days
+
+    return baseWeight * (0.7 + 0.3 * recencyBonus)
+  }
+
+  /**
+   * Calculate consistency trust based on variance in performance
+   */
+  private calculateConsistencyTrust(local: AgentReputation, agent0: AgentReputation): number {
+    // Higher consistency = higher trust
+    // For now, use a simple heuristic based on accuracy stability
+    if (local.totalBets < 10 && agent0.totalBets < 10) {
+      return 50 // Neutral for small samples
     }
-    
-    if (local.totalBets === 0) {
-      return agent0.trustScore
-    }
-    
-    if (agent0.totalBets === 0) {
-      return local.trustScore
-    }
-    
-    // Take maximum (more conservative - require trust from both sources)
-    return Math.max(local.trustScore, agent0.trustScore)
+
+    const avgAccuracy = (local.accuracyScore + agent0.accuracyScore) / 2
+    const accuracyVariance = Math.abs(local.accuracyScore - agent0.accuracyScore)
+
+    // Lower variance = higher consistency score
+    const consistencyScore = Math.max(0, 100 - (accuracyVariance / avgAccuracy) * 50)
+    return consistencyScore
+  }
+
+  /**
+   * Calculate time-based trust considering data freshness
+   */
+  private calculateTimeBasedTrust(local: AgentReputation, agent0: AgentReputation): number {
+    const now = Date.now()
+    const localFreshness = Math.max(0, 1 - ((now - (local.lastUpdated || now)) / (90 * 24 * 60 * 60 * 1000))) // 90 days
+    const agent0Freshness = Math.max(0, 1 - ((now - (agent0.lastUpdated || now)) / (90 * 24 * 60 * 60 * 1000)))
+
+    return (localFreshness * 60 + agent0Freshness * 40) // Weighted average
+  }
+
+  /**
+   * Sum volumes as numbers for calculations
+   */
+  private sumVolumesAsNumber(volume1: string, volume2: string): number {
+    const v1 = parseFloat(volume1) || 0
+    const v2 = parseFloat(volume2) || 0
+    return v1 + v2
   }
   
   /**

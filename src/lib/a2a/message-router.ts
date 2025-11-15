@@ -15,12 +15,18 @@ import {
   A2AMethod,
   ErrorCode
 } from '@/types/a2a'
-import type { JsonRpcResult } from '@/types/common'
 import type { PaymentVerificationParams, PaymentVerificationResult } from '@/types/payments'
 import type { RegistryClient } from '@/types/a2a-server'
 import type { X402Manager } from '@/types/a2a-server'
 import type { IAgent0Client } from '@/agents/agent0/types'
 import type { IUnifiedDiscoveryService } from '@/agents/agent0/types'
+import type {
+  A2ABalanceResponse,
+  A2APositionsResponse,
+  A2AUserWalletResponse,
+  A2APerpPosition,
+  A2AMarketPosition
+} from '@/types/a2a-responses'
 import { logger } from '@/lib/logger'
 import { prisma } from '@/lib/prisma'
 import {
@@ -169,7 +175,7 @@ export class MessageRouter {
       result: {
         agents,
         total: agents.length
-      } as unknown as JsonRpcResult,
+      },
       id: request.id
     }
   }
@@ -217,7 +223,7 @@ export class MessageRouter {
             
             return {
               jsonrpc: '2.0',
-              result: agentProfile as unknown as JsonRpcResult,
+              result: agentProfile,
               id: request.id
             }
           }
@@ -228,7 +234,7 @@ export class MessageRouter {
           if (profile) {
             return {
               jsonrpc: '2.0',
-              result: profile as unknown as JsonRpcResult,
+              result: profile,
               id: request.id
             }
           }
@@ -247,7 +253,7 @@ export class MessageRouter {
         if (profile) {
           return {
             jsonrpc: '2.0',
-            result: profile as unknown as JsonRpcResult,
+            result: profile,
             id: request.id
           }
         }
@@ -305,7 +311,7 @@ export class MessageRouter {
 
     return {
       jsonrpc: '2.0',
-      result: marketData as unknown as JsonRpcResult,
+      result: marketData,
       id: request.id
     }
   }
@@ -347,7 +353,7 @@ export class MessageRouter {
           { outcome: 'NO', price: noPrice }
         ],
         timestamp: Date.now()
-      } as unknown as JsonRpcResult,
+      },
       id: request.id
     }
   }
@@ -406,15 +412,17 @@ export class MessageRouter {
         )
       }
       
+      const balanceResponse: A2ABalanceResponse = {
+        balance: Number(user.virtualBalance),
+        totalDeposited: Number(user.totalDeposited),
+        totalWithdrawn: Number(user.totalWithdrawn),
+        lifetimePnL: Number(user.lifetimePnL),
+        reputationPoints: user.reputationPoints || 0
+      }
+
       return {
         jsonrpc: '2.0',
-        result: {
-          balance: Number(user.virtualBalance),
-          totalDeposited: Number(user.totalDeposited),
-          totalWithdrawn: Number(user.totalWithdrawn),
-          lifetimePnL: Number(user.lifetimePnL),
-          reputationPoints: user.reputationPoints || 0
-        } as unknown as JsonRpcResult,
+        result: balanceResponse,
         id: request.id
       }
     } catch (error) {
@@ -473,10 +481,10 @@ export class MessageRouter {
       ])
       
       // Format perp positions
-      const formattedPerpPositions = perpPositions.map(p => ({
+      const formattedPerpPositions: A2APerpPosition[] = perpPositions.map(p => ({
         id: p.id,
         ticker: p.ticker,
-        side: p.side,
+        side: p.side === 'long' || p.side === 'short' ? p.side : 'long', // Ensure valid side
         size: Number(p.size),
         entryPrice: Number(p.entryPrice),
         currentPrice: Number(p.currentPrice),
@@ -486,20 +494,20 @@ export class MessageRouter {
       }))
       
       // Format prediction positions
-      const formattedMarketPositions = predictionPositions.map(p => {
+      const formattedMarketPositions: A2AMarketPosition[] = predictionPositions.map(p => {
         const yesShares = Number(p.Market.yesShares)
         const noShares = Number(p.Market.noShares)
         const totalShares = yesShares + noShares
-        const currentPrice = totalShares === 0 ? 0.5 : (String(p.side) === 'YES' ? yesShares / totalShares : noShares / totalShares)
+        const currentPrice = totalShares === 0 ? 0.5 : (p.side ? yesShares / totalShares : noShares / totalShares)
         const avgPrice = Number(p.avgPrice)
         const shares = Number(p.shares)
         const unrealizedPnL = (currentPrice * shares) - (avgPrice * shares)
-        
+
         return {
           id: p.id,
           marketId: p.Market.id,
           question: p.Market.question,
-          side: p.side,
+          side: p.side ? 'YES' : 'NO', // Convert boolean to string
           shares,
           avgPrice,
           currentPrice,
@@ -507,12 +515,14 @@ export class MessageRouter {
         }
       })
       
+      const positionsResponse: A2APositionsResponse = {
+        perpPositions: formattedPerpPositions,
+        marketPositions: formattedMarketPositions,
+      }
+
       return {
         jsonrpc: '2.0',
-        result: {
-          perpPositions: formattedPerpPositions,
-          marketPositions: formattedMarketPositions,
-        } as unknown as JsonRpcResult,
+        result: positionsResponse,
         id: request.id
       }
     } catch (error) {
@@ -554,12 +564,14 @@ export class MessageRouter {
         )
       }
       
+      const walletResponse: A2AUserWalletResponse = {
+        balance: balanceResponse.result as A2ABalanceResponse,
+        positions: positionsResponse.result as A2APositionsResponse,
+      }
+
       return {
         jsonrpc: '2.0',
-        result: {
-          balance: balanceResponse.result,
-          positions: positionsResponse.result,
-        } as unknown as JsonRpcResult,
+        result: walletResponse,
         id: request.id
       }
     } catch (error) {

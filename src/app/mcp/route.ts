@@ -100,6 +100,42 @@ export async function GET(request: NextRequest) {
             questionId: { type: 'string', description: 'Filter by question ID' }
           }
         }
+      },
+      {
+        name: 'discover_agents',
+        description: 'Discover other agents on the Agent0 network',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            strategies: { type: 'array', items: { type: 'string' }, description: 'Filter by trading strategies' },
+            minReputation: { type: 'number', description: 'Minimum reputation score' },
+            limit: { type: 'number', description: 'Maximum number of results', default: 20 }
+          }
+        }
+      },
+      {
+        name: 'get_agent_reputation',
+        description: 'Get reputation information for a specific agent',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            agentId: { type: 'string', description: 'Agent ID to check' }
+          },
+          required: ['agentId']
+        }
+      },
+      {
+        name: 'submit_feedback',
+        description: 'Submit feedback for another agent',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            targetAgentId: { type: 'string', description: 'Agent to give feedback to' },
+            rating: { type: 'number', description: 'Rating from -5 to +5', minimum: -5, maximum: 5 },
+            comment: { type: 'string', description: 'Optional feedback comment' }
+          },
+          required: ['targetAgentId', 'rating']
+        }
       }
     ]
   })
@@ -137,6 +173,12 @@ export async function POST(request: NextRequest) {
       return await executeGetMarketData(agent, args)
     case 'query_feed':
       return await executeQueryFeed(agent, args)
+    case 'discover_agents':
+      return await executeDiscoverAgents(agent, args)
+    case 'get_agent_reputation':
+      return await executeGetAgentReputation(agent, args)
+    case 'submit_feedback':
+      return await executeSubmitFeedback(agent, args)
     default:
       return NextResponse.json(
         { error: `Unknown tool: ${tool}` },
@@ -403,4 +445,108 @@ async function executeQueryFeed(
       timestamp: p.timestamp.toISOString()
     }))
   })
+}
+
+/**
+ * Execute discover_agents MCP tool
+ */
+async function executeDiscoverAgents(_agent: { agentId: string; userId: string }, args: { strategies?: string[]; minReputation?: number; limit?: number }) {
+  if (!process.env.AGENT0_ENABLED) {
+    return NextResponse.json({ error: 'Agent0 integration not enabled' }, { status: 503 })
+  }
+
+  try {
+    const { getAgent0Client } = await import('@/agents/agent0/Agent0Client')
+    const agent0Client = getAgent0Client()
+
+    const agents = await agent0Client.searchAgents({
+      strategies: args.strategies || [],
+      minReputation: args.minReputation || 0
+    })
+
+    // Limit results if specified
+    const limitedAgents = args.limit ? agents.slice(0, args.limit) : agents
+
+    return NextResponse.json({
+      agents: limitedAgents.map(a => ({
+        id: a.tokenId,
+        name: a.name,
+        reputation: a.reputation,
+        capabilities: a.capabilities
+      }))
+    })
+  } catch (error) {
+    logger.error('Failed to discover agents', { error }, 'MCP')
+    return NextResponse.json({ error: 'Failed to discover agents' }, { status: 500 })
+  }
+}
+
+/**
+ * Execute get_agent_reputation MCP tool
+ */
+async function executeGetAgentReputation(_agent: { agentId: string; userId: string }, args: { agentId: string }) {
+  if (!process.env.AGENT0_ENABLED) {
+    return NextResponse.json({ error: 'Agent0 integration not enabled' }, { status: 503 })
+  }
+
+  try {
+    const { getAgent0Client } = await import('@/agents/agent0/Agent0Client')
+    const agent0Client = getAgent0Client()
+
+    const tokenId = parseInt(args.agentId, 10)
+    if (isNaN(tokenId)) {
+      return NextResponse.json({ error: 'Invalid agent ID format' }, { status: 400 })
+    }
+
+    const agentProfile = await agent0Client.getAgentProfile(tokenId)
+    if (!agentProfile) {
+      return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({
+      agentId: args.agentId,
+      reputation: agentProfile.reputation
+    })
+  } catch (error) {
+    logger.error('Failed to get agent reputation', { error }, 'MCP')
+    return NextResponse.json({ error: 'Failed to get agent reputation' }, { status: 500 })
+  }
+}
+
+/**
+ * Execute submit_feedback MCP tool
+ */
+async function executeSubmitFeedback(_agent: { agentId: string; userId: string }, args: { targetAgentId: string; rating: number; comment?: string }) {
+  if (!process.env.AGENT0_ENABLED) {
+    return NextResponse.json({ error: 'Agent0 integration not enabled' }, { status: 503 })
+  }
+
+  try {
+    const { getAgent0Client } = await import('@/agents/agent0/Agent0Client')
+    const agent0Client = getAgent0Client()
+
+    // Validate rating range
+    if (args.rating < -5 || args.rating > 5) {
+      return NextResponse.json({ error: 'Rating must be between -5 and +5' }, { status: 400 })
+    }
+
+    const targetTokenId = parseInt(args.targetAgentId, 10)
+    if (isNaN(targetTokenId)) {
+      return NextResponse.json({ error: 'Invalid target agent ID format' }, { status: 400 })
+    }
+
+    await agent0Client.submitFeedback({
+      targetAgentId: targetTokenId,
+      rating: args.rating,
+      comment: args.comment || ''
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: 'Feedback submitted successfully'
+    })
+  } catch (error) {
+    logger.error('Failed to submit feedback', { error }, 'MCP')
+    return NextResponse.json({ error: 'Failed to submit feedback' }, { status: 500 })
+  }
 }

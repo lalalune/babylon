@@ -23,7 +23,7 @@ export interface JsonRpcRequest {
 
 export interface JsonRpcResponse {
   jsonrpc: '2.0'
-  result?: JsonRpcResult
+  result?: unknown
   error?: JsonRpcError
   id: string | number | null
 }
@@ -202,6 +202,7 @@ export interface AgentReputation {
   totalVolume: string
   profitLoss: number
   isBanned: boolean
+  lastUpdated?: number
 }
 
 export interface AgentConnection {

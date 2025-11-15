@@ -13,9 +13,16 @@ import type { AgentProfile, AgentCapabilities } from '@/types/a2a'
 export interface IAgent0Client {
   registerAgent(params: Agent0RegistrationParams): Promise<Agent0RegistrationResult>
   registerBabylonGame(): Promise<Agent0RegistrationResult>
+  updateAgent(tokenId: number, params: Partial<Agent0UpdateParams>): Promise<Agent0UpdateResult>
+  deactivateAgent(tokenId: number): Promise<void>
+  reactivateAgent(tokenId: number): Promise<void>
+  transferAgent(tokenId: number, newOwnerAddress: string): Promise<Agent0TransferResult>
+  batchRegisterAgents(params: Agent0RegistrationParams[]): Promise<Agent0BatchResult>
+  batchUpdateAgents(updates: Array<{ tokenId: number; params: Partial<Agent0UpdateParams> }>): Promise<Agent0BatchResult>
   searchAgents(filters: Agent0SearchFilters): Promise<Agent0SearchResult[]>
   submitFeedback(params: Agent0FeedbackParams): Promise<void>
   getAgentProfile(tokenId: number): Promise<Agent0AgentProfile | null>
+  getAgentHistory(tokenId: number): Promise<Agent0HistoryEntry[]>
   isAvailable(): boolean
 }
 
@@ -104,6 +111,70 @@ export interface Agent0FeedbackParams {
 }
 
 /**
+ * Agent0 Update Parameters
+ */
+export interface Agent0UpdateParams {
+  name?: string
+  description?: string
+  imageUrl?: string | null
+  walletAddress?: string | null
+  mcpEndpoint?: string
+  a2aEndpoint?: string
+  capabilities?: AgentCapabilities
+}
+
+/**
+ * Agent0 Update Result
+ */
+export interface Agent0UpdateResult {
+  tokenId: number
+  txHash: string
+  metadataCID?: string
+  updatedAt: number
+}
+
+/**
+ * Agent0 Transfer Result
+ */
+export interface Agent0TransferResult {
+  tokenId: number
+  oldOwner: string
+  newOwner: string
+  txHash: string
+  transferredAt: number
+}
+
+/**
+ * Agent0 History Entry
+ */
+export interface Agent0HistoryEntry {
+  type: 'registration' | 'update' | 'transfer' | 'deactivation' | 'reactivation' | 'feedback'
+  timestamp: number
+  txHash?: string
+  metadataCID?: string
+  details: Record<string, unknown>
+}
+
+/**
+ * Agent0 Batch Operation Result
+ */
+export interface Agent0BatchResult {
+  successful: Array<{
+    index: number
+    tokenId?: number
+    txHash: string
+    metadataCID?: string
+  }>
+  failed: Array<{
+    index: number
+    error: string
+  }>
+  totalProcessed: number
+  successCount: number
+  failureCount: number
+}
+
+/**
  * Discovery Filters for UnifiedDiscoveryService
  */
 export interface DiscoveryFilters {
@@ -111,6 +182,10 @@ export interface DiscoveryFilters {
   markets?: string[]
   minReputation?: number
   includeExternal?: boolean
+  semanticQuery?: string // Semantic/vector search query
+  capabilities?: string[] // Specific capabilities to search for
+  maxResults?: number
+  sortBy?: 'reputation' | 'recent' | 'activity'
 }
 
 /**

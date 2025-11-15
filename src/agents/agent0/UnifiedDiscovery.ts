@@ -39,28 +39,117 @@ export class UnifiedDiscoveryService implements IUnifiedDiscoveryService {
    */
   async discoverAgents(filters: DiscoveryFilters): Promise<AgentProfile[]> {
     const results: AgentProfile[] = []
-    
+
+    // Search local agents with enhanced filtering
     const localAgents = this.localRegistry.search({
       strategies: filters.strategies,
       minReputation: filters.minReputation
     })
-    
+
     results.push(...localAgents.map((r: { profile: AgentProfile }) => r.profile))
-    
+
+    // Search external agents if enabled
     if (filters.includeExternal && process.env.AGENT0_ENABLED === 'true') {
-      const externalAgents = await this.subgraphClient.searchAgents({
-        strategies: filters.strategies,
-        markets: filters.markets,
-        minTrustScore: filters.minReputation
-      })
-      
+      const externalAgents = await this.searchExternalAgents(filters)
+
       for (const agent0Data of externalAgents) {
         const profile = await this.transformAgent0Profile(agent0Data, this.reputationBridge)
         results.push(profile)
       }
     }
-    
-    return this.deduplicateAndSort(results)
+
+    // Apply semantic search if provided
+    let filteredResults = results
+    if (filters.semanticQuery) {
+      filteredResults = await this.applySemanticSearch(results, filters.semanticQuery)
+    }
+
+    // Apply result limits and sorting
+    const finalResults = this.applyFiltersAndSorting(filteredResults, filters)
+
+    return finalResults
+  }
+
+  /**
+   * Search external agents with enhanced parameters
+   */
+  private async searchExternalAgents(filters: DiscoveryFilters): Promise<SubgraphAgent[]> {
+    // Enhanced search parameters for Agent0
+    const searchParams: Record<string, unknown> = {
+      strategies: filters.strategies,
+      markets: filters.markets,
+      minTrustScore: filters.minReputation,
+      limit: filters.maxResults || 50
+    }
+
+    // Add semantic search if supported by Agent0 SDK
+    if (filters.semanticQuery) {
+      // Note: This would need Agent0 SDK support for semantic search
+      // For now, we'll use text-based filtering
+      searchParams.query = filters.semanticQuery
+    }
+
+    if (filters.capabilities && filters.capabilities.length > 0) {
+      searchParams.capabilities = filters.capabilities
+    }
+
+    return await this.subgraphClient.searchAgents(searchParams)
+  }
+
+  /**
+   * Apply semantic search filtering
+   */
+  private async applySemanticSearch(agents: AgentProfile[], query: string): Promise<AgentProfile[]> {
+    // Simple semantic search implementation
+    // In a full implementation, this would use vector embeddings
+    const queryLower = query.toLowerCase()
+
+    return agents.filter(agent => {
+      const nameMatch = agent.name.toLowerCase().includes(queryLower)
+      const descriptionMatch = agent.endpoint.toLowerCase().includes(queryLower)
+      const capabilitiesMatch = agent.capabilities.strategies?.some(s => s.toLowerCase().includes(queryLower)) ||
+                               agent.capabilities.actions?.some(a => a.toLowerCase().includes(queryLower))
+
+      return nameMatch || descriptionMatch || capabilitiesMatch
+    })
+  }
+
+  /**
+   * Apply final filtering and sorting
+   */
+  private applyFiltersAndSorting(agents: AgentProfile[], filters: DiscoveryFilters): AgentProfile[] {
+    let filteredAgents = [...agents]
+
+    // Apply capability filtering
+    if (filters.capabilities && filters.capabilities.length > 0) {
+      filteredAgents = filteredAgents.filter(agent =>
+        filters.capabilities!.some(cap =>
+          agent.capabilities.strategies?.includes(cap) ||
+          agent.capabilities.actions?.includes(cap)
+        )
+      )
+    }
+
+    // Apply result limits
+    if (filters.maxResults && filters.maxResults > 0) {
+      filteredAgents = filteredAgents.slice(0, filters.maxResults)
+    }
+
+    // Apply sorting
+    switch (filters.sortBy) {
+      case 'recent':
+        // Sort by some recency metric (would need timestamp data)
+        break
+      case 'activity':
+        // Sort by activity level (would need activity metrics)
+        break
+      case 'reputation':
+      default:
+        // Default is already sorted by reputation in deduplicateAndSort
+        break
+    }
+
+    return this.deduplicateAndSort(filteredAgents)
   }
   
   /**
