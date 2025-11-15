@@ -742,7 +742,7 @@ Trending system not initialized yet.
     mediaEntities: (Organization | Actor)[],
     worldEvent: WorldEvent,
     allActors: Actor[],
-    outcome: boolean
+    _outcome: boolean
   ): Promise<Array<{ post: string; sentiment: number; clueStrength: number; pointsToward: boolean | null }>> {
     if (!this.llm || mediaEntities.length === 0) {
       return [];
@@ -908,7 +908,7 @@ Trending system not initialized yet.
   private async generateReactionsBatch(
     actors: Actor[],
     worldEvent: WorldEvent,
-    outcome: boolean
+    _outcome: boolean
   ): Promise<Array<{ post: string; sentiment: number; clueStrength: number; pointsToward: boolean | null }>> {
     if (!this.llm || actors.length === 0) {
       return [];
@@ -1426,13 +1426,6 @@ Trending system not initialized yet.
     }
 
     const isCrisis = event.type === 'scandal' || event.type === 'leak';
-    
-    // Companies ALWAYS try to frame things positively for themselves
-    const frameGuidance = event.pointsToward === 'NO'
-      ? 'Defensively spin this as minor/temporary - protect company reputation'
-      : event.pointsToward === 'YES'
-        ? 'Promote this as evidence of company strength and success'
-        : 'Frame neutrally but emphasize company stability and commitment';
 
     // Ensure world context is available
     if (!this.worldContext) {
@@ -1783,7 +1776,7 @@ Trending system not initialized yet.
    * Generates ambient posts WITHOUT knowing predetermined outcome.
    * Actors post general thoughts based on their mood and context.
    */
-  private async generateAmbientFeed(day: number, allActors: Actor[], outcome: boolean): Promise<FeedPost[]> {
+  private async generateAmbientFeed(day: number, allActors: Actor[], _outcome: boolean): Promise<FeedPost[]> {
     const ambient: FeedPost[] = [];
     const baseTime = `2025-10-${String(day).padStart(2, '0')}T`;
 
