@@ -10,7 +10,7 @@ out/
 build/
 *.tsbuildinfo
 next-env.d.ts
-prisma/migrations/
+# prisma/migrations/ should NOT be ignored - they need to be in version control!
 .vscode/
 .idea/
 .serena/
