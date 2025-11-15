@@ -99,24 +99,13 @@ export function ShareVerificationModal({
 
         {/* Content */}
         <div className="p-6 space-y-4">
-          {/* Points Reward Banner */}
-          <div className="p-4 rounded-lg bg-gradient-to-r from-primary/20 to-primary/10 border border-primary/30">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-2xl">🎁</span>
-              <h3 className="font-bold text-foreground">Earn 1,000 Points</h3>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Verify your {platformName} post to earn your reward!
-            </p>
-          </div>
-
           <div>
             <p className="text-sm text-muted-foreground mb-4">
-              Paste the URL to your {platformName} post below to verify and earn points.
+              Help us verify that you shared to {platformName}! Paste the URL to your post below.
             </p>
             
             <label htmlFor="postUrl" className="block text-sm font-medium mb-2">
-              Post URL <span className="text-red-500">*</span>
+              Post URL
             </label>
             <input
               id="postUrl"
@@ -127,15 +116,14 @@ export function ShareVerificationModal({
                 if (e.key === 'Enter') handleVerify()
               }}
               placeholder={placeholderUrl}
-              className="w-full px-4 py-2 rounded-lg bg-sidebar-accent/50 focus:outline-none focus:border-border border border-border/50"
+              className="w-full px-4 py-2 rounded-lg bg-sidebar-accent/50 focus:outline-none focus:border-border"
               disabled={verifying}
-              required
             />
           </div>
 
-          <div className="p-3 rounded-lg bg-muted/50 border border-border/50">
+          <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
             <p className="text-xs text-muted-foreground">
-              <strong>How to get the URL:</strong> After posting, copy the URL from your browser&apos;s address bar or use the &quot;Copy link&quot; option on your post.
+              <strong>Tip:</strong> After posting, copy the URL from your browser&apos;s address bar or use the &quot;Copy link&quot; option on your post.
             </p>
           </div>
 
@@ -144,7 +132,7 @@ export function ShareVerificationModal({
               onClick={handleVerify}
               disabled={verifying || !postUrl.trim()}
               className={cn(
-                'flex-1 px-4 py-3 rounded-lg font-semibold transition-colors',
+                'flex-1 px-4 py-2 rounded-lg font-semibold transition-colors',
                 'bg-primary text-primary-foreground hover:bg-primary/90',
                 'disabled:opacity-50 disabled:cursor-not-allowed',
                 'flex items-center justify-center gap-2'
@@ -152,13 +140,12 @@ export function ShareVerificationModal({
             >
               {verifying ? (
                 <>
-                  <span className="animate-spin">⏳</span>
                   <span>Verifying...</span>
                 </>
               ) : (
                 <>
                   <Check className="w-4 h-4" />
-                  <span>Verify & Earn Points</span>
+                  <span>Verify</span>
                 </>
               )}
             </button>
@@ -166,15 +153,11 @@ export function ShareVerificationModal({
             <button
               onClick={onClose}
               disabled={verifying}
-              className="px-4 py-3 rounded-lg bg-muted hover:bg-muted/70 font-semibold transition-colors text-sm"
+              className="px-4 py-2 rounded-lg bg-muted hover:bg-muted/70 font-semibold transition-colors"
             >
               Skip
             </button>
           </div>
-
-          <p className="text-xs text-center text-muted-foreground">
-            ⚠️ You must verify to earn points. Skipping means no reward.
-          </p>
         </div>
       </div>
     </div>
